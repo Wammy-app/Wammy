@@ -1,114 +1,128 @@
 package eu.kanade.tachiyomi.ui.profile
 
+import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.tachiyomi.data.sync.AuthorizationResult
-import eu.kanade.tachiyomi.data.sync.DriveApiHelper
-import eu.kanade.tachiyomi.data.sync.DriveSyncManager
-import eu.kanade.tachiyomi.data.sync.SyncResult
-import eu.kanade.tachiyomi.data.sync.DriveSyncWorker
+import coil3.compose.AsyncImage
+import com.google.firebase.auth.FirebaseAuth
+import eu.kanade.tachiyomi.data.sync.replica.*
 import kotlinx.coroutines.launch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 class CloudSyncScreen : Screen {
+
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val context = LocalContext.current
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
-        val driveSyncManager: DriveSyncManager = Injekt.get()
-        val driveApiHelper: DriveApiHelper = Injekt.get()
 
-        var isSyncing by remember { mutableStateOf(false) }
-        var lastSyncStatus by remember { mutableStateOf<String?>(null) }
-        var pendingAction by remember { mutableStateOf<String?>(null) }
+        val syncSettings = remember { Injekt.get<SyncSettings>() }
+        val syncRepository = remember { Injekt.get<GoogleDriveSyncRepository>() }
+        val auth = remember { Injekt.get<GoogleDriveAuth>() }
+
+        val isSyncing by syncRepository.isSyncing.collectAsState()
+
+        var accountEmail by remember { mutableStateOf(syncSettings.accountEmail) }
+        var accountName by remember { mutableStateOf(syncSettings.accountName) }
+        var accountPhotoUrl by remember { mutableStateOf(syncSettings.accountPhotoUrl) }
+        var isEmailHidden by remember { mutableStateOf(syncSettings.isEmailHidden) }
+        var intervalMinutes by remember { mutableIntStateOf(syncSettings.intervalMinutes) }
+        var isWifiOnly by remember { mutableStateOf(syncSettings.isWifiOnly) }
+        var enabledContent by remember { mutableStateOf(syncSettings.enabledContent) }
+        var lastSyncTimestamp by remember { mutableLongStateOf(syncSettings.lastSyncTimestamp) }
+        var lastError by remember { mutableStateOf(syncSettings.lastSyncError) }
+
+        var showDeleteConfirm by remember { mutableStateOf(false) }
+
+        // Setup account info from Firebase if available and not yet set
+        LaunchedEffect(Unit) {
+            val fbUser = FirebaseAuth.getInstance().currentUser
+            if (fbUser != null && syncSettings.accountEmail == null) {
+                syncSettings.accountEmail = fbUser.email
+                syncSettings.accountName = fbUser.displayName
+                syncSettings.accountPhotoUrl = fbUser.photoUrl?.toString()
+                accountEmail = syncSettings.accountEmail
+                accountName = syncSettings.accountName
+                accountPhotoUrl = syncSettings.accountPhotoUrl
+            }
+        }
+
+        fun refreshState() {
+            accountEmail = syncSettings.accountEmail
+            accountName = syncSettings.accountName
+            accountPhotoUrl = syncSettings.accountPhotoUrl
+            isEmailHidden = syncSettings.isEmailHidden
+            intervalMinutes = syncSettings.intervalMinutes
+            isWifiOnly = syncSettings.isWifiOnly
+            enabledContent = syncSettings.enabledContent
+            lastSyncTimestamp = syncSettings.lastSyncTimestamp
+            lastError = syncSettings.lastSyncError
+        }
 
         val consentLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartIntentSenderForResult()
+            contract = ActivityResultContracts.StartIntentSenderForResult(),
         ) { result ->
             if (result.resultCode == android.app.Activity.RESULT_OK) {
                 scope.launch {
-                    isSyncing = true
-                    lastSyncStatus = null
-                    val syncResult = if (pendingAction == "backup") {
-                        driveSyncManager.backup()
-                    } else {
-                        driveSyncManager.restore()
+                    val syncRes = syncRepository.sync(force = true)
+                    refreshState()
+                    if (syncRes is SyncResult.Success) {
+                        Toast.makeText(context, "Google Drive sync completed", Toast.LENGTH_SHORT).show()
                     }
-                    when (syncResult) {
-                        is SyncResult.Success -> {
-                            lastSyncStatus = "✓ ${syncResult.message}"
-                            Toast.makeText(context, syncResult.message, Toast.LENGTH_SHORT).show()
-                        }
-                        is SyncResult.Error -> {
-                            lastSyncStatus = "✗ ${syncResult.message}"
-                            Toast.makeText(context, syncResult.message, Toast.LENGTH_LONG).show()
-                        }
-                    }
-                    isSyncing = false
-                    pendingAction = null
                 }
             }
         }
 
-        fun launchDriveAction(action: String) {
+        fun runSync() {
             scope.launch {
-                isSyncing = true
-                lastSyncStatus = null
-                pendingAction = action
-
-                when (val authResult = driveApiHelper.requestDriveAuthorization()) {
-                    is AuthorizationResult.Success -> {
-                        val syncResult = if (action == "backup") {
-                            driveSyncManager.backup()
-                        } else {
-                            driveSyncManager.restore()
+                when (val authRes = auth.requestAuthorization()) {
+                    is AuthResult.Success -> {
+                        val res = syncRepository.sync(force = true)
+                        refreshState()
+                        when (res) {
+                            is SyncResult.Success -> Toast.makeText(context, "Sync completed", Toast.LENGTH_SHORT).show()
+                            is SyncResult.SignInRequired -> Toast.makeText(context, "Sign-in required", Toast.LENGTH_LONG).show()
+                            is SyncResult.Error -> Toast.makeText(context, res.message, Toast.LENGTH_LONG).show()
                         }
-                        when (syncResult) {
-                            is SyncResult.Success -> {
-                                lastSyncStatus = "✓ ${syncResult.message}"
-                                Toast.makeText(context, syncResult.message, Toast.LENGTH_SHORT).show()
-                            }
-                            is SyncResult.Error -> {
-                                lastSyncStatus = "✗ ${syncResult.message}"
-                                Toast.makeText(context, syncResult.message, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                        isSyncing = false
                     }
-                    is AuthorizationResult.NeedsConsent -> {
-                        isSyncing = false
+                    is AuthResult.NeedsConsent -> {
                         try {
-                            val intentSenderRequest = IntentSenderRequest.Builder(authResult.pendingIntent).build()
-                            consentLauncher.launch(intentSenderRequest)
+                            consentLauncher.launch(IntentSenderRequest.Builder(authRes.pendingIntent).build())
                         } catch (e: Exception) {
-                            lastSyncStatus = "✗ Could not open consent screen"
+                            Toast.makeText(context, "Could not launch consent: ${e.message}", Toast.LENGTH_LONG).show()
                         }
                     }
-                    is AuthorizationResult.Error -> {
-                        lastSyncStatus = "✗ ${authResult.message}"
-                        isSyncing = false
+                    is AuthResult.Error -> {
+                        Toast.makeText(context, authRes.message, Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -117,147 +131,296 @@ class CloudSyncScreen : Screen {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Cloud Sync") },
+                    title = { Text("Google Drive Sync") },
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
-                    }
+                    },
                 )
-            }
+            },
         ) { paddingValues ->
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(horizontal = 24.dp, vertical = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text(
-                    text = "Backup & restore your library via Google Drive",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(32.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = { launchDriveAction("backup") },
-                        enabled = !isSyncing,
-                        modifier = Modifier.weight(1f).height(56.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF4285F4),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(12.dp)
+                // 1. Account Section
+                item {
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
                     ) {
-                        if (isSyncing && pendingAction == "backup") {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text("Backup", fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // Avatar
+                            if (!accountPhotoUrl.isNullOrEmpty()) {
+                                AsyncImage(
+                                    model = accountPhotoUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            } else {
+                                Surface(
+                                    modifier = Modifier.size(48.dp),
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Outlined.CloudSync,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = accountName ?: (if (accountEmail != null) "Connected" else "Not connected"),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = if (isEmailHidden) Modifier.blur(7.dp) else Modifier,
+                                )
+                                if (!accountEmail.isNullOrBlank()) {
+                                    Text(
+                                        text = accountEmail!!,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = if (isEmailHidden) Modifier.blur(7.dp) else Modifier,
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Sign in to keep devices in sync",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+
+                            if (!accountEmail.isNullOrBlank()) {
+                                IconButton(onClick = {
+                                    isEmailHidden = !isEmailHidden
+                                    syncSettings.isEmailHidden = isEmailHidden
+                                }) {
+                                    Icon(
+                                        if (isEmailHidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                        contentDescription = "Toggle privacy",
+                                    )
+                                }
+                            }
                         }
                     }
-
-                    Button(
-                        onClick = { launchDriveAction("restore") },
-                        enabled = !isSyncing,
-                        modifier = Modifier.weight(1f).height(56.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF34A853),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        if (isSyncing && pendingAction == "restore") {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text("Restore", fontWeight = FontWeight.Bold)
-                        }
-                    }
                 }
 
-                if (lastSyncStatus != null) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = lastSyncStatus!!,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (lastSyncStatus!!.startsWith("✓")) Color(0xFF4CAF50) else Color(0xFFE53935),
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                // Last synced timestamp
-                val syncPrefs = context.getSharedPreferences(
-                    DriveSyncWorker.PREFS_NAME,
-                    android.content.Context.MODE_PRIVATE
-                )
-                val lastSyncTime = syncPrefs.getLong(DriveSyncWorker.KEY_LAST_SYNC_TIME, 0L)
-                if (lastSyncTime > 0L) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    val elapsed = System.currentTimeMillis() - lastSyncTime
-                    val timeAgo = when {
-                        elapsed < 60_000 -> "just now"
-                        elapsed < 3_600_000 -> "${elapsed / 60_000} min ago"
-                        elapsed < 86_400_000 -> "${elapsed / 3_600_000}h ago"
-                        else -> "${elapsed / 86_400_000}d ago"
-                    }
-                    Text(
-                        text = "Last synced: $timeAgo",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                // Auto-sync toggle
-                Spacer(modifier = Modifier.height(32.dp))
-                var autoSyncEnabled by remember {
-                    mutableStateOf(
-                        syncPrefs.getBoolean(DriveSyncWorker.KEY_AUTO_SYNC_ENABLED, true)
-                    )
-                }
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ) {
-                    Row(
+                // 2. Sync Status & Sync Now Button
+                item {
+                    ElevatedCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .clickable(enabled = !isSyncing) { runSync() },
+                        shape = RoundedCornerShape(16.dp),
                     ) {
-                        Text(
-                            text = "Auto-sync",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Switch(
-                            checked = autoSyncEnabled,
-                            onCheckedChange = { enabled ->
-                                autoSyncEnabled = enabled
-                                syncPrefs.edit().putBoolean(
-                                    DriveSyncWorker.KEY_AUTO_SYNC_ENABLED,
-                                    enabled
-                                ).apply()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Sync,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(32.dp),
+                            )
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                val title = when {
+                                    isSyncing -> "Syncing with Google Drive…"
+                                    lastError != null -> "Sync error"
+                                    lastSyncTimestamp > 0L -> "Up to date"
+                                    else -> "Never synced"
+                                }
+                                val subtitle = when {
+                                    isSyncing -> "Uploading & merging replicas…"
+                                    lastError != null -> "Tap to retry: $lastError"
+                                    lastSyncTimestamp > 0L -> "Last synced ${DateUtils.getRelativeTimeSpanString(lastSyncTimestamp)}"
+                                    else -> "Tap to sync now"
+                                }
+
+                                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(
+                                    subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (lastError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                        )
+
+                            if (isSyncing) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp)
+                            }
+                        }
+                    }
+                }
+
+                // 3. What to Sync Section
+                item {
+                    Text(
+                        text = "What to sync",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                item {
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            SyncContent.entries.forEach { content ->
+                                val isChecked = content.key in enabledContent
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val newSet = if (isChecked) {
+                                                enabledContent - content.key
+                                            } else {
+                                                enabledContent + content.key
+                                            }
+                                            enabledContent = newSet
+                                            syncSettings.enabledContent = newSet
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    val title = when (content) {
+                                        SyncContent.FAVOURITES -> "Favourites (Manga & Novels)"
+                                        SyncContent.HISTORY -> "Reading History & Progress"
+                                        SyncContent.BOOKMARKS -> "Page Bookmarks"
+                                        SyncContent.TRACKING -> "Tracker Progress (AniList / MAL)"
+                                        SyncContent.SETTINGS -> "Preferences & Reading Modes"
+                                    }
+                                    Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                                    Checkbox(
+                                        checked = isChecked,
+                                        onCheckedChange = { checked ->
+                                            val newSet = if (checked) enabledContent + content.key else enabledContent - content.key
+                                            enabledContent = newSet
+                                            syncSettings.enabledContent = newSet
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 4. Advanced Options
+                item {
+                    Text(
+                        text = "Settings",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                item {
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            // Wi-Fi Only Switch
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Wi-Fi only", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        "Only sync when connected to Wi-Fi",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Switch(
+                                    checked = isWifiOnly,
+                                    onCheckedChange = { checked ->
+                                        isWifiOnly = checked
+                                        syncSettings.isWifiOnly = checked
+                                        SyncWorker.Scheduler.schedule(context)
+                                    },
+                                )
+                            }
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                            // Delete Data Button
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showDeleteConfirm = true },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Delete all cloud data", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                                    Text("Erase all device replicas from Google Drive", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete all cloud data?") },
+                text = { Text("This will permanently remove all device replicas stored in your Google Drive appdata folder. Local data on your devices will remain.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteConfirm = false
+                            scope.launch {
+                                val res = syncRepository.deleteRemoteData()
+                                refreshState()
+                                if (res is SyncResult.Success) {
+                                    Toast.makeText(context, "Cloud replicas deleted", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                    ) {
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                },
+            )
         }
     }
 }

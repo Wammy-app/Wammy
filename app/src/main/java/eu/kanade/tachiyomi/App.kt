@@ -1,4 +1,4 @@
-﻿package eu.kanade.tachiyomi
+package eu.kanade.tachiyomi
 
 import android.annotation.SuppressLint
 import android.app.Application
@@ -139,6 +139,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         setupNotificationChannels()
 
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+        Injekt.get<eu.kanade.tachiyomi.data.sync.replica.SyncTrigger>().init()
 
         val scope = ProcessLifecycleOwner.get().lifecycleScope
 

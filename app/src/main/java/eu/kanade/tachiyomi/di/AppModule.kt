@@ -149,6 +149,15 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.sync.DriveSyncManager(app, get()) }
         addSingletonFactory { eu.kanade.tachiyomi.data.sync.FirestoreUserRepository() }
 
+        // Replica-based Google Drive sync
+        addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.SyncSettings(app) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.GoogleDriveApi(get<NetworkHelper>().client) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.GoogleDriveAuth(app) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.ReplicaBuilder(get(), get(), get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.ReplicaApplier(get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.GoogleDriveSyncRepository(app, get(), get(), get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.SyncTrigger(app, get(), get()) }
+
         addSingletonFactory { ChapterCache(app, get()) }
         addSingletonFactory { CoverCache(app) }
         addSingletonFactory { LibrarySettingsCache(app) }
