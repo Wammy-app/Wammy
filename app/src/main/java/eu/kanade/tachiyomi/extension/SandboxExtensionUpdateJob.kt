@@ -1,10 +1,13 @@
 package eu.kanade.tachiyomi.extension
 
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -16,8 +19,9 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.TimeUnit
 
 /**
- * Background job that silently auto-updates sandbox extensions once per day.
- * Only runs when sandbox mode is enabled. Zero user interaction — no popups, no dialogs.
+ * Background job that silently auto-updates sandbox extensions.
+ * Runs periodically (daily) and can also be triggered immediately.
+ * Only runs when sandbox mode is enabled. Zero user interaction.
  */
 class SandboxExtensionUpdateJob(
     private val context: Context,
@@ -68,9 +72,19 @@ class SandboxExtensionUpdateJob(
     }
 
     companion object {
-        private const val TAG = "SandboxExtensionUpdateJob"
+        private const val PERIODIC_WORK_NAME = "SandboxExtensionUpdateJob"
+        private const val IMMEDIATE_WORK_NAME = "SandboxExtensionUpdateJob_immediate"
+
+        private fun periodicConstraints() = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        private fun immediateConstraints() = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
 
         /**
+         * Schedule or cancel the periodic daily check + an immediate one-shot check.
          * Call with enabled=true when sandbox is turned ON.
          * Call with enabled=false when sandbox is turned OFF.
          */
@@ -78,29 +92,39 @@ class SandboxExtensionUpdateJob(
             val workManager = WorkManager.getInstance(context)
 
             if (!enabled) {
-                workManager.cancelUniqueWork(TAG)
-                logcat { "Sandbox auto-update worker cancelled" }
+                workManager.cancelUniqueWork(PERIODIC_WORK_NAME)
+                workManager.cancelUniqueWork(IMMEDIATE_WORK_NAME)
+                logcat { "Sandbox auto-update workers cancelled" }
                 return
             }
 
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
-
-            val request = PeriodicWorkRequestBuilder<SandboxExtensionUpdateJob>(
+            // 1. Schedule the periodic daily check (same as DropSauce: 1 day interval)
+            val periodicRequest = PeriodicWorkRequestBuilder<SandboxExtensionUpdateJob>(
                 1, TimeUnit.DAYS,
             )
-                .setConstraints(constraints)
-                .addTag(TAG)
+                .setConstraints(periodicConstraints())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
                 .build()
 
             workManager.enqueueUniquePeriodicWork(
-                TAG,
+                PERIODIC_WORK_NAME,
                 ExistingPeriodicWorkPolicy.UPDATE,
-                request,
+                periodicRequest,
             )
 
-            logcat { "Sandbox auto-update worker scheduled (daily)" }
+            // 2. Fire an immediate one-shot check right now
+            val immediateRequest = OneTimeWorkRequestBuilder<SandboxExtensionUpdateJob>()
+                .setConstraints(immediateConstraints())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.MINUTES)
+                .build()
+
+            workManager.enqueueUniqueWork(
+                IMMEDIATE_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                immediateRequest,
+            )
+
+            logcat { "Sandbox auto-update workers scheduled (immediate + daily)" }
         }
     }
 }
