@@ -84,7 +84,7 @@ data object MoreTab : Tab {
 
 class MoreViewModel(
     private val downloadManager: DownloadManager = Injekt.get(),
-    preferences: BasePreferences = Injekt.get(),
+    private val preferences: BasePreferences = Injekt.get(),
 ) : ViewModel() {
 
     var downloadedOnly by preferences.downloadedOnly.asState(viewModelScope)
