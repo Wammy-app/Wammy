@@ -219,6 +219,8 @@ class DriveSyncWorker(
         const val KEY_LAST_SYNC_TIME = "last_sync_time"
         const val KEY_DATA_DIRTY = "data_dirty"
         const val KEY_AUTO_SYNC_ENABLED = "auto_sync_enabled"
+        const val KEY_WIFI_ONLY = "sync_only_wifi"
+        const val KEY_SYNC_INTERVAL_HOURS = "sync_interval_hours"
 
         private const val NOTIF_ID_BACKUP = -510
         private const val NOTIF_ID_RESTORE = -511
@@ -248,10 +250,11 @@ class DriveSyncWorker(
             // Mark data as dirty (persisted to disk)
             prefs.edit().putBoolean(KEY_DATA_DIRTY, true).apply()
 
-            // Enqueue a delayed WorkManager backup.
-            // REPLACE policy = debounce. Every new call resets the 2-minute timer.
+            val wifiOnly = prefs.getBoolean(KEY_WIFI_ONLY, false)
+            val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
+
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiredNetworkType(networkType)
                 .build()
 
             val request = OneTimeWorkRequestBuilder<DriveSyncWorker>()
@@ -265,7 +268,7 @@ class DriveSyncWorker(
                 request
             )
 
-            logcat(LogPriority.INFO) { "DriveSyncWorker: Backup scheduled (2-minute debounce)" }
+            logcat(LogPriority.INFO) { "DriveSyncWorker: Backup scheduled (2-minute debounce, wifiOnly=$wifiOnly)" }
         }
 
         /**
@@ -276,8 +279,12 @@ class DriveSyncWorker(
             // Guard: skip if user is not logged in
             if (FirebaseAuth.getInstance().currentUser == null) return
 
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val wifiOnly = prefs.getBoolean(KEY_WIFI_ONLY, false)
+            val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
+
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiredNetworkType(networkType)
                 .build()
 
             val request = OneTimeWorkRequestBuilder<DriveSyncWorker>()
@@ -293,19 +300,31 @@ class DriveSyncWorker(
         }
 
         /**
-         * Schedule a periodic backup every 12 hours as a fallback.
+         * Schedule a periodic backup with configurable interval.
          * Only runs if user is logged in.
          */
-        fun schedulePeriodicBackup(context: Context) {
+        fun schedulePeriodicBackup(context: Context, intervalHours: Long? = null) {
             // Guard: skip if user is not logged in
             if (FirebaseAuth.getInstance().currentUser == null) return
 
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (!prefs.getBoolean(KEY_AUTO_SYNC_ENABLED, true)) return
+
+            val hours = intervalHours ?: prefs.getLong(KEY_SYNC_INTERVAL_HOURS, 6L)
+            if (hours <= 0L) {
+                WorkManager.getInstance(context).cancelUniqueWork("DriveSyncPeriodic")
+                return
+            }
+
+            val wifiOnly = prefs.getBoolean(KEY_WIFI_ONLY, false)
+            val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
+
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiredNetworkType(networkType)
                 .build()
 
             val request = androidx.work.PeriodicWorkRequestBuilder<DriveSyncWorker>(
-                12, TimeUnit.HOURS
+                hours, TimeUnit.HOURS
             )
                 .setConstraints(constraints)
                 .build()

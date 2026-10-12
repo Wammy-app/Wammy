@@ -4,13 +4,21 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -119,6 +127,9 @@ object HomeScreen : Screen() {
         val currentScreen = navigator.lastItem
         LaunchedEffect(user, currentScreen) {
             val uid = user?.uid
+            if (uid != null) {
+                basePreferences.hasCompletedInitialLogin.set(true)
+            }
             if (uid != null && currentScreen is HomeScreen) {
                 val hasProfile = repo.hasProfile(uid)
                 if (hasProfile == false) {
@@ -141,110 +152,115 @@ object HomeScreen : Screen() {
             CompositionLocalProvider(LocalNavigator provides navigator) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     Scaffold(
-                    startBar = {
-                        if (isTabletUi()) {
-                            NavigationRail {
-                                tabs.fastForEach {
-                                    NavigationRailItem(it)
+                        startBar = {
+                            if (isTabletUi()) {
+                                NavigationRail {
+                                    tabs.fastForEach {
+                                        NavigationRailItem(it)
+                                    }
+                                }
+                            }
+                        },
+                        contentWindowInsets = WindowInsets(0),
+                    ) { contentPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(
+                                    top = contentPadding.calculateTopPadding(),
+                                    start = contentPadding.calculateStartPadding(LocalLayoutDirection.current),
+                                    end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
+                                ),
+                        ) {
+                            AnimatedContent(
+                                targetState = tabNavigator.current,
+                                transitionSpec = {
+                                    materialFadeThroughIn(initialScale = 1f, durationMillis = TabFadeDuration) togetherWith
+                                        materialFadeThroughOut(durationMillis = TabFadeDuration)
+                                },
+                                label = "tabContent",
+                            ) {
+                                tabNavigator.saveableState(key = "currentTab", it) {
+                                    it.Content()
                                 }
                             }
                         }
-                    },
-                    bottomBar = {
-                        if (!isTabletUi()) {
-                            val bottomNavVisible by produceState(initialValue = true) {
-                                showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
-                            }
-                            AnimatedVisibility(
-                                visible = bottomNavVisible,
-                                enter = expandVertically(),
-                                exit = shrinkVertically(),
-                            ) {
-                                val scope = rememberCoroutineScope()
-                                WavyDockNavigationBar(
-                                    tabs = tabs,
-                                    currentTab = tabNavigator.current,
-                                    onTabSelected = { tab ->
-                                        if (tabNavigator.current::class != tab::class) {
-                                            tabNavigator.current = tab
-                                        } else {
-                                            scope.launch { tab.onReselect(navigator) }
-                                        }
-                                    },
-                                    badgeContent = { tab ->
-                                        when {
-                                            tab is UpdatesTab -> {
-                                                val count by produceState(initialValue = 0) {
-                                                    val pref = Injekt.get<LibraryPreferences>()
-                                                    combine(
-                                                        pref.newShowUpdatesCount.changes(),
-                                                        pref.newUpdatesCount.changes(),
-                                                    ) { show, count -> if (show) count else 0 }
-                                                        .collectLatest { value = it }
-                                                }
-                                                if (count > 0) {
-                                                    Badge {
-                                                        val desc = pluralStringResource(
-                                                            MR.plurals.notification_chapters_generic,
-                                                            count = count,
-                                                            count,
-                                                        )
-                                                        Text(
-                                                            text = count.toString(),
-                                                            modifier = Modifier.semantics { contentDescription = desc },
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            BrowseTab::class.isInstance(tab) -> {
-                                                val count by produceState(initialValue = 0) {
-                                                    Injekt.get<SourcePreferences>().extensionUpdatesCount.changes()
-                                                        .collectLatest { value = it }
-                                                }
-                                                if (count > 0) {
-                                                    Badge {
-                                                        val desc = pluralStringResource(
-                                                            MR.plurals.update_check_notification_ext_updates,
-                                                            count = count,
-                                                            count,
-                                                        )
-                                                        Text(
-                                                            text = count.toString(),
-                                                            modifier = Modifier.semantics { contentDescription = desc },
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    },
-                                )
-                            }
+                    }
+
+                    if (!isTabletUi()) {
+                        val bottomNavVisible by produceState(initialValue = true) {
+                            showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
                         }
-                    },
-                    contentWindowInsets = WindowInsets(0),
-                ) { contentPadding ->
-                    Box(
-                        modifier = Modifier
-                            .padding(contentPadding)
-                            .consumeWindowInsets(contentPadding),
-                    ) {
-                        AnimatedContent(
-                            targetState = tabNavigator.current,
-                            transitionSpec = {
-                                materialFadeThroughIn(initialScale = 1f, durationMillis = TabFadeDuration) togetherWith
-                                    materialFadeThroughOut(durationMillis = TabFadeDuration)
-                            },
-                            label = "tabContent",
+                        AnimatedVisibility(
+                            visible = bottomNavVisible,
+                            enter = slideInVertically { it } + fadeIn(),
+                            exit = slideOutVertically { it } + fadeOut(),
+                            modifier = Modifier.align(Alignment.BottomCenter),
                         ) {
-                            tabNavigator.saveableState(key = "currentTab", it) {
-                                it.Content()
-                            }
+                            val scope = rememberCoroutineScope()
+                            WavyDockNavigationBar(
+                                tabs = tabs,
+                                currentTab = tabNavigator.current,
+                                onTabSelected = { tab ->
+                                    if (tabNavigator.current::class != tab::class) {
+                                        tabNavigator.current = tab
+                                    } else {
+                                        scope.launch { tab.onReselect(navigator) }
+                                    }
+                                },
+                                badgeContent = { tab ->
+                                    when {
+                                        tab is UpdatesTab -> {
+                                            val count by produceState(initialValue = 0) {
+                                                val pref = Injekt.get<LibraryPreferences>()
+                                                combine(
+                                                    pref.newShowUpdatesCount.changes(),
+                                                    pref.newUpdatesCount.changes(),
+                                                ) { show, count -> if (show) count else 0 }
+                                                    .collectLatest { value = it }
+                                            }
+                                            if (count > 0) {
+                                                Badge {
+                                                    val desc = pluralStringResource(
+                                                        MR.plurals.notification_chapters_generic,
+                                                        count = count,
+                                                        count,
+                                                    )
+                                                    Text(
+                                                        text = count.toString(),
+                                                        modifier = Modifier.semantics { contentDescription = desc },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        BrowseTab::class.isInstance(tab) -> {
+                                            val count by produceState(initialValue = 0) {
+                                                Injekt.get<SourcePreferences>().extensionUpdatesCount.changes()
+                                                    .collectLatest { value = it }
+                                            }
+                                            if (count > 0) {
+                                                Badge {
+                                                    val desc = pluralStringResource(
+                                                        MR.plurals.update_check_notification_ext_updates,
+                                                        count = count,
+                                                        count,
+                                                    )
+                                                    Text(
+                                                        text = count.toString(),
+                                                        modifier = Modifier.semantics { contentDescription = desc },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                            )
                         }
                     }
-                }
 
                 val hasShownOnboarding by basePreferences.shownOnboardingFlow.collectAsState()
-                if (user == null && hasShownOnboarding) {
+                val hasCompletedInitialLogin by basePreferences.hasCompletedInitialLogin.collectAsState()
+                if (user == null && hasShownOnboarding && !hasCompletedInitialLogin) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()

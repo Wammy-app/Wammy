@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.discover.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,8 +24,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,7 +70,8 @@ fun HeroFeaturedCard(
             val manga = items[page]
             val coverData = manga.asMangaCover()
             val genresText = manga.genre?.take(2)?.joinToString(" • ") ?: ""
-            val authorText = manga.author?.takeIf { it.isNotBlank() }?.let { "By $it" } ?: ""
+            val rawAuthor = manga.author?.takeIf { it.isNotBlank() } ?: manga.artist?.takeIf { it.isNotBlank() }
+            val authorText = rawAuthor?.let { if (it.startsWith("by ", ignoreCase = true)) it else "By $it" } ?: ""
 
             Box(
                 modifier = Modifier
@@ -132,75 +137,90 @@ fun HeroFeaturedCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // Left spacer reserved for the visible sharp character art
-                    Spacer(modifier = Modifier.weight(0.38f))
+                    Spacer(modifier = Modifier.weight(0.48f))
 
                     // Right column for title, genres, author, and Read button
                     Column(
                         modifier = Modifier
-                            .weight(0.62f)
-                            .fillMaxHeight(),
+                            .weight(0.52f)
+                            .fillMaxHeight()
+                            .padding(start = 6.dp),
                         verticalArrangement = Arrangement.SpaceBetween,
+                        horizontalAlignment = Alignment.End,
                     ) {
-                        Column {
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
                             Text(
                                 text = manga.title,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
                                 color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = FontFamily.SansSerif,
+                                letterSpacing = 0.3.sp,
+                                lineHeight = 19.sp,
                                 maxLines = 2,
+                                textAlign = TextAlign.End,
                                 overflow = TextOverflow.Ellipsis,
                             )
 
-                            if (genresText.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(4.dp))
+                            if (authorText.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(3.dp))
                                 Text(
-                                    text = genresText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.85f),
+                                    text = authorText,
+                                    color = Color.White.copy(alpha = 0.70f),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = FontFamily.SansSerif,
+                                    letterSpacing = 0.2.sp,
                                     maxLines = 1,
+                                    textAlign = TextAlign.End,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
 
-                            if (authorText.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(2.dp))
+                            if (genresText.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(3.dp))
                                 Text(
-                                    text = authorText,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White.copy(alpha = 0.65f),
+                                    text = genresText,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    fontFamily = FontFamily.SansSerif,
+                                    letterSpacing = 0.2.sp,
                                     maxLines = 1,
+                                    textAlign = TextAlign.End,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
 
-                        // [ ▶ READ ] Pill Button
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
+                        // "READ NOW" pill button matching design reference
+                        Surface(
+                            onClick = { onClick(manga) },
+                            shape = CircleShape,
+                            color = Color(0xFF0D62D9),
+                            shadowElevation = 0.dp,
                         ) {
-                            Button(
-                                onClick = { onClick(manga) },
-                                shape = RoundedCornerShape(24.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF1E1E1E).copy(alpha = 0.85f),
-                                    contentColor = Color.White,
-                                ),
-                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp),
-                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.PlayArrow,
                                     contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
                                     tint = Color.White,
+                                    modifier = Modifier.size(16.dp),
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "READ",
+                                    text = "READ NOW",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    letterSpacing = 1.sp,
+                                    fontFamily = FontFamily.SansSerif,
+                                    letterSpacing = 0.4.sp,
                                 )
                             }
                         }

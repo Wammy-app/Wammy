@@ -31,6 +31,11 @@ class BasePreferences(
         false,
     )
 
+    val hasCompletedInitialLogin: Preference<Boolean> = preferenceStore.getBoolean(
+        Preference.appStateKey("has_completed_initial_login"),
+        false,
+    )
+
     val hideMangaUi: Preference<Boolean> = preferenceStore.getBoolean(
         Preference.appStateKey("pref_hide_manga_ui"),
         false,

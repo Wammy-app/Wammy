@@ -94,11 +94,13 @@ import eu.kanade.tachiyomi.ui.history.HistoryTab
 import eu.kanade.tachiyomi.ui.history.HistoryFilter
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import tachiyomi.domain.source.interactor.GetRemoteManga
+import eu.kanade.tachiyomi.ui.discover.components.ContinueReadingCarouselWidget
 import eu.kanade.tachiyomi.ui.discover.components.ContinueReadingDiscWidget
 import eu.kanade.tachiyomi.ui.discover.components.HeroFeaturedCard
 import eu.kanade.tachiyomi.ui.discover.components.HomeMediaSection
 import eu.kanade.tachiyomi.ui.discover.components.HomeTopBar
 import eu.kanade.tachiyomi.ui.discover.components.RecentlyUploadedCard
+import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 
 object DiscoverTab : Tab {
 
@@ -147,7 +149,9 @@ object DiscoverTab : Tab {
                 )
             },
             floatingActionButton = {
-                SwipeUpFab(onSlideUpTriggered = { viewModel.toggleNovel(!state.isNovel) })
+                Box(modifier = Modifier.padding(bottom = 80.dp)) {
+                    SwipeUpFab(onSlideUpTriggered = { viewModel.toggleNovel(!state.isNovel) })
+                }
             }
         ) { contentPadding ->
             androidx.compose.animation.Crossfade(targetState = state, animationSpec = tween(400), modifier = Modifier.padding(contentPadding).fillMaxSize(), label = "discover") { animatedState ->
@@ -200,6 +204,12 @@ object DiscoverTab : Tab {
                         trendingAggregated.take(5)
                     }
 
+                    LaunchedEffect(featuredManga) {
+                        if (featuredManga.isNotEmpty()) {
+                            viewModel.fetchFeaturedDetails(featuredManga)
+                        }
+                    }
+
                     val allCachesLoaded = animatedState.sources.all { viewModel.popularCache.containsKey(it.id) }
                     val hasNoMangaAtAll = allCachesLoaded && viewModel.popularCache.values.all { it.isEmpty() }
 
@@ -228,18 +238,25 @@ object DiscoverTab : Tab {
                                 Spacer(modifier = Modifier.height(10.dp))
                             }
 
-                            // 2. Continue Reading (Vinyl Disc Widget)
+                            // 2. Continue Reading (Vinyl Disc Carousel)
                             if (recentlyRead.isNotEmpty()) {
                                 item {
-                                    ContinueReadingDiscWidget(
-                                        history = recentlyRead.firstOrNull(),
+                                    val continueReadingItems = remember(recentlyRead) { recentlyRead.take(5) }
+                                    val context = androidx.compose.ui.platform.LocalContext.current
+                                    ContinueReadingCarouselWidget(
+                                        items = continueReadingItems,
                                         onClick = { history ->
-                                            scope.launch {
-                                                navigator.push(MangaScreen(history.mangaId))
+                                            if (history.chapterId > 0) {
+                                                val intent = ReaderActivity.newIntent(context, history.mangaId, history.chapterId)
+                                                context.startActivity(intent)
+                                            } else {
+                                                scope.launch {
+                                                    navigator.push(MangaScreen(history.mangaId))
+                                                }
                                             }
-                                        }
+                                        },
                                     )
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Spacer(modifier = Modifier.height(14.dp))
                                 }
                             }
 
@@ -255,7 +272,7 @@ object DiscoverTab : Tab {
                                             }
                                         },
                                         onFilterClick = {
-                                            tabNavigator.current = BrowseTab
+                                            navigator.push(DiscoverFeedScreen(isLatest = true))
                                         }
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
@@ -282,15 +299,7 @@ object DiscoverTab : Tab {
                                         title = "Trending",
                                         items = trendingAggregated,
                                         onSeeAll = {
-                                            if (animatedState.sources.isNotEmpty()) {
-                                                navigator.push(
-                                                    BrowseSourceScreen(
-                                                        animatedState.sources.first().id,
-                                                        GetRemoteManga.QUERY_POPULAR,
-                                                        isFeed = true
-                                                    )
-                                                )
-                                            }
+                                            navigator.push(DiscoverFeedScreen(isLatest = false))
                                         },
                                         onClick = { manga ->
                                             scope.launch {
@@ -309,15 +318,7 @@ object DiscoverTab : Tab {
                                         title = "Latest",
                                         items = latestAggregated,
                                         onSeeAll = {
-                                            if (animatedState.sources.isNotEmpty()) {
-                                                navigator.push(
-                                                    BrowseSourceScreen(
-                                                        animatedState.sources.first().id,
-                                                        GetRemoteManga.QUERY_LATEST,
-                                                        isFeed = true
-                                                    )
-                                                )
-                                            }
+                                            navigator.push(DiscoverFeedScreen(isLatest = true))
                                         },
                                         onClick = { manga ->
                                             scope.launch {
@@ -331,7 +332,7 @@ object DiscoverTab : Tab {
 
                             // Bottom Spacer for clean clearance above dock
                             item {
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(96.dp))
                             }
                         }
                     }

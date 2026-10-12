@@ -32,6 +32,8 @@ import eu.kanade.tachiyomi.data.sync.DriveApiHelper
 import eu.kanade.tachiyomi.data.sync.AuthorizationResult
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,6 +123,8 @@ fun LoginBottomSheet(
                                 val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
                                 FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).addOnCompleteListener { task ->
                                     if (task.isSuccessful) {
+                                        uy.kohesive.injekt.Injekt.get<eu.kanade.domain.base.BasePreferences>()
+                                            .hasCompletedInitialLogin.set(true)
                                         Toast.makeText(context, "Signed in successfully!", Toast.LENGTH_SHORT).show()
                                         
                                         scope.launch {

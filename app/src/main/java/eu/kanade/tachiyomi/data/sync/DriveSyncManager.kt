@@ -210,6 +210,48 @@ class DriveSyncManager(
             logcat(LogPriority.WARN, e) { "DriveSync: Failed to cleanup legacy file (non-critical)" }
         }
     }
+
+    /**
+     * Delete all backup files from Google Drive appdata folder and reset local sync state.
+     */
+    suspend fun deleteCloudBackup(): SyncResult = syncMutex.withLock {
+        withContext(Dispatchers.IO) {
+            try {
+                val accessToken = driveApiHelper.getAccessToken()
+                    ?: return@withContext SyncResult.Error("Not authorized for Google Drive.")
+
+                var deletedAny = false
+                val fileId = driveApiHelper.findSyncFile(accessToken)
+                if (fileId != null) {
+                    val deleted = driveApiHelper.deleteSyncFile(accessToken, fileId)
+                    if (deleted) deletedAny = true
+                }
+
+                val legacyFileId = driveApiHelper.findLegacySyncFile(accessToken)
+                if (legacyFileId != null) {
+                    val deleted = driveApiHelper.deleteSyncFile(accessToken, legacyFileId)
+                    if (deleted) deletedAny = true
+                }
+
+                // Clear sync timestamp & hash
+                val prefs = context.getSharedPreferences(DriveSyncWorker.PREFS_NAME, Context.MODE_PRIVATE)
+                prefs.edit()
+                    .remove("last_backup_hash")
+                    .remove(DriveSyncWorker.KEY_LAST_SYNC_TIME)
+                    .putBoolean(DriveSyncWorker.KEY_DATA_DIRTY, false)
+                    .apply()
+
+                if (deletedAny) {
+                    SyncResult.Success("Cloud sync data removed from Google Drive")
+                } else {
+                    SyncResult.Success("No cloud backups found to delete")
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "DriveSync: Failed to delete cloud backup" }
+                SyncResult.Error(e.message ?: "Failed to delete sync data")
+            }
+        }
+    }
 }
 
 sealed class SyncResult {

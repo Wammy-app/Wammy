@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -20,6 +21,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -58,6 +60,7 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryManga
+import tachiyomi.presentation.core.util.plus
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.novel.TDMR
@@ -220,7 +223,7 @@ data object LibraryTab : Tab {
                         categories = state.displayedCategories,
                         searchQuery = state.searchQuery,
                         selection = state.selection,
-                        contentPadding = contentPadding,
+                        contentPadding = contentPadding + PaddingValues(bottom = 84.dp),
                         currentPage = state.coercedActiveCategoryIndex,
                         hasActiveFilters = state.hasActiveFilters,
                         isQueryRunning = state.isQueryRunning,

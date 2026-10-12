@@ -43,6 +43,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.*
 
 data object MoreTab : Tab {
 
@@ -121,14 +122,12 @@ data object MoreTab : Tab {
                     onDismissRequest = { /* block dismiss during migration */ },
                     title = { Text("Migrating extensions…") },
                     text = {
-                        androidx.compose.foundation.layout.Column {
+                        Column {
                             Text("${state.done} / ${state.total} done")
-                            androidx.compose.foundation.layout.Spacer(
-                                modifier = androidx.compose.ui.Modifier.height(8.dp),
-                            )
+                            Spacer(modifier = Modifier.height(8.dp))
                             LinearProgressIndicator(
                                 progress = { if (state.total == 0) 0f else state.done.toFloat() / state.total },
-                                modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth(),
                             )
                         }
                     },

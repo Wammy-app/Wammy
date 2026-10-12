@@ -244,6 +244,8 @@ class ProfileScreen : Screen {
                                     headlineContent = { Text("Sign Out", color = MaterialTheme.colorScheme.error) },
                                     modifier = Modifier.clickable { 
                                         showBottomSheet = false
+                                        Injekt.get<eu.kanade.domain.base.BasePreferences>()
+                                            .hasCompletedInitialLogin.set(true)
                                         authManager.signOut()
                                         navigator.pop()
                                     }
@@ -947,15 +949,19 @@ class ProfileScreen : Screen {
                                         val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
                                         FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).addOnCompleteListener { task ->
                                             if (task.isSuccessful) {
+                                                Injekt.get<eu.kanade.domain.base.BasePreferences>()
+                                                    .hasCompletedInitialLogin.set(true)
                                                 Toast.makeText(context, "Signed in successfully!", Toast.LENGTH_SHORT).show()
                                                 
                                                 // Request Google Drive permission for sync immediately after login
-                                                  scope.launch {
-                                                      // Wait for their profile to be fully created/loaded first
-                                                      val currentUid = FirebaseAuth.getInstance().currentUser?.uid
-                                                      if (currentUid != null) {
-                                                          androidx.compose.runtime.snapshotFlow { cloudUser }.first { it != null }
-                                                      }
+                                                scope.launch {
+                                                    // Wait briefly for their profile to be loaded if it exists
+                                                    val currentUid = FirebaseAuth.getInstance().currentUser?.uid
+                                                    if (currentUid != null) {
+                                                        kotlinx.coroutines.withTimeoutOrNull(2500L) {
+                                                            androidx.compose.runtime.snapshotFlow { cloudUser }.first { it != null }
+                                                        }
+                                                    }
                                                     when (val authResult = driveApiHelper.requestDriveAuthorization()) {
                                                         is AuthorizationResult.NeedsConsent -> {
                                                             // New device/account -> prompt for Drive permission
