@@ -65,6 +65,11 @@ data object MoreTab : Tab {
             onDownloadedOnlyChange = { viewModel.downloadedOnly = it },
             incognitoMode = viewModel.incognitoMode,
             onIncognitoModeChange = { viewModel.incognitoMode = it },
+            sandboxExtensionsEnabled = viewModel.sandboxExtensionsEnabled,
+            onSandboxExtensionsChange = { enabled ->
+                viewModel.sandboxExtensionsEnabled = enabled
+                viewModel.setSandboxInstaller(enabled)
+            },
             onClickDownloadQueue = { navigator.push(DownloadQueueScreen()) },
             onClickUpdates = { navigator.push(eu.kanade.tachiyomi.ui.updates.UpdatesTab) },
             onClickCategories = { navigator.push(CategoryScreen()) },
@@ -84,6 +89,15 @@ class MoreViewModel(
 
     var downloadedOnly by preferences.downloadedOnly.asState(viewModelScope)
     var incognitoMode by preferences.incognitoMode.asState(viewModelScope)
+    var sandboxExtensionsEnabled by preferences.sandboxExtensionsEnabled.asState(viewModelScope)
+
+    fun setSandboxInstaller(enabled: Boolean) {
+        if (enabled) {
+            preferences.extensionInstaller.set(BasePreferences.ExtensionInstaller.PRIVATE)
+        } else {
+            preferences.extensionInstaller.set(BasePreferences.ExtensionInstaller.PACKAGEINSTALLER)
+        }
+    }
 
     private var _downloadQueueState: MutableStateFlow<DownloadQueueState> = MutableStateFlow(DownloadQueueState.Stopped)
     val downloadQueueState: StateFlow<DownloadQueueState> = _downloadQueueState.asStateFlow()

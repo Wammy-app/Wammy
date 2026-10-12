@@ -16,16 +16,21 @@ import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.QueryStats
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Update
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -60,6 +65,8 @@ fun MoreScreen(
     onDownloadedOnlyChange: (Boolean) -> Unit,
     incognitoMode: Boolean,
     onIncognitoModeChange: (Boolean) -> Unit,
+    sandboxExtensionsEnabled: Boolean,
+    onSandboxExtensionsChange: (Boolean) -> Unit,
     onClickDownloadQueue: () -> Unit,
     onClickUpdates: () -> Unit,
     onClickCategories: () -> Unit,
@@ -72,6 +79,7 @@ fun MoreScreen(
     val uriHandler = LocalUriHandler.current
     val uiPreferences = remember { Injekt.get<UiPreferences>() }
     val fabSizeDp by uiPreferences.fabSizeDp.collectAsState()
+    var showSandboxDialog by remember { mutableStateOf(false) }
 
     Scaffold { contentPadding ->
         ScrollbarLazyColumn(contentPadding = contentPadding) {
@@ -155,6 +163,31 @@ fun MoreScreen(
                         icon = Icons.Outlined.Storage,
                         onClick = onClickDataAndStorage,
                     )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingItem(
+                        title = "Sandbox extensions",
+                        subtitle = "Install extensions inside the app. No install popups, silent updates.",
+                        icon = Icons.Outlined.Security,
+                        onClick = {
+                            if (!sandboxExtensionsEnabled) {
+                                showSandboxDialog = true
+                            } else {
+                                onSandboxExtensionsChange(false)
+                            }
+                        },
+                        trailing = {
+                            Switch(
+                                checked = sandboxExtensionsEnabled,
+                                onCheckedChange = { newValue ->
+                                    if (newValue) {
+                                        showSandboxDialog = true
+                                    } else {
+                                        onSandboxExtensionsChange(false)
+                                    }
+                                },
+                            )
+                        },
+                    )
                 }
             }
 
@@ -202,6 +235,32 @@ fun MoreScreen(
                 }
             }
         }
+    }
+
+    // Sandbox confirmation dialog
+    if (showSandboxDialog) {
+        AlertDialog(
+            onDismissRequest = { showSandboxDialog = false },
+            title = { Text("Enable sandbox mode?") },
+            text = {
+                Text(
+                    "Extensions will be installed inside Wammy's private storage.\n\n" +
+                        "• No Android install popups\n" +
+                        "• Silent automatic updates\n" +
+                        "• Extensions are hidden from other apps\n\n" +
+                        "Your existing extensions will keep working. New installs and updates will use sandbox mode.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSandboxDialog = false
+                    onSandboxExtensionsChange(true)
+                }) { Text("Enable") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSandboxDialog = false }) { Text("Cancel") }
+            },
+        )
     }
 }
 
