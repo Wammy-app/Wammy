@@ -154,7 +154,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.GoogleDriveApi(get<NetworkHelper>().client) }
         addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.GoogleDriveAuth(app) }
         addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.ReplicaBuilder(get(), get(), get(), get(), get()) }
-        addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.ReplicaApplier(get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.ReplicaApplier(get(), get(), get(), get()) }
         addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.GoogleDriveSyncRepository(app, get(), get(), get(), get(), get()) }
         addSingletonFactory { eu.kanade.tachiyomi.data.sync.replica.SyncTrigger(app, get(), get()) }
 

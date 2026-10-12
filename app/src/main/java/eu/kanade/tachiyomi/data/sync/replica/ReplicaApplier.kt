@@ -1,11 +1,12 @@
 package eu.kanade.tachiyomi.data.sync.replica
 
-import app.cash.sqldelight.async.coroutines.awaitAsList
-import app.cash.sqldelight.async.coroutines.awaitAsOne
 import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
 import tachiyomi.data.Database
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
+import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.model.MangaUpdate
+import tachiyomi.domain.manga.repository.MangaRepository
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.Date
@@ -15,6 +16,7 @@ import java.util.Date
  */
 class ReplicaApplier(
     private val database: Database = Injekt.get(),
+    private val mangaRepository: MangaRepository = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
     private val setMangaCategories: SetMangaCategories = Injekt.get(),
 ) {
@@ -44,65 +46,44 @@ class ReplicaApplier(
 
         // 2. Favourites (Manga & Novels)
         for (fav in changes.favouritesToUpsert) {
-            val existingManga = database.mangasQueries
-                .getMangaByUrlAndSource(fav.url, fav.source)
-                .awaitAsOneOrNull()
+            val existingManga = mangaRepository.getMangaByUrlAndSourceId(fav.url, fav.source)
 
             val mangaId = if (existingManga != null) {
-                database.mangasQueries.update(
-                    mangaId = existingManga._id,
-                    source = fav.source,
-                    url = fav.url,
-                    artist = fav.artist ?: existingManga.artist,
-                    author = fav.author ?: existingManga.author,
-                    description = fav.description ?: existingManga.description,
-                    genre = if (fav.genre.isNotEmpty()) fav.genre else existingManga.genre,
-                    title = fav.title,
-                    status = if (fav.status > 0) fav.status else existingManga.status,
-                    thumbnailUrl = fav.thumbnailUrl ?: existingManga.thumbnail_url,
-                    favorite = fav.favorite,
-                    lastUpdate = existingManga.last_update,
-                    nextUpdate = existingManga.next_update,
-                    calculateInterval = existingManga.calculate_interval,
-                    initialized = existingManga.initialized,
-                    viewerFlags = existingManga.viewer,
-                    chapterFlags = existingManga.chapter_flags,
-                    coverLastModified = existingManga.cover_last_modified,
-                    dateAdded = existingManga.date_added,
-                    updateStrategy = existingManga.update_strategy,
-                    version = existingManga.version,
-                    notes = existingManga.notes,
+                mangaRepository.update(
+                    MangaUpdate(
+                        id = existingManga.id,
+                        favorite = fav.favorite,
+                        title = fav.title,
+                        artist = fav.artist,
+                        author = fav.author,
+                        description = fav.description,
+                        genre = fav.genre.takeIf { it.isNotEmpty() },
+                        thumbnailUrl = fav.thumbnailUrl,
+                        status = fav.status.takeIf { it > 0 },
+                    ),
                 )
-                existingManga._id
+                existingManga.id
             } else {
-                database.mangasQueries.insert(
+                val newManga = Manga.create().copy(
                     source = fav.source,
                     url = fav.url,
+                    title = fav.title,
                     artist = fav.artist,
                     author = fav.author,
                     description = fav.description,
                     genre = fav.genre,
-                    title = fav.title,
-                    status = fav.status,
                     thumbnailUrl = fav.thumbnailUrl,
+                    status = fav.status,
                     favorite = fav.favorite,
-                    lastUpdate = null,
-                    nextUpdate = null,
-                    calculateInterval = 0L,
-                    initialized = false,
-                    viewerFlags = 0L,
-                    chapterFlags = 0L,
-                    coverLastModified = 0L,
-                    dateAdded = System.currentTimeMillis(),
-                    updateStrategy = eu.kanade.tachiyomi.source.model.UpdateStrategy.ALWAYS_UPDATE,
-                    version = 0L,
                     isNovel = fav.isNovel,
+                    dateAdded = System.currentTimeMillis(),
                 )
-                database.mangasQueries.selectLastInsertedRowId().awaitAsOne()
+                val inserted = mangaRepository.insertNetworkManga(listOf(newManga))
+                inserted.firstOrNull()?.id ?: 0L
             }
 
             // Assign categories if provided
-            if (fav.categoryNames.isNotEmpty()) {
+            if (mangaId > 0L && fav.categoryNames.isNotEmpty()) {
                 val catIds = fav.categoryNames.mapNotNull { categoriesByName[it]?.id }
                 if (catIds.isNotEmpty()) {
                     setMangaCategories.await(mangaId, catIds)
@@ -112,50 +93,26 @@ class ReplicaApplier(
 
         // 3. History
         for (h in changes.historyToUpsert) {
-            val manga = database.mangasQueries
-                .getMangaByUrlAndSource(h.mangaUrl, h.source)
-                .awaitAsOneOrNull() ?: continue
+            val manga = mangaRepository.getMangaByUrlAndSourceId(h.mangaUrl, h.source) ?: continue
 
             val chapter = database.chaptersQueries
-                .getChapterByUrlAndMangaId(h.chapterUrl, manga._id)
+                .getChapterByUrlAndMangaId(h.chapterUrl, manga.id)
                 .awaitAsOneOrNull() ?: continue
 
             database.historyQueries.upsert(
                 chapterId = chapter._id,
                 readAt = Date(h.lastRead),
-                readDuration = h.timeRead,
+                time_read = h.timeRead,
             )
         }
 
         // 4. Tracking
         for (tr in changes.trackingToUpsert) {
-            val manga = database.mangasQueries
-                .getMangaByUrlAndSource(tr.mangaUrl, tr.source)
-                .awaitAsOneOrNull() ?: continue
+            val manga = mangaRepository.getMangaByUrlAndSourceId(tr.mangaUrl, tr.source) ?: continue
 
-            val existingTrack = database.manga_syncQueries
-                .getTrackById(manga._id, tr.trackerId)
-                .awaitAsOneOrNull()
-
-            if (existingTrack != null) {
-                database.manga_syncQueries.update(
-                    id = existingTrack._id,
-                    mangaId = manga._id,
-                    syncId = tr.trackerId,
-                    remoteId = tr.remoteId,
-                    libraryId = existingTrack.library_id,
-                    title = existingTrack.title,
-                    lastChapterRead = tr.lastChapterRead,
-                    totalChapters = tr.totalChapters,
-                    status = tr.status,
-                    score = tr.score,
-                    trackingUrl = tr.trackingUrl,
-                    startDate = existingTrack.start_date,
-                    finishDate = existingTrack.finish_date,
-                )
-            } else {
+            try {
                 database.manga_syncQueries.insert(
-                    mangaId = manga._id,
+                    mangaId = manga.id,
                     syncId = tr.trackerId,
                     remoteId = tr.remoteId,
                     libraryId = null,
@@ -164,10 +121,13 @@ class ReplicaApplier(
                     totalChapters = tr.totalChapters,
                     status = tr.status,
                     score = tr.score,
-                    trackingUrl = tr.trackingUrl,
+                    remoteUrl = tr.trackingUrl,
                     startDate = 0L,
                     finishDate = 0L,
+                    `private` = false,
                 )
+            } catch (_: Exception) {
+                // Ignore conflict or failure
             }
         }
 
@@ -179,11 +139,9 @@ class ReplicaApplier(
                 if (parts.size == 2) {
                     val sourceId = parts[0].toLongOrNull() ?: continue
                     val url = parts[1]
-                    val existing = database.mangasQueries
-                        .getMangaByUrlAndSource(url, sourceId)
-                        .awaitAsOneOrNull()
+                    val existing = mangaRepository.getMangaByUrlAndSourceId(url, sourceId)
                     if (existing != null && existing.favorite) {
-                        database.mangasQueries.resetFavoriteById(existing._id)
+                        mangaRepository.update(MangaUpdate(id = existing.id, favorite = false))
                     }
                 }
             }

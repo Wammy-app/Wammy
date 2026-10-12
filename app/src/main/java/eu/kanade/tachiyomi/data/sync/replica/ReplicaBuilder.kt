@@ -37,7 +37,7 @@ class ReplicaBuilder(
             val allFavorites = getFavorites.await()
             allFavorites.map { manga ->
                 val mangaCategories = getCategories.await(manga.id).map { it.name }
-                val v = maxOf(manga.lastModifiedAt, manga.favoriteModifiedAt, 1L)
+                val v = maxOf(manga.lastModifiedAt, manga.favoriteModifiedAt ?: 0L, 1L)
                 RFavourite(
                     key = "${manga.source}:${manga.url}",
                     v = v,
@@ -107,7 +107,7 @@ class ReplicaBuilder(
                             totalChapters = t.total_chapters,
                             score = t.score,
                             status = t.status,
-                            trackingUrl = t.tracking_url,
+                            trackingUrl = t.remote_url,
                         ),
                     )
                 }
