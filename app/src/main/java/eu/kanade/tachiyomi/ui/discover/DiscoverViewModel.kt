@@ -96,12 +96,17 @@ class DiscoverViewModel(
                 mutableState.update { 
                     it.copy(isLoading = false, sources = sources, isNovel = isNovel)
                 }
-                // Pre-fetch the first 3 sources to speed up the initial banner load
+                // Pre-fetch active sources to populate Trending, Latest, and Hero
                 viewModelScope.launch {
-                    sources.take(3).forEach { source ->
+                    sources.forEach { source ->
                         if (!popularCache.containsKey(source.id)) {
                             launch {
                                 popularCache[source.id] = loadSourcePopular(source)
+                            }
+                        }
+                        if (!latestCache.containsKey(source.id)) {
+                            launch {
+                                latestCache[source.id] = loadSourceLatest(source)
                             }
                         }
                     }
