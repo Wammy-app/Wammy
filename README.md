@@ -140,10 +140,6 @@ The APK will be generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
 For full documentation, extension guides, and FAQs, visit the [Official Website](https://kainotch.github.io/WammyWeb/).
 
-## Credits
-
-Wammy is built on the foundation of the open-source Android manga and novel reader community, with special thanks to the [Mihon](https://github.com/mihonapp/mihon) and [LNReader](https://github.com/LNReader/lnreader) projects and contributors.
-
 ## License
 
 ```text
