@@ -42,11 +42,13 @@ import android.os.VibratorManager
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.presentation.util.isTabletUi
 import tachiyomi.presentation.core.util.collectAsState
 
 @Composable
 fun SwipeUpFab(
-    onSlideUpTriggered: () -> Unit
+    onSlideUpTriggered: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
     val initialHasShown = remember { libraryPreferences.hasShownSwipeUpFabTutorial.get() }
@@ -215,8 +217,11 @@ fun SwipeUpFab(
         }
     }
 
+    val bottomPadding = if (isTabletUi()) 0.dp else 80.dp
+
     Box(
-        modifier = Modifier
+        modifier = modifier
+            .padding(bottom = bottomPadding)
             .offset { IntOffset(0, animatedOffset.toInt()) }
             .pointerInput(hasShownTutorial) {
                 awaitEachGesture {
