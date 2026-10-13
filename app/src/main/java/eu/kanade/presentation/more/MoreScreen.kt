@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Info
@@ -41,7 +42,12 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.tachiyomi.R
@@ -305,6 +311,59 @@ fun MoreScreen(
                             onClick = { uriHandler.openUri(Constants.URL_HELP) },
                         )
                     }
+                }
+            }
+
+            // GitHub Star Footer Callout
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                val gitHubUrl = "https://github.com/kainotch/Wammy"
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { uriHandler.openUri(gitHubUrl) }
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    val primaryColor = MaterialTheme.colorScheme.primary
+                    val starText = remember(primaryColor, gitHubUrl) {
+                        buildAnnotatedString {
+                            append("Enjoying the app? Star it on ")
+                            withLink(
+                                LinkAnnotation.Url(
+                                    url = gitHubUrl,
+                                    styles = TextLinkStyles(
+                                        style = SpanStyle(
+                                            color = primaryColor,
+                                            fontWeight = FontWeight.SemiBold,
+                                        ),
+                                    ),
+                                    linkInteractionListener = {
+                                        uriHandler.openUri(gitHubUrl)
+                                    },
+                                ),
+                            ) {
+                                append("GitHub")
+                            }
+                            append(" — it helps other readers find it.")
+                        }
+                    }
+                    Text(
+                        text = starText,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            lineHeight = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                    )
                 }
             }
         }
