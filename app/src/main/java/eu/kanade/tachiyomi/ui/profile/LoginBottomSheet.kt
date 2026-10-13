@@ -43,6 +43,7 @@ import eu.kanade.tachiyomi.data.sync.AuthorizationResult
 import eu.kanade.tachiyomi.data.sync.DriveApiHelper
 import eu.kanade.tachiyomi.data.sync.DriveSyncWorker
 import eu.kanade.tachiyomi.ui.home.HomeScreen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -67,6 +68,21 @@ fun LoginBottomSheet(
     val basePreferences = remember { Injekt.get<BasePreferences>() }
     val webClientId = AuthConstants.WEB_CLIENT_ID
 
+    // Request notification permission on Android 13+ so sync notifications can be shown
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* no-op: best effort request */ }
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
     var isSigningIn by remember { mutableStateOf(false) }
     var authErrorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -81,10 +97,16 @@ fun LoginBottomSheet(
     val driveConsentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
+        isSigningIn = false
+        basePreferences.hasCompletedInitialLogin.set(true)
+        val appContext = context.applicationContext
         if (result.resultCode == Activity.RESULT_OK) {
             driveApiHelper.handleAuthorizationResult(result.data)
-            DriveSyncWorker.scheduleRestoreCheck(context)
-            Toast.makeText(context, "Google Drive connected! Checking for restore...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Google Drive connected! Restoring your library...", Toast.LENGTH_SHORT).show()
+            DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
+            DriveSyncWorker.schedulePeriodicBackup(appContext)
+        } else {
+            Toast.makeText(context, "Signed in! You can enable Google Drive sync later in More -> Cloud Sync.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -92,30 +114,39 @@ fun LoginBottomSheet(
         isSigningIn = true
         val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
         FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).addOnCompleteListener { task ->
-            isSigningIn = false
             if (task.isSuccessful) {
-                basePreferences.hasCompletedInitialLogin.set(true)
-                Toast.makeText(context, "Signed in successfully!", Toast.LENGTH_SHORT).show()
-
-                scope.launch {
+                val appContext = context.applicationContext
+                kotlinx.coroutines.CoroutineScope(Dispatchers.Main).launch {
                     try {
                         when (val authResult = driveApiHelper.requestDriveAuthorization()) {
                             is AuthorizationResult.NeedsConsent -> {
                                 val intentSenderRequest = IntentSenderRequest.Builder(authResult.pendingIntent).build()
                                 driveConsentLauncher.launch(intentSenderRequest)
+                                // Do not mark initial login complete yet; consent launcher will dismiss
                             }
                             is AuthorizationResult.Success -> {
-                                DriveSyncWorker.scheduleRestoreCheck(context)
+                                isSigningIn = false
+                                basePreferences.hasCompletedInitialLogin.set(true)
+                                Toast.makeText(context, "Signed in successfully! Checking for restore...", Toast.LENGTH_SHORT).show()
+                                DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
+                                DriveSyncWorker.schedulePeriodicBackup(appContext)
                             }
                             is AuthorizationResult.Error -> {
+                                isSigningIn = false
+                                basePreferences.hasCompletedInitialLogin.set(true)
                                 android.util.Log.e("LoginSheet", "Drive Auth Error: ${authResult.message}")
+                                DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
                             }
                         }
                     } catch (e: Exception) {
+                        isSigningIn = false
+                        basePreferences.hasCompletedInitialLogin.set(true)
                         android.util.Log.e("LoginSheet", "Drive Auth Exception", e)
+                        DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
                     }
                 }
             } else {
+                isSigningIn = false
                 val ex = task.exception
                 android.util.Log.e("LoginSheet", "Firebase Auth Failed", ex)
                 authErrorMessage = "Firebase Authentication Failed:\n\n${ex?.localizedMessage ?: ex?.message ?: "Unknown Firebase error"}\n\nPlease verify that the Google sign-in provider is enabled in Firebase Console (Authentication -> Sign-in method)."
@@ -170,6 +201,7 @@ fun LoginBottomSheet(
             val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestIdToken(webClientId)
                 .requestEmail()
+                .requestScopes(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive.appdata"))
                 .build()
             val client = GoogleSignIn.getClient(context, gso)
             client.signOut().addOnCompleteListener {

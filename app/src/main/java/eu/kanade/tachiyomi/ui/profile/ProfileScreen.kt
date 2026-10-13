@@ -114,8 +114,8 @@ class ProfileScreen : Screen {
         ) { result ->
             if (result.resultCode == android.app.Activity.RESULT_OK) {
                 driveApiHelper.handleAuthorizationResult(result.data)
-                // If they successfully authorized Drive, trigger the restore check!
-                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context)
+                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context, immediate = true)
+                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(context)
                 Toast.makeText(context, "Google Drive connected! Checking for restore...", Toast.LENGTH_SHORT).show()
             }
             if (navigator.size == 1) navigator.replaceAll(eu.kanade.tachiyomi.ui.home.HomeScreen)
@@ -200,7 +200,8 @@ class ProfileScreen : Screen {
                                     driveConsentLauncher.launch(intentSenderRequest)
                                 }
                                 is AuthorizationResult.Success -> {
-                                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context)
+                                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context, immediate = true)
+                                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(context)
                                 }
                                 is AuthorizationResult.Error -> {
                                     android.util.Log.e("ProfileScreen", "Drive Auth Error: ${authResult.message}")
@@ -265,6 +266,7 @@ class ProfileScreen : Screen {
                 val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
                     .requestIdToken(webClientId)
                     .requestEmail()
+                    .requestScopes(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive.appdata"))
                     .build()
                 val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
                 client.signOut().addOnCompleteListener {

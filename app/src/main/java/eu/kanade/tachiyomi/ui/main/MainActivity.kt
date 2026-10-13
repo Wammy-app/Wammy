@@ -138,8 +138,23 @@ class MainActivity : BaseActivity() {
 
         super.onCreate(savedInstanceState)
         
-        // Schedule Google Drive background restore check on app launch
-        eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(this)
+        // Request notification permission on Android 13+ so sync and backup notifications appear
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                androidx.core.app.ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                    1001
+                )
+            }
+        }
+
+        // Schedule Google Drive background restore check on app launch (runs immediately if logged in)
+        eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(this, immediate = true)
         // Also ensure a periodic sync happens every 12 hours as a fallback
         eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(this)
 
