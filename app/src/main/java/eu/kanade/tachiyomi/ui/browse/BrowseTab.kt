@@ -67,11 +67,6 @@ data object BrowseTab : Tab {
     @Composable
     override fun Content() {
         val context = LocalContext.current
-        androidx.compose.runtime.DisposableEffect(Unit) {
-            onDispose {
-                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
-            }
-        }
         val basePreferences = remember { Injekt.get<BasePreferences>() }
         val hideMangaUi by basePreferences.hideMangaUi.collectAsState()
         val hideMangaBrowseTabs = hideMangaUi

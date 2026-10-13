@@ -203,12 +203,17 @@ class DriveSyncWorker(
             }
         } else {
             val errorMsg = if (result is SyncResult.Error) result.message else "Sync failed."
-            context.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
-                setContentTitle("Google Drive")
-                setContentText(errorMsg)
-                setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
-                setOngoing(false)
-                setTimeoutAfter(5000)
+            if (result is SyncResult.Error && result.message.contains("0 books")) {
+                logcat(LogPriority.INFO) { "DriveSyncWorker: Background backup skipped (local library has 0 books)" }
+                context.cancelNotification(NOTIF_ID_BACKUP)
+            } else {
+                context.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
+                    setContentTitle("Google Drive")
+                    setContentText(errorMsg)
+                    setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
+                    setOngoing(false)
+                    setTimeoutAfter(5000)
+                }
             }
         }
     }
@@ -227,6 +232,9 @@ class DriveSyncWorker(
                 } else if (result is SyncResult.Error) {
                     lastResult = result
                     logcat(LogPriority.WARN) { "DriveSyncWorker: Backup attempt $attempt failed: ${result.message}" }
+                    if (result.message.contains("0 books") || result.message.contains("Restore in progress")) {
+                        return result
+                    }
                 }
             } catch (e: Exception) {
                 lastResult = SyncResult.Error(e.message ?: "Backup threw exception")
@@ -272,6 +280,15 @@ class DriveSyncWorker(
         fun scheduleBackup(context: Context) {
             // Guard: skip if user is not logged in
             if (FirebaseAuth.getInstance().currentUser == null) return
+
+            // Guard: skip if restore is currently in progress
+            try {
+                val driveSyncManager: DriveSyncManager = Injekt.get()
+                if (driveSyncManager.isRestoring) {
+                    logcat(LogPriority.INFO) { "DriveSyncWorker: Restore is in progress, skipping backup schedule" }
+                    return
+                }
+            } catch (_: Exception) {}
 
             // Guard: skip if user disabled auto-sync
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -405,26 +422,26 @@ class DriveSyncWorker(
                         logcat(LogPriority.ERROR, e) { "DriveSyncWorker: Immediate restore check failed" }
                     }
                 }
+            } else {
+                val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val wifiOnly = prefs.getBoolean(KEY_WIFI_ONLY, false)
+                val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
+
+                val constraints = Constraints.Builder()
+                    .setRequiredNetworkType(networkType)
+                    .build()
+
+                val request = OneTimeWorkRequestBuilder<DriveSyncWorker>()
+                    .setConstraints(constraints)
+                    .setInputData(androidx.work.Data.Builder().putBoolean(KEY_IS_RESTORE_CHECK, true).build())
+                    .build()
+
+                WorkManager.getInstance(appContext).enqueueUniqueWork(
+                    WORK_NAME_RESTORE,
+                    ExistingWorkPolicy.REPLACE,
+                    request
+                )
             }
-
-            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val wifiOnly = prefs.getBoolean(KEY_WIFI_ONLY, false)
-            val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
-
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(networkType)
-                .build()
-
-            val request = OneTimeWorkRequestBuilder<DriveSyncWorker>()
-                .setConstraints(constraints)
-                .setInputData(androidx.work.Data.Builder().putBoolean(KEY_IS_RESTORE_CHECK, true).build())
-                .build()
-
-            WorkManager.getInstance(appContext).enqueueUniqueWork(
-                WORK_NAME_RESTORE,
-                ExistingWorkPolicy.REPLACE,
-                request
-            )
         }
 
         /**

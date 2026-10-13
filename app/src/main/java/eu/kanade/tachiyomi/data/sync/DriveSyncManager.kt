@@ -33,12 +33,21 @@ class DriveSyncManager(
 ) {
     private val syncMutex = Mutex()
 
+    @Volatile
+    var isRestoring: Boolean = false
+        private set
+
     /**
      * Create a backup and upload it to Google Drive.
      */
     suspend fun backup(): SyncResult = syncMutex.withLock {
         withContext(Dispatchers.IO) {
             try {
+                if (isRestoring) {
+                    logcat(LogPriority.WARN) { "DriveSync: Restore is currently in progress, skipping backup" }
+                    return@withContext SyncResult.Error("Restore in progress, skipping backup.")
+                }
+
                 logcat(LogPriority.INFO) { "DriveSync: Starting backup..." }
 
                 val accessToken = driveApiHelper.getAccessToken()
@@ -80,6 +89,13 @@ class DriveSyncManager(
 
                 val mangaCount = countMangaInBackup(tempFile)
                 logcat(LogPriority.INFO) { "DriveSync: Backup created with $mangaCount books (${tempFile.length()} bytes)" }
+
+                // NEVER overwrite cloud data with an empty library (prevents wiping cloud backup after data clear)
+                if (mangaCount == 0) {
+                    logcat(LogPriority.WARN) { "DriveSync: Local library has 0 books. Aborting backup to protect cloud data." }
+                    tempFile.delete()
+                    return@withContext SyncResult.Error("Cannot backup: local library has 0 books. Add books to your library first.")
+                }
 
                 // Always save an accessible local copy so the user can verify their backup
                 try {
@@ -175,9 +191,11 @@ class DriveSyncManager(
      * Download backup from Google Drive and restore it.
      */
     suspend fun restore(): SyncResult = syncMutex.withLock {
-        withContext(Dispatchers.IO) {
-            try {
-                logcat(LogPriority.INFO) { "DriveSync: Starting restore..." }
+        isRestoring = true
+        try {
+            withContext(Dispatchers.IO) {
+                try {
+                    logcat(LogPriority.INFO) { "DriveSync: Starting restore..." }
 
                 val accessToken = driveApiHelper.getAccessToken()
                     ?: return@withContext SyncResult.Error("Not authorized for Google Drive.")
@@ -259,7 +277,10 @@ class DriveSyncManager(
                 SyncResult.Error(e.message ?: "Unknown restore error")
             }
         }
+    } finally {
+        isRestoring = false
     }
+}
 
     private suspend fun countMangaInBackup(file: File): Int {
         var count = 0
