@@ -160,6 +160,70 @@ class ProfileScreen : Screen {
 
         val webClientId = eu.kanade.tachiyomi.data.auth.AuthConstants.WEB_CLIENT_ID
 
+        val legacyGoogleSignInLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                try {
+                    val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                    val idToken = account?.idToken
+                    if (!idToken.isNullOrBlank()) {
+                        val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+                        FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).addOnCompleteListener { authTask ->
+                            if (authTask.isSuccessful) {
+                                Injekt.get<eu.kanade.domain.base.BasePreferences>().hasCompletedInitialLogin.set(true)
+                                Toast.makeText(context, "Signed in successfully!", Toast.LENGTH_SHORT).show()
+                                scope.launch {
+                                    when (val authResult = driveApiHelper.requestDriveAuthorization()) {
+                                        is AuthorizationResult.NeedsConsent -> {
+                                            val intentSenderRequest = IntentSenderRequest.Builder(authResult.pendingIntent).build()
+                                            driveConsentLauncher.launch(intentSenderRequest)
+                                        }
+                                        is AuthorizationResult.Success -> {
+                                            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context)
+                                            if (navigator.size == 1) navigator.replaceAll(eu.kanade.tachiyomi.ui.home.HomeScreen)
+                                        }
+                                        is AuthorizationResult.Error -> {
+                                            android.util.Log.e("ProfileScreen", "Drive Auth Error: ${authResult.message}")
+                                            if (navigator.size == 1) navigator.replaceAll(eu.kanade.tachiyomi.ui.home.HomeScreen)
+                                        }
+                                    }
+                                }
+                            } else {
+                                Toast.makeText(context, "Firebase Auth Failed: ${authTask.exception?.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } else {
+                        Toast.makeText(context, "Sign in failed: ID token is null", Toast.LENGTH_LONG).show()
+                    }
+                } catch (e: com.google.android.gms.common.api.ApiException) {
+                    val message = when (e.statusCode) {
+                        10 -> "Developer error (10): Ensure keystore SHA-1 is added in Firebase console."
+                        12500 -> "Sign in failed (12500): Check Google Play Services account."
+                        else -> "Sign in failed: ${e.statusCode} ${e.message.orEmpty()}"
+                    }
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                }
+            } else if (result.resultCode != android.app.Activity.RESULT_CANCELED) {
+                Toast.makeText(context, "Sign in cancelled or failed (${result.resultCode})", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        fun launchLegacyGoogleSignIn() {
+            try {
+                val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestIdToken(webClientId)
+                    .requestEmail()
+                    .build()
+                val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+                legacyGoogleSignInLauncher.launch(client.signInIntent)
+            } catch (e: Exception) {
+                android.util.Log.e("ProfileScreen", "Failed to launch legacy Google Sign In", e)
+                Toast.makeText(context, "Google Play Services sign-in unavailable: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+
         if (user != null) {
             val highResPhotoUrl = user?.photoUrl?.toString()?.replace("s96-c", "s800-c")
 
@@ -1001,71 +1065,69 @@ class ProfileScreen : Screen {
                     Surface(
                         onClick = {
                             scope.launch {
+                                var credentialSuccess = false
                                 try {
                                     val credentialManager = CredentialManager.create(context)
-                                    val request1: GetCredentialRequest = GetCredentialRequest.Builder()
+                                    val request = GetCredentialRequest.Builder()
                                         .addCredentialOption(GetGoogleIdOption.Builder()
-                                            .setFilterByAuthorizedAccounts(true)
+                                            .setFilterByAuthorizedAccounts(false)
                                             .setServerClientId(webClientId)
+                                            .setAutoSelectEnabled(false)
                                             .build())
                                         .build()
-                                        
-                                    val result = try {
-                                        credentialManager.getCredential(context, request1)
-                                    } catch (e: androidx.credentials.exceptions.NoCredentialException) {
-                                        val request2 = GetCredentialRequest.Builder()
-                                            .addCredentialOption(GetGoogleIdOption.Builder()
-                                                .setFilterByAuthorizedAccounts(false)
-                                                .setServerClientId(webClientId)
-                                                .build())
-                                            .build()
-                                        credentialManager.getCredential(context, request2)
-                                    }
+
+                                    val result = credentialManager.getCredential(context, request)
                                     val credential = result.credential
                                     if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                                         val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                                        val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
-                                        FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).addOnCompleteListener { task ->
-                                            if (task.isSuccessful) {
-                                                Injekt.get<eu.kanade.domain.base.BasePreferences>()
-                                                    .hasCompletedInitialLogin.set(true)
-                                                Toast.makeText(context, "Signed in successfully!", Toast.LENGTH_SHORT).show()
-                                                
-                                                // Request Google Drive permission for sync immediately after login
-                                                scope.launch {
-                                                    // Wait briefly for their profile to be loaded if it exists
-                                                    val currentUid = FirebaseAuth.getInstance().currentUser?.uid
-                                                    if (currentUid != null) {
-                                                        kotlinx.coroutines.withTimeoutOrNull(2500L) {
-                                                            androidx.compose.runtime.snapshotFlow { cloudUser }.first { it != null }
+                                        val idToken = googleIdTokenCredential.idToken
+                                        if (idToken.isNotBlank()) {
+                                            credentialSuccess = true
+                                            val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+                                            FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).addOnCompleteListener { task ->
+                                                if (task.isSuccessful) {
+                                                    Injekt.get<eu.kanade.domain.base.BasePreferences>()
+                                                        .hasCompletedInitialLogin.set(true)
+                                                    Toast.makeText(context, "Signed in successfully!", Toast.LENGTH_SHORT).show()
+
+                                                    scope.launch {
+                                                        val currentUid = FirebaseAuth.getInstance().currentUser?.uid
+                                                        if (currentUid != null) {
+                                                            kotlinx.coroutines.withTimeoutOrNull(2500L) {
+                                                                androidx.compose.runtime.snapshotFlow { cloudUser }.first { it != null }
+                                                            }
+                                                        }
+                                                        when (val authResult = driveApiHelper.requestDriveAuthorization()) {
+                                                            is AuthorizationResult.NeedsConsent -> {
+                                                                val intentSenderRequest = IntentSenderRequest.Builder(authResult.pendingIntent).build()
+                                                                driveConsentLauncher.launch(intentSenderRequest)
+                                                            }
+                                                            is AuthorizationResult.Success -> {
+                                                                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context)
+                                                                if (navigator.size == 1) navigator.replaceAll(eu.kanade.tachiyomi.ui.home.HomeScreen)
+                                                            }
+                                                            is AuthorizationResult.Error -> {
+                                                                android.util.Log.e("ProfileScreen", "Drive Auth Error: ${authResult.message}")
+                                                                if (navigator.size == 1) navigator.replaceAll(eu.kanade.tachiyomi.ui.home.HomeScreen)
+                                                            }
                                                         }
                                                     }
-                                                    when (val authResult = driveApiHelper.requestDriveAuthorization()) {
-                                                        is AuthorizationResult.NeedsConsent -> {
-                                                            // New device/account -> prompt for Drive permission
-                                                            val intentSenderRequest = IntentSenderRequest.Builder(authResult.pendingIntent).build()
-                                                            driveConsentLauncher.launch(intentSenderRequest)
-                                                        }
-                                                        is AuthorizationResult.Success -> {
-                                                            // Already authorized (silently got token) -> trigger restore check now!
-                                                            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context)
-                                                            if (navigator.size == 1) navigator.replaceAll(eu.kanade.tachiyomi.ui.home.HomeScreen)
-                                                        }
-                                                        is AuthorizationResult.Error -> {
-                                                            android.util.Log.e("ProfileScreen", "Drive Auth Error: ${authResult.message}")
-                                                            if (navigator.size == 1) navigator.replaceAll(eu.kanade.tachiyomi.ui.home.HomeScreen)
-                                                        }
-                                                    }
+                                                } else {
+                                                    android.util.Log.e("ProfileScreen", "Auth Failed", task.exception)
+                                                    Toast.makeText(context, "Firebase Auth Failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
                                                 }
-                                            } else {
-                                                android.util.Log.e("ProfileScreen", "Auth Failed", task.exception)
-                                                Toast.makeText(context, "Firebase Auth Failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
                                             }
                                         }
                                     }
+                                } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+                                    android.util.Log.d("ProfileScreen", "User cancelled credential picker")
+                                    return@launch
                                 } catch (e: Exception) {
-                                    android.util.Log.e("ProfileScreen", "Sign in failed", e)
-                                    Toast.makeText(context, "Sign in failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                    android.util.Log.w("ProfileScreen", "CredentialManager failed (${e::class.java.simpleName}: ${e.message}), trying legacy fallback...", e)
+                                }
+
+                                if (!credentialSuccess) {
+                                    launchLegacyGoogleSignIn()
                                 }
                             }
                         },

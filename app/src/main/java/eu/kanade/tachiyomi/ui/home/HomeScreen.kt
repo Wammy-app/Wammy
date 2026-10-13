@@ -264,7 +264,9 @@ object HomeScreen : Screen() {
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = {}
+                                onClick = {
+                                    basePreferences.hasCompletedInitialLogin.set(true)
+                                }
                             )
                     )
                     LoginBottomSheet(navigator = navigator, driveApiHelper = driveApiHelper)
