@@ -121,6 +121,7 @@ object HomeScreen : Screen() {
         val authManager: AuthManager = remember { Injekt.get() }
         val user: FirebaseUser? by authManager.currentUser.collectAsState()
         val driveApiHelper: DriveApiHelper = remember { Injekt.get() }
+        val context = androidx.compose.ui.platform.LocalContext.current
         val repo: FirestoreUserRepository = remember { Injekt.get() }
         
         // Re-check whenever auth state changes OR user navigates back to HomeScreen
@@ -135,8 +136,8 @@ object HomeScreen : Screen() {
                 if (hasProfile == false) {
                     navigator.push(UsernamePickerScreen())
                 } else if (hasProfile == null) {
-                    // Network error — show toast, will re-check on next navigation
                     android.util.Log.w("HomeScreen", "Could not verify profile (network error), will retry")
+                    android.widget.Toast.makeText(context, "Could not verify profile with server. Check internet connection.", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
