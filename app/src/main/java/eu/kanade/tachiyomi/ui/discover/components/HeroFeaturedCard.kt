@@ -61,7 +61,7 @@ fun HeroFeaturedCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(180.dp),
+            .height(215.dp),
     ) {
         HorizontalPager(
             state = pagerState,
@@ -77,7 +77,7 @@ fun HeroFeaturedCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color.Black)
                     .clickable { onClick(manga) },
             ) {
