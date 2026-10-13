@@ -90,7 +90,7 @@ fun MoreScreen(
     var showSandboxDialog by remember { mutableStateOf(false) }
 
     Scaffold { contentPadding ->
-        ScrollbarLazyColumn(contentPadding = contentPadding + PaddingValues(bottom = 84.dp)) {
+        ScrollbarLazyColumn(contentPadding = contentPadding + PaddingValues(bottom = 16.dp)) {
             item {
                 LogoHeader(
                     iconPadding = PaddingValues(top = 20.dp, bottom = 8.dp),

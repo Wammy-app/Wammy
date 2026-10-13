@@ -30,9 +30,7 @@ fun HomeMediaSection(
 ) {
     if (items.isEmpty()) return
 
-    // Partition items into two rows for a dense 2-row horizontal feed
-    val row1 = items.filterIndexed { index, _ -> index % 2 == 0 }
-    val row2 = items.filterIndexed { index, _ -> index % 2 != 0 }
+    val columns = items.chunked(2)
 
     Column(
         modifier = modifier
@@ -65,25 +63,38 @@ fun HomeMediaSection(
             }
         }
 
-        // Row 1
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.padding(bottom = 10.dp),
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
         ) {
-            items(row1, key = { "r1_${it.id}_${it.url}" }) { manga ->
-                HomeMediaCard(manga = manga, onClick = { onClick(manga) })
-            }
-        }
+            val itemSpacing = 12.dp
+            val cardWidth = (maxWidth - itemSpacing * 2) / 3
 
-        // Row 2 (if there are items)
-        if (row2.isNotEmpty()) {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(itemSpacing),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                items(row2, key = { "r2_${it.id}_${it.url}" }) { manga ->
-                    HomeMediaCard(manga = manga, onClick = { onClick(manga) })
+                items(
+                    items = columns,
+                    key = { col -> "col_${col.first().id}_${col.first().url}" },
+                ) { col ->
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        HomeMediaCard(
+                            manga = col[0],
+                            cardWidth = cardWidth,
+                            onClick = { onClick(col[0]) },
+                        )
+                        if (col.size > 1) {
+                            HomeMediaCard(
+                                manga = col[1],
+                                cardWidth = cardWidth,
+                                onClick = { onClick(col[1]) },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -93,12 +104,13 @@ fun HomeMediaSection(
 @Composable
 private fun HomeMediaCard(
     manga: Manga,
+    cardWidth: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
-            .width(96.dp)
+            .width(cardWidth)
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick),
     ) {
@@ -106,13 +118,13 @@ private fun HomeMediaCard(
             model = manga.asMangaCover(),
             contentDescription = manga.title,
             modifier = Modifier
-                .width(96.dp)
-                .height(138.dp)
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(10.dp)),
             contentScale = ContentScale.Crop,
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = manga.title,

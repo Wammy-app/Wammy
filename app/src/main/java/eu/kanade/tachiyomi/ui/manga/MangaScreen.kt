@@ -307,6 +307,13 @@ class MangaScreen(
         } // TachiyomiTheme
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }
+        var reopenCategoryDialogOnReturn by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(navigator.lastItem) {
+            if (reopenCategoryDialogOnReturn && navigator.lastItem == this@MangaScreen) {
+                reopenCategoryDialogOnReturn = false
+                viewModel.showChangeCategoryDialog()
+            }
+        }
 
         val onDismissRequest = { viewModel.dismissDialog() }
         when (val dialog = successState.dialog) {
@@ -315,7 +322,10 @@ class MangaScreen(
                 ChangeCategoryDialog(
                     initialSelection = dialog.initialSelection,
                     onDismissRequest = onDismissRequest,
-                    onEditCategories = { navigator.push(CategoryScreen()) },
+                    onEditCategories = {
+                        reopenCategoryDialogOnReturn = true
+                        navigator.push(CategoryScreen())
+                    },
                     onConfirm = { addCategories, removeCategories ->
                         val currentSelected = dialog.initialSelection
                             .filter {

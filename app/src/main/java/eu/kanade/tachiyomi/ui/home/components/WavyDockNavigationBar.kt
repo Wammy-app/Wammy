@@ -82,98 +82,83 @@ fun WavyDockNavigationBar(
         tabs.indexOfFirst { it::class == currentTab::class }.coerceAtLeast(0)
     }
 
-    val outerShape = RoundedCornerShape(16.dp)
     val activeItemShape = RoundedCornerShape(12.dp)
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 26.dp, end = 26.dp, bottom = 10.dp),
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = dockBackground,
     ) {
-        Surface(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .shadow(
-                    elevation = 10.dp,
-                    shape = outerShape,
-                    ambientColor = Color.Black.copy(alpha = 0.35f),
-                    spotColor = Color.Black.copy(alpha = 0.35f),
-                ),
-            shape = outerShape,
-            color = dockBackground,
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .height(64.dp)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                tabs.forEachIndexed { index, tab ->
-                    val isSelected = index == selectedIndex
-                    val interactionSource = remember { MutableInteractionSource() }
+            tabs.forEachIndexed { index, tab ->
+                val isSelected = index == selectedIndex
+                val interactionSource = remember { MutableInteractionSource() }
 
-                    val itemBackgroundColor by animateColorAsState(
-                        targetValue = if (isSelected) activePillColor else Color.Transparent,
-                        animationSpec = tween(durationMillis = 220),
-                        label = "nav_item_bg",
-                    )
+                val itemBackgroundColor by animateColorAsState(
+                    targetValue = if (isSelected) activePillColor else Color.Transparent,
+                    animationSpec = tween(durationMillis = 220),
+                    label = "nav_item_bg",
+                )
 
-                    Box(
-                        modifier = Modifier
-                            .height(40.dp)
-                            .clip(activeItemShape)
-                            .background(itemBackgroundColor, activeItemShape)
-                            .clickable(
-                                interactionSource = interactionSource,
-                                indication = null,
-                                onClick = { onTabSelected(tab) },
-                            )
-                            .padding(
-                                horizontal = if (isSelected) 12.dp else 8.dp,
-                            ),
-                        contentAlignment = Alignment.Center,
+                Box(
+                    modifier = Modifier
+                        .height(42.dp)
+                        .clip(activeItemShape)
+                        .background(itemBackgroundColor, activeItemShape)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = { onTabSelected(tab) },
+                        )
+                        .padding(
+                            horizontal = if (isSelected) 14.dp else 10.dp,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            TabIcon(
-                                tab = tab,
-                                isSelected = isSelected,
-                                badgeContent = badgeContent,
-                            )
+                        TabIcon(
+                            tab = tab,
+                            isSelected = isSelected,
+                            badgeContent = badgeContent,
+                        )
 
-                            AnimatedVisibility(
-                                visible = isSelected,
-                                enter = expandHorizontally(
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ),
-                                    expandFrom = Alignment.Start,
-                                ) + fadeIn(animationSpec = tween(180)),
-                                exit = shrinkHorizontally(
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ),
-                                    shrinkTowards = Alignment.Start,
-                                ) + fadeOut(animationSpec = tween(120)),
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = tab.options.title,
-                                        color = primaryColor,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
+                        AnimatedVisibility(
+                            visible = isSelected,
+                            enter = expandHorizontally(
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMedium,
+                                ),
+                                expandFrom = Alignment.Start,
+                            ) + fadeIn(animationSpec = tween(180)),
+                            exit = shrinkHorizontally(
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMedium,
+                                ),
+                                shrinkTowards = Alignment.Start,
+                            ) + fadeOut(animationSpec = tween(120)),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = tab.options.title,
+                                    color = primaryColor,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                     }

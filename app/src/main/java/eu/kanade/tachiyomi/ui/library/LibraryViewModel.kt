@@ -281,7 +281,7 @@ class LibraryViewModel(
             ) { categories, favorites, tracksAndFilters, itemPreferences, isLoading ->
                 val (tracksMap, trackingFilters) = tracksAndFilters
 
-                val showSystemCategory = favorites.any { it.libraryManga.categories.contains(0L) }
+                val showSystemCategory = favorites.isEmpty() || favorites.any { it.libraryManga.categories.contains(0L) }
 
                 val filteredFavorites = favorites
                     .applyFilters(tracksMap, trackingFilters, itemPreferences)
@@ -1501,7 +1501,19 @@ class LibraryViewModel(
             val mangaList = state.value.selectedManga
 
             // Hide the default category because it has a different behavior than the ones from db.
-            val categories = state.value.displayedCategories.filter { it.id != 0L }
+            val categories = getCategories.await()
+                .filter { !it.isSystemCategory }
+                .filter {
+                    when (type) {
+                        LibraryType.All -> true
+                        LibraryType.Manga ->
+                            it.contentType == Category.CONTENT_TYPE_ALL ||
+                                it.contentType == Category.CONTENT_TYPE_MANGA
+                        LibraryType.Novel ->
+                            it.contentType == Category.CONTENT_TYPE_ALL ||
+                                it.contentType == Category.CONTENT_TYPE_NOVEL
+                    }
+                }
 
             val perManga = mangaList.map { manga -> getCategories.await(manga.id).mapTo(HashSet()) { it.id } }
             val preselected = categories.toCommonCheckboxState({ it.id }, perManga)
@@ -2089,7 +2101,7 @@ class LibraryViewModel(
         val searchQuery: String? = null, // Committed search (triggers filtering)
         val selection: Set</* Manga */ Long> = setOf(),
         val hasActiveFilters: Boolean = false,
-        val showCategoryTabs: Boolean = false,
+        val showCategoryTabs: Boolean = true,
         val showMangaCount: Boolean = false,
         val showMangaContinueButton: Boolean = false,
         val dialog: Dialog? = null,
@@ -2107,6 +2119,8 @@ class LibraryViewModel(
         private val groupedFavorites: Map<Category, List</* LibraryItem */ Long>> = emptyMap(),
     ) {
         val displayedCategories: List<Category> = groupedFavorites.keys.toList()
+
+        val hasUserCategories: Boolean = displayedCategories.any { !it.isSystemCategory }
 
         val coercedActiveCategoryIndex = activeCategoryIndex.coerceIn(
             minimumValue = 0,

@@ -45,6 +45,7 @@ fun LibraryToolbar(
     onClickMassImport: (() -> Unit)? = null,
     onClickImportEpub: (() -> Unit)? = null,
     onClickFindDuplicates: (() -> Unit)? = null,
+    onClickEditCategories: (() -> Unit)? = null,
     onClickCategoryActions: (() -> Unit)? = null,
 ) = when {
     selectedCount > 0 -> LibrarySelectionToolbar(
@@ -68,6 +69,7 @@ fun LibraryToolbar(
         onClickMassImport = onClickMassImport,
         onClickImportEpub = onClickImportEpub,
         onClickFindDuplicates = onClickFindDuplicates,
+        onClickEditCategories = onClickEditCategories,
         onClickCategoryActions = onClickCategoryActions,
     )
 }
@@ -88,6 +90,7 @@ private fun LibraryRegularToolbar(
     onClickMassImport: (() -> Unit)? = null,
     onClickImportEpub: (() -> Unit)? = null,
     onClickFindDuplicates: (() -> Unit)? = null,
+    onClickEditCategories: (() -> Unit)? = null,
     onClickCategoryActions: (() -> Unit)? = null,
 ) {
     val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
@@ -159,6 +162,15 @@ private fun LibraryRegularToolbar(
                     AppBar.OverflowAction(
                         title = "Find Duplicates",
                         onClick = onClickFindDuplicates,
+                    ),
+                )
+            }
+
+            if (onClickEditCategories != null) {
+                actions.add(
+                    AppBar.OverflowAction(
+                        title = stringResource(MR.strings.action_edit_categories),
+                        onClick = onClickEditCategories,
                     ),
                 )
             }

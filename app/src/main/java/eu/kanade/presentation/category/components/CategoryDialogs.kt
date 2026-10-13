@@ -278,7 +278,7 @@ fun ChangeCategoryDialog(
         )
         return
     }
-    var selection by remember { mutableStateOf(initialSelection) }
+    var selection by remember(initialSelection) { mutableStateOf(initialSelection) }
     val initialById = remember(initialSelection) {
         initialSelection.associateBy { it.value.id }
     }

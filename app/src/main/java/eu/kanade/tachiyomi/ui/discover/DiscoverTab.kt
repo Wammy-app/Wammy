@@ -149,9 +149,7 @@ object DiscoverTab : Tab {
                 )
             },
             floatingActionButton = {
-                Box(modifier = Modifier.padding(bottom = 80.dp)) {
-                    SwipeUpFab(onSlideUpTriggered = { viewModel.toggleNovel(!state.isNovel) })
-                }
+                SwipeUpFab(onSlideUpTriggered = { viewModel.toggleNovel(!state.isNovel) })
             }
         ) { contentPadding ->
             androidx.compose.animation.Crossfade(targetState = state, animationSpec = tween(400), modifier = Modifier.padding(contentPadding).fillMaxSize(), label = "discover") { animatedState ->
