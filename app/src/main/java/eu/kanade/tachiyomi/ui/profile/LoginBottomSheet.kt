@@ -82,6 +82,7 @@ fun LoginBottomSheet(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
+            driveApiHelper.handleAuthorizationResult(result.data)
             DriveSyncWorker.scheduleRestoreCheck(context)
             Toast.makeText(context, "Google Drive connected! Checking for restore...", Toast.LENGTH_SHORT).show()
         }

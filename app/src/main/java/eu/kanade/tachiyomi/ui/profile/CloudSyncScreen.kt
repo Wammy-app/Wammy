@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
@@ -69,6 +70,8 @@ class CloudSyncScreen : Screen {
         var isDeleting by remember { mutableStateOf(false) }
         var isEmailVisible by remember { mutableStateOf(true) }
         var pendingAction by remember { mutableStateOf<String?>(null) }
+        var lastErrorMessage by remember { mutableStateOf<String?>(null) }
+        var showRestoreConfirmDialog by remember { mutableStateOf(false) }
 
         val syncPrefs = remember {
             context.getSharedPreferences(DriveSyncWorker.PREFS_NAME, android.content.Context.MODE_PRIVATE)
@@ -99,6 +102,7 @@ class CloudSyncScreen : Screen {
             contract = ActivityResultContracts.StartIntentSenderForResult()
         ) { result ->
             if (result.resultCode == android.app.Activity.RESULT_OK) {
+                driveApiHelper.handleAuthorizationResult(result.data)
                 scope.launch {
                     isSyncing = true
                     val syncResult = if (pendingAction == "backup") {
@@ -112,12 +116,16 @@ class CloudSyncScreen : Screen {
                             Toast.makeText(context, syncResult.message, Toast.LENGTH_SHORT).show()
                         }
                         is SyncResult.Error -> {
-                            Toast.makeText(context, syncResult.message, Toast.LENGTH_LONG).show()
+                            lastErrorMessage = syncResult.message
                         }
                     }
                     isSyncing = false
                     pendingAction = null
                 }
+            } else {
+                isSyncing = false
+                pendingAction = null
+                Toast.makeText(context, "Google Drive authorization was cancelled.", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -139,10 +147,11 @@ class CloudSyncScreen : Screen {
                                 Toast.makeText(context, syncResult.message, Toast.LENGTH_SHORT).show()
                             }
                             is SyncResult.Error -> {
-                                Toast.makeText(context, syncResult.message, Toast.LENGTH_LONG).show()
+                                lastErrorMessage = syncResult.message
                             }
                         }
                         isSyncing = false
+                        pendingAction = null
                     }
                     is AuthorizationResult.NeedsConsent -> {
                         isSyncing = false
@@ -150,12 +159,14 @@ class CloudSyncScreen : Screen {
                             val intentSenderRequest = IntentSenderRequest.Builder(authResult.pendingIntent).build()
                             consentLauncher.launch(intentSenderRequest)
                         } catch (e: Exception) {
-                            Toast.makeText(context, "Could not open consent screen", Toast.LENGTH_SHORT).show()
+                            lastErrorMessage = "Could not open consent screen: ${e.message}"
+                            pendingAction = null
                         }
                     }
                     is AuthorizationResult.Error -> {
-                        Toast.makeText(context, authResult.message, Toast.LENGTH_LONG).show()
+                        lastErrorMessage = "Google Drive Authorization Failed:\n\n${authResult.message}"
                         isSyncing = false
+                        pendingAction = null
                     }
                 }
             }
@@ -171,7 +182,7 @@ class CloudSyncScreen : Screen {
                         Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
                     }
                     is SyncResult.Error -> {
-                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                        lastErrorMessage = result.message
                     }
                 }
                 isDeleting = false
@@ -414,6 +425,51 @@ class CloudSyncScreen : Screen {
                                 contentDescription = "Synced",
                                 tint = Color(0xFF34A853),
                                 modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 4b. Restore from Cloud Card
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable(enabled = !isSyncing) {
+                            showRestoreConfirmDialog = true
+                        },
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF1C1C1E)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.CloudDownload,
+                            contentDescription = "Restore",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Restore from Cloud",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Restore your library and progress from Google Drive",
+                                fontSize = 13.sp,
+                                color = Color(0xFF8E8E93)
                             )
                         }
                     }
@@ -796,6 +852,77 @@ class CloudSyncScreen : Screen {
                 dismissButton = {
                     TextButton(onClick = { showDeleteDialog = false }) {
                         Text("Cancel", color = Color.White)
+                    }
+                },
+                containerColor = Color(0xFF242426)
+            )
+        }
+
+        // 5. Restore Confirmation Dialog
+        if (showRestoreConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showRestoreConfirmDialog = false },
+                title = { Text("Restore from Google Drive", fontWeight = FontWeight.Bold, color = Color.White) },
+                text = {
+                    Text(
+                        "Download and restore your library from the cloud? This will sync your manga, reading progress, and settings with the latest cloud backup.",
+                        color = Color(0xFFCCCCCC)
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showRestoreConfirmDialog = false
+                            launchDriveAction("restore")
+                        }
+                    ) {
+                        Text("Restore", color = Color(0xFF5AC8FA), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRestoreConfirmDialog = false }) {
+                        Text("Cancel", color = Color.White)
+                    }
+                },
+                containerColor = Color(0xFF242426)
+            )
+        }
+
+        // 6. Error Details Dialog
+        if (lastErrorMessage != null) {
+            val errorText = lastErrorMessage!!
+            AlertDialog(
+                onDismissRequest = { lastErrorMessage = null },
+                title = { Text("Cloud Sync Status", fontWeight = FontWeight.Bold, color = Color.White) },
+                text = {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        Text(
+                            text = errorText,
+                            color = Color(0xFFCCCCCC),
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { lastErrorMessage = null }) {
+                        Text("OK", color = Color(0xFF5AC8FA), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    if (errorText.contains("http", ignoreCase = true)) {
+                        TextButton(
+                            onClick = {
+                                try {
+                                    val urlRegex = """https?://[^\s]+""".toRegex()
+                                    val match = urlRegex.find(errorText)?.value ?: "https://console.developers.google.com"
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(match))
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {}
+                            }
+                        ) {
+                            Text("Open Link", color = Color(0xFF34A853), fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 },
                 containerColor = Color(0xFF242426)

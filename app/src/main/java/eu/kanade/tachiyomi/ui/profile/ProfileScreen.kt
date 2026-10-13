@@ -113,6 +113,7 @@ class ProfileScreen : Screen {
             contract = ActivityResultContracts.StartIntentSenderForResult()
         ) { result ->
             if (result.resultCode == android.app.Activity.RESULT_OK) {
+                driveApiHelper.handleAuthorizationResult(result.data)
                 // If they successfully authorized Drive, trigger the restore check!
                 eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context)
                 Toast.makeText(context, "Google Drive connected! Checking for restore...", Toast.LENGTH_SHORT).show()

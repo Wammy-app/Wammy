@@ -102,11 +102,25 @@ class DriveSyncManager(
 
                 val existingFileId = driveApiHelper.findSyncFile(uploadToken)
 
-                val uploadedFileId = driveApiHelper.uploadSyncFile(
+                var uploadedFileId = driveApiHelper.uploadSyncFile(
                     accessToken = uploadToken,
                     file = tempFile,
                     existingFileId = existingFileId,
                 )
+
+                // If 401 unauthorized, invalidate token and retry once
+                if (uploadedFileId == null && driveApiHelper.lastErrorDetail?.contains("401") == true) {
+                    logcat(LogPriority.WARN) { "DriveSync: Upload returned 401, refreshing token and retrying..." }
+                    driveApiHelper.invalidateToken(uploadToken)
+                    val retryToken = driveApiHelper.getAccessToken()
+                    if (retryToken != null) {
+                        uploadedFileId = driveApiHelper.uploadSyncFile(
+                            accessToken = retryToken,
+                            file = tempFile,
+                            existingFileId = existingFileId,
+                        )
+                    }
+                }
 
                 // 4. Clean up temp file
                 val uploadedSize = tempFile.length()
@@ -125,7 +139,8 @@ class DriveSyncManager(
                     
                     SyncResult.Success("Backup uploaded to Google Drive")
                 } else {
-                    SyncResult.Error("Failed to upload backup to Google Drive")
+                    val detail = driveApiHelper.lastErrorDetail ?: "Failed to upload backup to Google Drive"
+                    SyncResult.Error(detail)
                 }
             } catch (e: Exception) {
                 logcat(LogPriority.ERROR, e) { "DriveSync: Fatal error during backup" }
@@ -147,11 +162,20 @@ class DriveSyncManager(
 
                 // 1. Find the backup file on Drive
                 val fileId = driveApiHelper.findSyncFile(accessToken)
-                    ?: return@withContext SyncResult.Error("No backup found on Google Drive. Sync your library first!")
+                if (fileId == null) {
+                    val detail = driveApiHelper.lastErrorDetail
+                    if (detail != null) {
+                        return@withContext SyncResult.Error(detail)
+                    }
+                    return@withContext SyncResult.Error("No backup found on Google Drive. Sync your library first!")
+                }
 
                 // 2. Download it (streams directly to a temp file — no RAM overload)
                 val tempFile = driveApiHelper.downloadSyncFileToFile(accessToken, fileId)
-                    ?: return@withContext SyncResult.Error("Failed to download backup from Google Drive")
+                if (tempFile == null) {
+                    val detail = driveApiHelper.lastErrorDetail ?: "Failed to download backup from Google Drive"
+                    return@withContext SyncResult.Error(detail)
+                }
 
                 logcat(LogPriority.INFO) { "DriveSync: Downloaded ${tempFile.length()} bytes" }
 

@@ -1,10 +1,16 @@
 package eu.kanade.tachiyomi.data.sync
 
+import android.accounts.Account
 import android.content.Context
+import android.content.Intent
+import com.google.android.gms.auth.GoogleAuthUtil
+import com.google.android.gms.auth.UserRecoverableAuthException
 import com.google.android.gms.auth.api.identity.AuthorizationClient
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.Scope
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -13,7 +19,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import okio.IOException
 import okio.source
 import tachiyomi.core.common.util.system.logcat
@@ -37,6 +42,13 @@ class DriveApiHelper(
 
     private val authClient: AuthorizationClient = Identity.getAuthorizationClient(context)
 
+    @Volatile
+    private var cachedAccessToken: String? = null
+
+    @Volatile
+    var lastErrorDetail: String? = null
+        private set
+
     companion object {
         private const val DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
         private const val DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
@@ -46,35 +58,86 @@ class DriveApiHelper(
         private val GZIP_MEDIA_TYPE = "application/gzip".toMediaType()
     }
 
+    private fun getCurrentAccount(): Account? {
+        val email = FirebaseAuth.getInstance().currentUser?.email
+            ?: GoogleSignIn.getLastSignedInAccount(context)?.email
+        return email?.let { Account(it, "com.google") }
+    }
+
+    /**
+     * Extracts and caches the granted access token when returning from the Google consent dialog.
+     */
+    fun handleAuthorizationResult(data: Intent?): String? {
+        if (data == null) return null
+        return try {
+            val result = authClient.getAuthorizationResultFromIntent(data)
+            val token = result.accessToken
+            if (!token.isNullOrBlank()) {
+                cachedAccessToken = token
+                lastErrorDetail = null
+                logcat(LogPriority.INFO) { "DriveApiHelper: Token successfully extracted from consent intent" }
+            }
+            token
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "DriveApiHelper: Failed to extract auth result from intent" }
+            lastErrorDetail = "Failed to parse Google consent result: ${e.message}"
+            null
+        }
+    }
+
     /**
      * Request the drive.appdata scope from the user.
-     * Returns the access token on success, or null if the user needs to resolve a consent screen.
-     *
-     * @return Pair<accessToken, pendingIntent?> — if pendingIntent is non-null, the caller
-     *         must launch it for the user to grant permission.
+     * Returns the access token on success, or NeedsConsent if the user must grant permissions.
      */
     suspend fun requestDriveAuthorization(): AuthorizationResult = withContext(Dispatchers.IO) {
         try {
-            val request = AuthorizationRequest.builder()
+            val account = getCurrentAccount()
+            val builder = AuthorizationRequest.builder()
                 .setRequestedScopes(listOf(Scope(DRIVE_SCOPE)))
-                .build()
+            if (account != null) {
+                builder.setAccount(account)
+            }
+            val request = builder.build()
 
             val result = authClient.authorize(request).await()
 
             if (result.hasResolution()) {
-                // User needs to grant permission — caller must launch the PendingIntent
-                AuthorizationResult.NeedsConsent(result.pendingIntent!!)
+                val pendingIntent = result.pendingIntent
+                if (pendingIntent != null) {
+                    AuthorizationResult.NeedsConsent(pendingIntent)
+                } else {
+                    AuthorizationResult.Error("Resolution required but PendingIntent was null")
+                }
             } else {
                 val token = result.accessToken
-                if (token != null) {
+                if (!token.isNullOrBlank()) {
+                    cachedAccessToken = token
+                    lastErrorDetail = null
                     AuthorizationResult.Success(token)
                 } else {
-                    AuthorizationResult.Error("No access token returned")
+                    // Try GoogleAuthUtil fallback if account is available
+                    val fallbackToken = tryGetGoogleAuthUtilToken(account)
+                    if (fallbackToken != null) {
+                        cachedAccessToken = fallbackToken
+                        lastErrorDetail = null
+                        AuthorizationResult.Success(fallbackToken)
+                    } else {
+                        AuthorizationResult.Error("No access token returned by Google Identity Services")
+                    }
                 }
             }
         } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "Drive authorization failed" }
-            AuthorizationResult.Error(e.message ?: "Unknown error")
+            logcat(LogPriority.ERROR, e) { "DriveApiHelper: Drive authorization failed" }
+            lastErrorDetail = e.message ?: "Authorization failed"
+            val account = getCurrentAccount()
+            val fallbackToken = tryGetGoogleAuthUtilToken(account)
+            if (fallbackToken != null) {
+                cachedAccessToken = fallbackToken
+                lastErrorDetail = null
+                AuthorizationResult.Success(fallbackToken)
+            } else {
+                AuthorizationResult.Error(e.message ?: "Unknown authorization error")
+            }
         }
     }
 
@@ -82,15 +145,86 @@ class DriveApiHelper(
      * Get a fresh access token. Call this before every Drive API request.
      */
     suspend fun getAccessToken(): String? = withContext(Dispatchers.IO) {
+        val account = getCurrentAccount()
+
+        // 1. Try Identity AuthorizationClient with account binding
         try {
-            val request = AuthorizationRequest.builder()
+            val builder = AuthorizationRequest.builder()
                 .setRequestedScopes(listOf(Scope(DRIVE_SCOPE)))
-                .build()
-            val result = authClient.authorize(request).await()
-            result.accessToken
+            if (account != null) {
+                builder.setAccount(account)
+            }
+            val result = authClient.authorize(builder.build()).await()
+            val token = result.accessToken
+            if (!token.isNullOrBlank()) {
+                cachedAccessToken = token
+                return@withContext token
+            }
         } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "Failed to get Drive access token" }
+            logcat(LogPriority.WARN, e) { "DriveApiHelper: Identity.authorize failed, falling back to GoogleAuthUtil" }
+        }
+
+        // 2. Try GoogleAuthUtil fallback (uses system AccountManager)
+        val authUtilToken = tryGetGoogleAuthUtilToken(account)
+        if (authUtilToken != null) {
+            cachedAccessToken = authUtilToken
+            return@withContext authUtilToken
+        }
+
+        // 3. Return cached access token if available
+        cachedAccessToken
+    }
+
+    private fun tryGetGoogleAuthUtilToken(account: Account?): String? {
+        if (account == null) return null
+        return try {
+            GoogleAuthUtil.getToken(context, account, "oauth2:$DRIVE_SCOPE")
+        } catch (e: UserRecoverableAuthException) {
+            logcat(LogPriority.INFO) { "DriveApiHelper: GoogleAuthUtil requires user consent" }
             null
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN, e) { "DriveApiHelper: GoogleAuthUtil failed" }
+            null
+        }
+    }
+
+    /**
+     * Invalidate token on HTTP 401 so the next request requests a fresh one.
+     */
+    fun invalidateToken(oldToken: String?) {
+        if (cachedAccessToken == oldToken) {
+            cachedAccessToken = null
+        }
+        if (oldToken != null) {
+            try {
+                GoogleAuthUtil.clearToken(context, oldToken)
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun parseGoogleError(code: Int, responseBody: String?): String {
+        val body = responseBody.orEmpty()
+        logcat(LogPriority.ERROR) { "Drive API HTTP $code: $body" }
+
+        val serverMessage = try {
+            val json = org.json.JSONObject(body)
+            val errorObj = json.optJSONObject("error")
+            errorObj?.optString("message") ?: body
+        } catch (_: Exception) {
+            body
+        }
+
+        return when {
+            code == 401 -> "Google Drive authorization expired (HTTP 401). Please re-authenticate."
+            code == 403 && (serverMessage.contains("Google Drive API has not been used", ignoreCase = true) ||
+                    serverMessage.contains("it is disabled", ignoreCase = true)) -> {
+                "Google Drive API has not been enabled in your Google Cloud project.\n\nPlease enable it in Google Cloud Console:\nhttps://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=997612260567"
+            }
+            code == 403 -> "Google Drive permission denied (HTTP 403):\n$serverMessage"
+            code == 404 -> "Google Drive file not found (HTTP 404):\n$serverMessage"
+            code in 500..599 -> "Google Drive temporary server error (HTTP $code). Please try again later."
+            serverMessage.isNotBlank() -> "Drive HTTP $code: $serverMessage"
+            else -> "Google Drive request failed with HTTP $code"
         }
     }
 
@@ -108,7 +242,10 @@ class DriveApiHelper(
 
         try {
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext null
+                if (!response.isSuccessful) {
+                    lastErrorDetail = parseGoogleError(response.code, response.body?.string())
+                    return@withContext null
+                }
                 val body = response.body?.string() ?: return@withContext null
                 val files = org.json.JSONObject(body).optJSONArray("files")
                 if (files != null && files.length() > 0) {
@@ -117,6 +254,7 @@ class DriveApiHelper(
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Failed to fetch file modified time" }
+            lastErrorDetail = e.message
         }
         null
     }
@@ -135,12 +273,21 @@ class DriveApiHelper(
             .get()
             .build()
 
-        val body = client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                logcat(LogPriority.ERROR) { "Drive findSyncFile failed: ${response.code}" }
-                return@withContext null
+        val body = try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    lastErrorDetail = parseGoogleError(response.code, response.body?.string())
+                    return@withContext null
+                }
+                response.body?.string() ?: run {
+                    lastErrorDetail = "Empty response received when checking Google Drive sync file"
+                    return@withContext null
+                }
             }
-            response.body?.string() ?: return@withContext null
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Drive findSyncFile exception" }
+            lastErrorDetail = "Network connection failed: ${e.message}"
+            return@withContext null
         }
 
         // Parse all files and prefer the .tachibk file over the old .json.gz
@@ -148,7 +295,6 @@ class DriveApiHelper(
             val files = org.json.JSONObject(body).optJSONArray("files")
             if (files == null || files.length() == 0) return@withContext null
 
-            // Prefer .tachibk over .json.gz
             var tachibkId: String? = null
             var fallbackId: String? = null
             for (i in 0 until files.length()) {
@@ -163,7 +309,6 @@ class DriveApiHelper(
             }
             tachibkId ?: fallbackId
         } catch (e: Exception) {
-            // Fallback to regex parsing
             val idRegex = """"id"\s*:\s*"([^"]+)"""".toRegex()
             idRegex.find(body)?.groupValues?.get(1)
         }
@@ -212,7 +357,7 @@ class DriveApiHelper(
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    logcat(LogPriority.ERROR) { "Drive download failed: ${response.code}" }
+                    lastErrorDetail = parseGoogleError(response.code, response.body?.string())
                     return@withContext null
                 }
                 val tempFile = java.io.File(context.cacheDir, "wammy_drive_download.tachibk")
@@ -220,11 +365,15 @@ class DriveApiHelper(
                     tempFile.outputStream().use { outputStream ->
                         inputStream.copyTo(outputStream)
                     }
-                } ?: return@withContext null
+                } ?: run {
+                    lastErrorDetail = "Failed to stream download data from Google Drive"
+                    return@withContext null
+                }
                 tempFile
             }
         } catch (e: IOException) {
             logcat(LogPriority.ERROR, e) { "Drive download IOException" }
+            lastErrorDetail = "Network error downloading backup: ${e.message}"
             null
         }
     }
@@ -240,6 +389,7 @@ class DriveApiHelper(
         file: java.io.File,
         existingFileId: String? = null,
     ): String? = withContext(Dispatchers.IO) {
+        lastErrorDetail = null
         try {
             if (existingFileId != null) {
                 // Update existing file (simple upload)
@@ -250,12 +400,12 @@ class DriveApiHelper(
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Drive upload failed" }
+            lastErrorDetail = "Upload failed: ${e.message}"
             null
         }
     }
 
     private fun createFile(accessToken: String, file: java.io.File): String? {
-        // Multipart upload: metadata + content (streams file directly)
         val boundary = "wammy_sync_boundary"
         val metadata = """{"name":"$SYNC_FILE_NAME","parents":["appDataFolder"]}"""
 
@@ -287,16 +437,29 @@ class DriveApiHelper(
             .post(multipartBody)
             .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                logcat(LogPriority.ERROR) { "Drive create failed: ${response.code} ${response.body?.string()}" }
-                return null
+        val body = try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    lastErrorDetail = parseGoogleError(response.code, response.body?.string())
+                    return null
+                }
+                response.body?.string() ?: run {
+                    lastErrorDetail = "Empty response received after upload"
+                    return null
+                }
             }
-
-            val body = response.body?.string() ?: return null
-            val idRegex = """"id"\s*:\s*"([^"]+)"""".toRegex()
-            return idRegex.find(body)?.groupValues?.get(1)
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "createFile network call failed" }
+            lastErrorDetail = "Network call failed during backup upload: ${e.message}"
+            return null
         }
+
+        val idRegex = """"id"\s*:\s*"([^"]+)"""".toRegex()
+        val fileId = idRegex.find(body)?.groupValues?.get(1)
+        if (fileId == null) {
+            lastErrorDetail = "Google Drive did not return a file ID in the response"
+        }
+        return fileId
     }
 
     private fun updateFile(accessToken: String, fileId: String, file: java.io.File): String? {
@@ -316,12 +479,18 @@ class DriveApiHelper(
             .patch(streamBody)
             .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                logcat(LogPriority.ERROR) { "Drive update failed: ${response.code} ${response.body?.string()}" }
-                return null
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    lastErrorDetail = parseGoogleError(response.code, response.body?.string())
+                    return null
+                }
+                return fileId
             }
-            return fileId
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "updateFile network call failed" }
+            lastErrorDetail = "Network call failed during backup update: ${e.message}"
+            return null
         }
     }
 
@@ -335,8 +504,17 @@ class DriveApiHelper(
             .delete()
             .build()
 
-        client.newCall(request).execute().use { response ->
-            response.isSuccessful
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    lastErrorDetail = parseGoogleError(response.code, response.body?.string())
+                }
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "deleteSyncFile failed" }
+            lastErrorDetail = "Delete request failed: ${e.message}"
+            false
         }
     }
 }
