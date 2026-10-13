@@ -58,6 +58,26 @@ class DriveApiHelper(
         private val GZIP_MEDIA_TYPE = "application/gzip".toMediaType()
     }
 
+    private fun setCachedToken(token: String?) {
+        cachedAccessToken = token
+        try {
+            val prefs = context.getSharedPreferences("wammy_drive_auth", Context.MODE_PRIVATE)
+            prefs.edit().putString("cached_token", token).apply()
+        } catch (_: Exception) {}
+    }
+
+    private fun getCachedToken(): String? {
+        if (!cachedAccessToken.isNullOrBlank()) return cachedAccessToken
+        return try {
+            val prefs = context.getSharedPreferences("wammy_drive_auth", Context.MODE_PRIVATE)
+            val saved = prefs.getString("cached_token", null)
+            cachedAccessToken = saved
+            saved
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun getCurrentAccount(): Account? {
         val email = FirebaseAuth.getInstance().currentUser?.email
             ?: GoogleSignIn.getLastSignedInAccount(context)?.email
@@ -73,7 +93,7 @@ class DriveApiHelper(
             val result = authClient.getAuthorizationResultFromIntent(data)
             val token = result.accessToken
             if (!token.isNullOrBlank()) {
-                cachedAccessToken = token
+                setCachedToken(token)
                 lastErrorDetail = null
                 logcat(LogPriority.INFO) { "DriveApiHelper: Token successfully extracted from consent intent" }
             }
@@ -91,15 +111,12 @@ class DriveApiHelper(
      */
     suspend fun requestDriveAuthorization(): AuthorizationResult = withContext(Dispatchers.IO) {
         try {
-            val account = getCurrentAccount()
-            val builder = AuthorizationRequest.builder()
+            // First try default authorization without synthetic account binding (most compatible with GIS)
+            val defaultRequest = AuthorizationRequest.builder()
                 .setRequestedScopes(listOf(Scope(DRIVE_SCOPE)))
-            if (account != null) {
-                builder.setAccount(account)
-            }
-            val request = builder.build()
+                .build()
 
-            val result = authClient.authorize(request).await()
+            val result = authClient.authorize(defaultRequest).await()
 
             if (result.hasResolution()) {
                 val pendingIntent = result.pendingIntent
@@ -111,14 +128,14 @@ class DriveApiHelper(
             } else {
                 val token = result.accessToken
                 if (!token.isNullOrBlank()) {
-                    cachedAccessToken = token
+                    setCachedToken(token)
                     lastErrorDetail = null
                     AuthorizationResult.Success(token)
                 } else {
-                    // Try GoogleAuthUtil fallback if account is available
+                    val account = getCurrentAccount()
                     val fallbackToken = tryGetGoogleAuthUtilToken(account)
                     if (fallbackToken != null) {
-                        cachedAccessToken = fallbackToken
+                        setCachedToken(fallbackToken)
                         lastErrorDetail = null
                         AuthorizationResult.Success(fallbackToken)
                     } else {
@@ -132,7 +149,7 @@ class DriveApiHelper(
             val account = getCurrentAccount()
             val fallbackToken = tryGetGoogleAuthUtilToken(account)
             if (fallbackToken != null) {
-                cachedAccessToken = fallbackToken
+                setCachedToken(fallbackToken)
                 lastErrorDetail = null
                 AuthorizationResult.Success(fallbackToken)
             } else {
@@ -145,34 +162,49 @@ class DriveApiHelper(
      * Get a fresh access token. Call this before every Drive API request.
      */
     suspend fun getAccessToken(): String? = withContext(Dispatchers.IO) {
-        val account = getCurrentAccount()
-
-        // 1. Try Identity AuthorizationClient with account binding
+        // 1. Try Identity AuthorizationClient without synthetic account (standard GIS flow, same as master)
         try {
-            val builder = AuthorizationRequest.builder()
+            val request = AuthorizationRequest.builder()
                 .setRequestedScopes(listOf(Scope(DRIVE_SCOPE)))
-            if (account != null) {
-                builder.setAccount(account)
-            }
-            val result = authClient.authorize(builder.build()).await()
+                .build()
+            val result = authClient.authorize(request).await()
             val token = result.accessToken
             if (!token.isNullOrBlank()) {
-                cachedAccessToken = token
+                setCachedToken(token)
                 return@withContext token
             }
         } catch (e: Exception) {
-            logcat(LogPriority.WARN, e) { "DriveApiHelper: Identity.authorize failed, falling back to GoogleAuthUtil" }
+            logcat(LogPriority.WARN, e) { "DriveApiHelper: Default Identity.authorize failed" }
         }
 
-        // 2. Try GoogleAuthUtil fallback (uses system AccountManager)
-        val authUtilToken = tryGetGoogleAuthUtilToken(account)
-        if (authUtilToken != null) {
-            cachedAccessToken = authUtilToken
-            return@withContext authUtilToken
+        // 2. Try with explicit Account binding if available
+        val account = getCurrentAccount()
+        if (account != null) {
+            try {
+                val request = AuthorizationRequest.builder()
+                    .setRequestedScopes(listOf(Scope(DRIVE_SCOPE)))
+                    .setAccount(account)
+                    .build()
+                val result = authClient.authorize(request).await()
+                val token = result.accessToken
+                if (!token.isNullOrBlank()) {
+                    setCachedToken(token)
+                    return@withContext token
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "DriveApiHelper: Identity.authorize with account failed" }
+            }
+
+            // 3. Try GoogleAuthUtil fallback
+            val authUtilToken = tryGetGoogleAuthUtilToken(account)
+            if (authUtilToken != null) {
+                setCachedToken(authUtilToken)
+                return@withContext authUtilToken
+            }
         }
 
-        // 3. Return cached access token if available
-        cachedAccessToken
+        // 4. Return cached access token (RAM or disk) if available
+        getCachedToken()
     }
 
     private fun tryGetGoogleAuthUtilToken(account: Account?): String? {
@@ -193,7 +225,7 @@ class DriveApiHelper(
      */
     fun invalidateToken(oldToken: String?) {
         if (cachedAccessToken == oldToken) {
-            cachedAccessToken = null
+            setCachedToken(null)
         }
         if (oldToken != null) {
             try {

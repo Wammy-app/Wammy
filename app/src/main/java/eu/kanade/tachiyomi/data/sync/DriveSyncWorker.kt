@@ -127,20 +127,20 @@ class DriveSyncWorker(
                     prefs.edit().putLong(KEY_LAST_SYNC_TIME, cloudTime).apply()
                     context.notify(NOTIF_ID_RESTORE, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
                         setContentTitle("Google Drive")
-                        setContentText("Library restored!")
+                        setContentText(result.message)
                         setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
                         setOngoing(false)
-                        setTimeoutAfter(3000)
+                        setTimeoutAfter(4000)
                     }
                 } else {
                     val errorMsg = if (result is SyncResult.Error) result.message else "Unknown error"
                     logcat(LogPriority.ERROR) { "DriveSyncWorker: Restore failed: $errorMsg" }
                     context.notify(NOTIF_ID_RESTORE, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
                         setContentTitle("Google Drive")
-                        setContentText("Restore failed: $errorMsg")
+                        setContentText(errorMsg)
                         setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
                         setOngoing(false)
-                        setTimeoutAfter(5000)
+                        setTimeoutAfter(6000)
                     }
                 }
             } else {
@@ -176,9 +176,9 @@ class DriveSyncWorker(
             setProgress(0, 0, true)
         }
 
-        val success = doBackupWithRetry(driveSyncManager)
+        val result = doBackupWithRetry(driveSyncManager)
 
-        if (success) {
+        if (result is SyncResult.Success) {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             // Use Drive server timestamp (not device time) to avoid clock skew
             val driveApiHelper: DriveApiHelper = Injekt.get()
@@ -196,15 +196,16 @@ class DriveSyncWorker(
 
             context.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
                 setContentTitle("Google Drive")
-                setContentText("Sync complete!")
+                setContentText(result.message)
                 setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
                 setOngoing(false)
-                setTimeoutAfter(3000)
+                setTimeoutAfter(4000)
             }
         } else {
+            val errorMsg = if (result is SyncResult.Error) result.message else "Sync failed."
             context.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
                 setContentTitle("Google Drive")
-                setContentText("Sync failed.")
+                setContentText(errorMsg)
                 setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
                 setOngoing(false)
                 setTimeoutAfter(5000)
@@ -215,27 +216,28 @@ class DriveSyncWorker(
     /**
      * Retry backup up to 3 times with exponential backoff (2s, 4s).
      */
-    private suspend fun doBackupWithRetry(driveSyncManager: DriveSyncManager): Boolean {
-        var lastError: Exception? = null
+    private suspend fun doBackupWithRetry(driveSyncManager: DriveSyncManager): SyncResult {
+        var lastResult: SyncResult = SyncResult.Error("Unknown backup error")
         for (attempt in 1..3) {
             try {
                 val result = driveSyncManager.backup()
                 if (result is SyncResult.Success) {
                     logcat(LogPriority.INFO) { "DriveSyncWorker: Backup succeeded on attempt $attempt" }
-                    return true
+                    return result
                 } else if (result is SyncResult.Error) {
+                    lastResult = result
                     logcat(LogPriority.WARN) { "DriveSyncWorker: Backup attempt $attempt failed: ${result.message}" }
                 }
             } catch (e: Exception) {
-                lastError = e
+                lastResult = SyncResult.Error(e.message ?: "Backup threw exception")
                 logcat(LogPriority.WARN, e) { "DriveSyncWorker: Backup attempt $attempt threw exception" }
             }
             if (attempt < 3) {
                 delay(2000L * attempt) // 2s, then 4s
             }
         }
-        logcat(LogPriority.ERROR, lastError) { "DriveSyncWorker: Backup failed after 3 retries" }
-        return false
+        logcat(LogPriority.ERROR) { "DriveSyncWorker: Backup failed after 3 retries" }
+        return lastResult
     }
 
     companion object {
@@ -346,19 +348,19 @@ class DriveSyncWorker(
                                     prefs.edit().putLong(KEY_LAST_SYNC_TIME, cloudTime).apply()
                                     appContext.notify(NOTIF_ID_RESTORE, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
                                         setContentTitle("Google Drive")
-                                        setContentText("Library restored!")
+                                        setContentText(result.message)
                                         setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
                                         setOngoing(false)
-                                        setTimeoutAfter(3000)
+                                        setTimeoutAfter(4000)
                                     }
                                 } else {
                                     val errorMsg = if (result is SyncResult.Error) result.message else "Unknown error"
                                     appContext.notify(NOTIF_ID_RESTORE, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
                                         setContentTitle("Google Drive")
-                                        setContentText("Restore failed: $errorMsg")
+                                        setContentText(errorMsg)
                                         setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
                                         setOngoing(false)
-                                        setTimeoutAfter(5000)
+                                        setTimeoutAfter(6000)
                                     }
                                 }
                             } else if (prefs.getBoolean(KEY_DATA_DIRTY, false)) {
@@ -382,15 +384,16 @@ class DriveSyncWorker(
                                     prefs.edit().putLong(KEY_LAST_SYNC_TIME, serverTime).putBoolean(KEY_DATA_DIRTY, false).apply()
                                     appContext.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
                                         setContentTitle("Google Drive")
-                                        setContentText("Sync complete!")
+                                        setContentText(result.message)
                                         setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
                                         setOngoing(false)
-                                        setTimeoutAfter(3000)
+                                        setTimeoutAfter(4000)
                                     }
                                 } else {
+                                    val errorMsg = if (result is SyncResult.Error) result.message else "Sync failed."
                                     appContext.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
                                         setContentTitle("Google Drive")
-                                        setContentText("Sync failed.")
+                                        setContentText(errorMsg)
                                         setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
                                         setOngoing(false)
                                         setTimeoutAfter(5000)
