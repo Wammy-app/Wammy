@@ -161,77 +161,6 @@ object HomeScreen : Screen() {
                                 }
                             }
                         },
-                        bottomBar = {
-                            if (!isTabletUi()) {
-                                val bottomNavVisible by produceState(initialValue = true) {
-                                    showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
-                                }
-                                AnimatedVisibility(
-                                    visible = bottomNavVisible,
-                                    enter = expandVertically(),
-                                    exit = shrinkVertically(),
-                                ) {
-                                    val scope = rememberCoroutineScope()
-                                    WavyDockNavigationBar(
-                                        tabs = tabs,
-                                        currentTab = tabNavigator.current,
-                                        onTabSelected = { tab ->
-                                            if (tabNavigator.current::class != tab::class) {
-                                                tabNavigator.current = tab
-                                            } else {
-                                                scope.launch { tab.onReselect(navigator) }
-                                            }
-                                        },
-                                        badgeContent = { tab ->
-                                            when {
-                                                tab is UpdatesTab -> {
-                                                    val count by produceState(initialValue = 0) {
-                                                        val pref = Injekt.get<LibraryPreferences>()
-                                                        combine(
-                                                            pref.newShowUpdatesCount.changes(),
-                                                            pref.newUpdatesCount.changes(),
-                                                        ) { show, count -> if (show) count else 0 }
-                                                            .collectLatest { value = it }
-                                                    }
-                                                    if (count > 0) {
-                                                        Badge {
-                                                            val desc = pluralStringResource(
-                                                                MR.plurals.notification_chapters_generic,
-                                                                count = count,
-                                                                count,
-                                                            )
-                                                            Text(
-                                                                text = count.toString(),
-                                                                modifier = Modifier.semantics { contentDescription = desc },
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                                BrowseTab::class.isInstance(tab) -> {
-                                                    val count by produceState(initialValue = 0) {
-                                                        Injekt.get<SourcePreferences>().extensionUpdatesCount.changes()
-                                                            .collectLatest { value = it }
-                                                    }
-                                                    if (count > 0) {
-                                                        Badge {
-                                                            val desc = pluralStringResource(
-                                                                MR.plurals.update_check_notification_ext_updates,
-                                                                count = count,
-                                                                count,
-                                                            )
-                                                            Text(
-                                                                text = count.toString(),
-                                                                modifier = Modifier.semantics { contentDescription = desc },
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        },
-                                    )
-                                }
-                            }
-                        },
                         contentWindowInsets = WindowInsets(0),
                     ) { contentPadding ->
                         Box(
@@ -251,6 +180,77 @@ object HomeScreen : Screen() {
                                     it.Content()
                                 }
                             }
+                        }
+                    }
+
+                    if (!isTabletUi()) {
+                        val bottomNavVisible by produceState(initialValue = true) {
+                            showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
+                        }
+                        AnimatedVisibility(
+                            visible = bottomNavVisible,
+                            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        ) {
+                            val scope = rememberCoroutineScope()
+                            WavyDockNavigationBar(
+                                tabs = tabs,
+                                currentTab = tabNavigator.current,
+                                onTabSelected = { tab ->
+                                    if (tabNavigator.current::class != tab::class) {
+                                        tabNavigator.current = tab
+                                    } else {
+                                        scope.launch { tab.onReselect(navigator) }
+                                    }
+                                },
+                                badgeContent = { tab ->
+                                    when {
+                                        tab is UpdatesTab -> {
+                                            val count by produceState(initialValue = 0) {
+                                                val pref = Injekt.get<LibraryPreferences>()
+                                                combine(
+                                                    pref.newShowUpdatesCount.changes(),
+                                                    pref.newUpdatesCount.changes(),
+                                                ) { show, count -> if (show) count else 0 }
+                                                    .collectLatest { value = it }
+                                            }
+                                            if (count > 0) {
+                                                Badge {
+                                                    val desc = pluralStringResource(
+                                                        MR.plurals.notification_chapters_generic,
+                                                        count = count,
+                                                        count,
+                                                    )
+                                                    Text(
+                                                        text = count.toString(),
+                                                        modifier = Modifier.semantics { contentDescription = desc },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        BrowseTab::class.isInstance(tab) -> {
+                                            val count by produceState(initialValue = 0) {
+                                                Injekt.get<SourcePreferences>().extensionUpdatesCount.changes()
+                                                    .collectLatest { value = it }
+                                            }
+                                            if (count > 0) {
+                                                Badge {
+                                                    val desc = pluralStringResource(
+                                                        MR.plurals.update_check_notification_ext_updates,
+                                                        count = count,
+                                                        count,
+                                                    )
+                                                    Text(
+                                                        text = count.toString(),
+                                                        modifier = Modifier.semantics { contentDescription = desc },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                            )
                         }
                     }
 

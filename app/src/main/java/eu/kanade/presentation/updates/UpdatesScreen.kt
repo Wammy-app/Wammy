@@ -2,10 +2,12 @@ package eu.kanade.presentation.updates
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
+import tachiyomi.presentation.core.util.plus
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FilterList
@@ -149,7 +151,7 @@ fun UpdateScreen(
                     }
 
                     FastScrollLazyColumn(
-                        contentPadding = contentPadding,
+                        contentPadding = contentPadding + PaddingValues(bottom = 84.dp),
                         state = lazyListState,
                     ) {
                         if (showFilterChips) {
