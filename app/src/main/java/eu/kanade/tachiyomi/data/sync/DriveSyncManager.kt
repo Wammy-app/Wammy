@@ -14,6 +14,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.File
 import java.security.MessageDigest
 
@@ -69,6 +71,11 @@ class DriveSyncManager(
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e) { "DriveSync: BackupCreator failed" }
                     return@withContext SyncResult.Error("Failed to create backup: ${e.message}")
+                }
+
+                if (tempFile.length() <= 0L) {
+                    tempFile.delete()
+                    return@withContext SyncResult.Error("Created backup file is empty (0 bytes)")
                 }
 
                 // 2. Hash check: skip upload if backup is identical to the last one
@@ -134,8 +141,8 @@ class DriveSyncManager(
                         prefs.edit().putString("last_backup_hash", newHash).apply()
                     }
                     
-                    // Clean up legacy sync file if it still exists
-                    cleanupLegacyFile(uploadToken)
+                    // Clean up legacy sync file if it still exists (safely never deleting our uploaded file)
+                    cleanupLegacyFile(uploadToken, uploadedFileId)
                     
                     SyncResult.Success("Backup uploaded to Google Drive")
                 } else {
@@ -172,8 +179,9 @@ class DriveSyncManager(
 
                 // 2. Download it (streams directly to a temp file — no RAM overload)
                 val tempFile = driveApiHelper.downloadSyncFileToFile(accessToken, fileId)
-                if (tempFile == null) {
-                    val detail = driveApiHelper.lastErrorDetail ?: "Failed to download backup from Google Drive"
+                if (tempFile == null || tempFile.length() <= 0L) {
+                    tempFile?.delete()
+                    val detail = driveApiHelper.lastErrorDetail ?: "Downloaded backup file is empty or missing"
                     return@withContext SyncResult.Error(detail)
                 }
 
@@ -205,6 +213,13 @@ class DriveSyncManager(
                     tempFile.delete()
                 }
 
+                // Force refresh the library cache so UI updates immediately without needing an app restart
+                try {
+                    Injekt.get<tachiyomi.domain.manga.interactor.GetLibraryManga>().refreshForced()
+                } catch (e: Exception) {
+                    logcat(LogPriority.WARN, e) { "DriveSync: Failed to force refresh library after restore" }
+                }
+
                 // 4. Clear the backup hash so the next backup doesn't incorrectly skip
                 val prefs = context.getSharedPreferences("wammy_sync_prefs", Context.MODE_PRIVATE)
                 prefs.edit().remove("last_backup_hash").apply()
@@ -220,10 +235,10 @@ class DriveSyncManager(
      * Delete the old legacy sync file (wammy_sync.json.gz) if it still exists on Drive.
      * This is a one-time cleanup — once deleted, the query will never find it again.
      */
-    private suspend fun cleanupLegacyFile(accessToken: String) {
+    private suspend fun cleanupLegacyFile(accessToken: String, uploadedFileId: String?) {
         try {
             val legacyFileId = driveApiHelper.findLegacySyncFile(accessToken)
-            if (legacyFileId != null) {
+            if (legacyFileId != null && legacyFileId != uploadedFileId) {
                 val deleted = driveApiHelper.deleteSyncFile(accessToken, legacyFileId)
                 if (deleted) {
                     logcat(LogPriority.INFO) { "DriveSync: Cleaned up legacy wammy_sync.json.gz" }

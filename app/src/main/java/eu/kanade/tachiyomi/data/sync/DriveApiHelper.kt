@@ -232,8 +232,8 @@ class DriveApiHelper(
      * Gets the last modified time of the sync file in the cloud (ISO 8601 string)
      */
     suspend fun getSyncFileModifiedTime(accessToken: String): String? = withContext(Dispatchers.IO) {
-        val query = java.net.URLEncoder.encode("name='wammy_backup.tachibk' or name='wammy_sync.json.gz'", "UTF-8")
-        val url = "$DRIVE_FILES_URL?spaces=appDataFolder&q=$query&fields=files(id,modifiedTime)"
+        val query = java.net.URLEncoder.encode("name='$SYNC_FILE_NAME' and trashed=false", "UTF-8")
+        val url = "$DRIVE_FILES_URL?spaces=appDataFolder&q=$query&orderBy=modifiedTime%20desc&fields=files(id,modifiedTime)"
         val request = Request.Builder()
             .url(url)
             .addHeader("Authorization", "Bearer $accessToken")
@@ -264,9 +264,8 @@ class DriveApiHelper(
      * @return The file ID, or null if the file doesn't exist yet.
      */
     suspend fun findSyncFile(accessToken: String): String? = withContext(Dispatchers.IO) {
-        // Look for either the new or old filename so we don't lose user data from the previous build
-        val query = java.net.URLEncoder.encode("name='wammy_backup.tachibk' or name='wammy_sync.json.gz'", "UTF-8")
-        val url = "$DRIVE_FILES_URL?spaces=appDataFolder&q=$query&fields=files(id,name,modifiedTime)"
+        val query = java.net.URLEncoder.encode("name='$SYNC_FILE_NAME' and trashed=false", "UTF-8")
+        val url = "$DRIVE_FILES_URL?spaces=appDataFolder&q=$query&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)"
         val request = Request.Builder()
             .url(url)
             .addHeader("Authorization", "Bearer $accessToken")
@@ -290,24 +289,12 @@ class DriveApiHelper(
             return@withContext null
         }
 
-        // Parse all files and prefer the .tachibk file over the old .json.gz
         try {
             val files = org.json.JSONObject(body).optJSONArray("files")
             if (files == null || files.length() == 0) return@withContext null
 
-            var tachibkId: String? = null
-            var fallbackId: String? = null
-            for (i in 0 until files.length()) {
-                val file = files.getJSONObject(i)
-                val name = file.optString("name")
-                val id = file.optString("id")
-                if (name == SYNC_FILE_NAME) {
-                    tachibkId = id
-                } else {
-                    fallbackId = id
-                }
-            }
-            tachibkId ?: fallbackId
+            // First file is the latest non-trashed backup due to orderBy=modifiedTime desc
+            files.getJSONObject(0).optString("id")
         } catch (e: Exception) {
             val idRegex = """"id"\s*:\s*"([^"]+)"""".toRegex()
             idRegex.find(body)?.groupValues?.get(1)
@@ -319,7 +306,7 @@ class DriveApiHelper(
      * @return The file ID of the legacy file, or null if it doesn't exist.
      */
     suspend fun findLegacySyncFile(accessToken: String): String? = withContext(Dispatchers.IO) {
-        val query = java.net.URLEncoder.encode("name='wammy_sync.json.gz'", "UTF-8")
+        val query = java.net.URLEncoder.encode("name='wammy_sync.json.gz' and trashed=false", "UTF-8")
         val url = "$DRIVE_FILES_URL?spaces=appDataFolder&q=$query&fields=files(id)"
         val request = Request.Builder()
             .url(url)
@@ -367,6 +354,11 @@ class DriveApiHelper(
                     }
                 } ?: run {
                     lastErrorDetail = "Failed to stream download data from Google Drive"
+                    return@withContext null
+                }
+                if (tempFile.length() <= 0L) {
+                    tempFile.delete()
+                    lastErrorDetail = "Downloaded backup file is empty (0 bytes)"
                     return@withContext null
                 }
                 tempFile
