@@ -405,6 +405,11 @@ class ProfileScreen : Screen {
                                                         Injekt.get<eu.kanade.domain.base.BasePreferences>()
                                                             .hasCompletedInitialLogin.set(true)
                                                         authManager.signOut()
+                                                        androidx.work.WorkManager.getInstance(context).cancelUniqueWork("DriveSyncPeriodic")
+                                                        androidx.work.WorkManager.getInstance(context).cancelUniqueWork("DriveSyncBackup")
+                                                        androidx.work.WorkManager.getInstance(context).cancelUniqueWork("DriveSyncRestoreCheck")
+                                                        context.getSharedPreferences(eu.kanade.tachiyomi.data.sync.DriveSyncWorker.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                                                            .edit().clear().apply()
                                                         navigator.pop()
                                                     }
                                                     .padding(horizontal = 16.dp, vertical = 14.dp),

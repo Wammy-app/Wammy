@@ -132,8 +132,7 @@ object HomeScreen : Screen() {
                 basePreferences.hasCompletedInitialLogin.set(true)
             }
             if (uid != null && currentScreen is HomeScreen) {
-                // Trigger cloud restore check / dirty data backup
-                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context, immediate = true)
+                // Keep background periodic backup active
                 eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(context)
 
                 val hasProfile = repo.hasProfile(uid)

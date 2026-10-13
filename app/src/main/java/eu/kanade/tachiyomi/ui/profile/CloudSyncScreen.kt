@@ -195,6 +195,9 @@ class CloudSyncScreen : Screen {
             authManager.signOut()
             WorkManager.getInstance(context).cancelUniqueWork("DriveSyncPeriodic")
             WorkManager.getInstance(context).cancelUniqueWork("DriveSyncBackup")
+            WorkManager.getInstance(context).cancelUniqueWork("DriveSyncRestoreCheck")
+            context.getSharedPreferences(DriveSyncWorker.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                .edit().clear().apply()
             Toast.makeText(context, "Signed out of Google Drive", Toast.LENGTH_SHORT).show()
             navigator.pop()
         }

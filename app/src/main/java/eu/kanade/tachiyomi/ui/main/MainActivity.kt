@@ -153,10 +153,14 @@ class MainActivity : BaseActivity() {
             }
         }
 
-        // Schedule Google Drive background restore check on app launch (runs immediately if logged in)
-        eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(this, immediate = true)
-        // Also ensure a periodic sync happens every 12 hours as a fallback
+        // Ensure periodic cloud backup happens in the background
         eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(this)
+
+        // If local data was marked dirty before process killed, ensure backup is queued
+        val syncPrefs = getSharedPreferences(eu.kanade.tachiyomi.data.sync.DriveSyncWorker.PREFS_NAME, MODE_PRIVATE)
+        if (syncPrefs.getBoolean(eu.kanade.tachiyomi.data.sync.DriveSyncWorker.KEY_DATA_DIRTY, false)) {
+            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(this)
+        }
 
         Migrator.awaitAndRelease()
 
