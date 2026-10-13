@@ -26,8 +26,8 @@ import java.util.concurrent.TimeUnit
  * Background worker for automatic Google Drive Sync.
  *
  * Architecture:
- * - WorkManager with 2-minute initial delay acts as a disk-persisted debounce.
- *   Every new trigger replaces the pending job, restarting the 2-minute timer.
+ * - WorkManager with 1-minute initial delay acts as a disk-persisted debounce.
+ *   Every new trigger replaces the pending job, restarting the 1-minute timer.
  *   Even if the app is killed, Android will still fire the backup on schedule.
  * - Login guard ensures zero battery waste for non-logged-in users.
  * - Retry logic with exponential backoff handles transient server errors.
@@ -229,10 +229,10 @@ class DriveSyncWorker(
          * Schedule an auto-backup with 2-minute debounce using WorkManager.
          *
          * How the debounce works:
-         * - Each call enqueues a WorkManager job with a 2-minute delay using REPLACE policy.
-         * - If another call comes in before the 2 minutes are up, the old job is cancelled
-         *   and a new 2-minute timer starts.
-         * - This means: save 10 manga in 2 minutes = 1 single backup.
+         * - Each call enqueues a WorkManager job with a 1-minute delay using REPLACE policy.
+         * - If another call comes in before the 1 minute is up, the old job is cancelled
+         *   and a new 1-minute timer starts.
+         * - This means: save 10 manga in 1 minute = 1 single backup.
          *
          * Why WorkManager instead of GlobalScope:
          * - WorkManager persists its job queue to disk. Even if the user kills the app
@@ -259,7 +259,7 @@ class DriveSyncWorker(
 
             val request = OneTimeWorkRequestBuilder<DriveSyncWorker>()
                 .setConstraints(constraints)
-                .setInitialDelay(2, TimeUnit.MINUTES)
+                .setInitialDelay(1, TimeUnit.MINUTES)
                 .build()
 
             WorkManager.getInstance(context).enqueueUniqueWork(
@@ -268,7 +268,7 @@ class DriveSyncWorker(
                 request
             )
 
-            logcat(LogPriority.INFO) { "DriveSyncWorker: Backup scheduled (2-minute debounce, wifiOnly=$wifiOnly)" }
+            logcat(LogPriority.INFO) { "DriveSyncWorker: Backup scheduled (1-minute debounce, wifiOnly=$wifiOnly)" }
         }
 
         /**
