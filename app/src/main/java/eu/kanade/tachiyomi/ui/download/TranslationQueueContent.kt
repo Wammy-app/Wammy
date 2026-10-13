@@ -6,9 +6,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -24,6 +26,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.translation.model.TranslationProgress
@@ -47,9 +51,10 @@ fun TranslationQueueContent(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
                 ),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -83,14 +88,19 @@ fun TranslationQueueContent(
                     Text(
                         text = statusText,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                     if (progress.currentChapterProgress > 0f) {
                         LinearProgressIndicator(
                             progress = { progress.currentChapterProgress },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 8.dp),
+                                .padding(top = 10.dp)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            gapSize = 0.dp,
+                            drawStopIndicator = {},
                         )
                     }
                 }
@@ -100,7 +110,7 @@ fun TranslationQueueContent(
         // Queue list grouped by series
         val grouped = remember(queueItems) { queueItems.groupBy { it.mangaId } }
         LazyColumn(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             grouped.forEach { (mangaId, tasks) ->
@@ -138,12 +148,14 @@ private fun TranslationQueueGroupHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp),
+            .padding(top = 8.dp, start = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = "$title ($count)",
             style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -171,11 +183,12 @@ private fun TranslationQueueItem(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrentlyTranslating) {
-                MaterialTheme.colorScheme.secondaryContainer
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
             } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
+                MaterialTheme.colorScheme.surfaceContainer
             },
         ),
     ) {
@@ -192,6 +205,7 @@ private fun TranslationQueueItem(
                 Text(
                     text = task.chapterName.ifBlank { "#${task.chapterId}" },
                     style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

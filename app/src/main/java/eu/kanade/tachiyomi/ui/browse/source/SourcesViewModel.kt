@@ -130,6 +130,13 @@ class SourcesViewModel(
         toggleSource.await(source)
     }
 
+    fun uninstallSource(source: Source) {
+        val ext = source.installedExtension
+        if (ext != null) {
+            Injekt.get<eu.kanade.tachiyomi.extension.ExtensionManager>().uninstallExtension(ext)
+        }
+    }
+
     fun togglePin(source: Source) {
         toggleSourcePin.await(source)
     }

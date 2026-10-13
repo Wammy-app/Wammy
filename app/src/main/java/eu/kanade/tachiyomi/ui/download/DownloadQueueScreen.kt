@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.Close
@@ -32,9 +33,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.SmallExtendedFloatingActionButton
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.animateFloatingActionButton
@@ -81,6 +82,7 @@ import tachiyomi.core.common.util.lang.launchUI
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.novel.TDMR
 import tachiyomi.presentation.core.components.material.Scaffold
+import tachiyomi.presentation.core.components.material.TabText
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import uy.kohesive.injekt.Injekt
@@ -166,9 +168,9 @@ class DownloadQueueScreen(private val initialTab: Int = 0) : Screen() {
         }
 
         val tabs = listOf(
-            "${stringResource(TDMR.strings.label_novels)} ($novelCount)",
-            "${stringResource(TDMR.strings.label_manga)} ($mangaCount)",
-            "${stringResource(TDMR.strings.label_translations)} (${translationQueue.size})",
+            stringResource(TDMR.strings.label_novels) to novelCount,
+            stringResource(TDMR.strings.label_manga) to mangaCount,
+            stringResource(TDMR.strings.label_translations) to translationQueue.size,
         )
 
         val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
@@ -513,12 +515,20 @@ class DownloadQueueScreen(private val initialTab: Int = 0) : Screen() {
             },
         ) { contentPadding ->
             Column(modifier = Modifier.padding(top = contentPadding.calculateTopPadding())) {
-                TabRow(selectedTabIndex = selectedTab) {
-                    tabs.forEachIndexed { index, titleRes ->
+                PrimaryTabRow(selectedTabIndex = selectedTab) {
+                    tabs.forEachIndexed { index, (title, count) ->
+                        val selected = selectedTab == index
                         Tab(
-                            selected = selectedTab == index,
+                            selected = selected,
                             onClick = { selectedTab = index },
-                            text = { Text(titleRes) },
+                            selectedContentColor = MaterialTheme.colorScheme.primary,
+                            unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = {
+                                TabText(
+                                    text = title,
+                                    badgeCount = count.takeIf { it > 0 },
+                                )
+                            },
                         )
                     }
                 }
@@ -600,12 +610,12 @@ class DownloadQueueScreen(private val initialTab: Int = 0) : Screen() {
                         } else {
                             androidx.compose.foundation.lazy.LazyColumn(
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                                    top = 8.dp,
-                                    bottom = 80.dp,
+                                    top = 12.dp,
+                                    bottom = 88.dp,
                                     start = 16.dp,
                                     end = 16.dp,
                                 ),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.fillMaxSize(),
                             ) {
                                 items(
@@ -670,18 +680,19 @@ private fun NovelDownloadCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (item.isActive) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
             } else {
-                MaterialTheme.colorScheme.surfaceVariant
+                MaterialTheme.colorScheme.surfaceContainer
             },
         ),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -697,7 +708,7 @@ private fun NovelDownloadCard(
                     Text(
                         text = item.mangaTitle,
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = titleMaxLines,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -789,21 +800,23 @@ private fun NovelDownloadCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Progress bar
             LinearProgressIndicator(
                 progress = { item.overallProgress },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(5.dp)
-                    .clip(MaterialTheme.shapes.small),
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(4.dp)),
                 color = when {
                     item.hasError -> MaterialTheme.colorScheme.error
                     item.isActive -> MaterialTheme.colorScheme.primary
                     else -> MaterialTheme.colorScheme.secondary
                 },
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                gapSize = 0.dp,
+                drawStopIndicator = {},
             )
 
             Spacer(modifier = Modifier.height(6.dp))

@@ -125,9 +125,7 @@ fun RecentlyUploadedCard(
                     contentColor = MaterialTheme.colorScheme.onSurface,
                 ) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f), CircleShape),
+                        modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
@@ -164,16 +162,14 @@ private fun RecentlyUploadedItemCard(
         modifier = modifier
             .fillMaxWidth()
             .height(64.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(10.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 2.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -183,7 +179,7 @@ private fun RecentlyUploadedItemCard(
                 contentDescription = manga.title,
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp)),
+                    .clip(RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Crop,
             )
 

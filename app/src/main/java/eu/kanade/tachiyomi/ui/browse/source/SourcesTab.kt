@@ -1,4 +1,4 @@
-﻿package eu.kanade.tachiyomi.ui.browse.source
+package eu.kanade.tachiyomi.ui.browse.source
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FilterList
@@ -65,6 +65,7 @@ fun Screen.sourcesTab(): TabContent {
                 onLongClickItem = viewModel::showSourceDialog,
                 onLongClickPin = viewModel::showPinGroupsDialog,
                 onRemoveFromGroup = viewModel::removeSourceFromGroup,
+                onClickUninstall = viewModel::uninstallSource,
             )
 
             val currentDialog = state.dialog

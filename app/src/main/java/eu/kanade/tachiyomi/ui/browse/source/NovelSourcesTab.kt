@@ -1,4 +1,4 @@
-﻿package eu.kanade.tachiyomi.ui.browse.source
+package eu.kanade.tachiyomi.ui.browse.source
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
@@ -83,6 +83,7 @@ fun Screen.novelSourcesTab(): TabContent {
                 onClickPin = screenModel::togglePin,
                 onLongClickPin = screenModel::showPinGroupsDialog,
                 onRemoveFromGroup = screenModel::removeSourceFromGroup,
+                onClickUninstall = screenModel::uninstallSource,
             )
 
             val currentDialog = state.dialog

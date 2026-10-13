@@ -5,37 +5,40 @@
     android:id="@+id/container"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="8dp"
+    android:layout_marginTop="10dp"
+    android:layout_marginBottom="2dp"
     app:cardBackgroundColor="?android:attr/colorBackground"
     app:cardElevation="0dp"
-    app:cardForegroundColor="@color/draggable_card_foreground">
+    app:cardForegroundColor="@color/draggable_card_foreground"
+    app:strokeWidth="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="20dp">
 
         <TextView
             android:id="@+id/title"
             style="@style/TextAppearance.Tachiyomi.SectionHeader"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
-            android:layout_weight="1"
             android:layout_gravity="center_vertical"
+            android:layout_weight="1"
+            android:paddingVertical="8dp"
+            android:textColor="?attr/colorPrimary"
             tools:text="Title" />
 
         <ImageView
             android:id="@+id/reorder"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="start"
-            android:layout_marginEnd="4dp"
-            android:paddingHorizontal="10dp"
+            android:layout_gravity="center_vertical"
+            android:paddingHorizontal="8dp"
             android:paddingVertical="8dp"
             android:scaleType="center"
             app:srcCompat="@drawable/ic_drag_handle_24dp"
-            app:tint="?android:attr/textColorHint"
+            app:tint="?attr/colorOnSurfaceVariant"
             tools:ignore="ContentDescription" />
 
     </LinearLayout>

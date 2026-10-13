@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ModalBottomSheet
@@ -23,7 +24,11 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.foundation.clickable
+import eu.kanade.presentation.more.SettingItem
+import eu.kanade.presentation.more.SettingsGroup
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.MultipartBody
@@ -47,6 +52,7 @@ import coil3.compose.AsyncImage
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.CustomCredential
@@ -223,33 +229,94 @@ class ProfileScreen : Screen {
                         @OptIn(ExperimentalMaterial3Api::class)
                         ModalBottomSheet(
                             onDismissRequest = { showBottomSheet = false },
-                            containerColor = MaterialTheme.colorScheme.surface
+                            shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+                            containerColor = MaterialTheme.colorScheme.background,
+                            dragHandle = {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 14.dp, bottom = 6.dp)
+                                        .size(width = 36.dp, height = 4.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                                )
+                            },
                         ) {
-                            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
-                                ListItem(
-                                    headlineContent = { Text("Settings") },
-                                    modifier = Modifier.clickable { 
-                                        showBottomSheet = false
-                                        navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen())
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 6.dp, bottom = 32.dp),
+                            ) {
+                                SettingsGroup {
+                                    item { pos ->
+                                        SettingItem(
+                                            title = "Settings",
+                                            subtitle = "Appearance, library, reader, and preferences",
+                                            icon = Icons.Outlined.Settings,
+                                            shape = pos.shape,
+                                            onClick = {
+                                                showBottomSheet = false
+                                                navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen())
+                                            },
+                                        )
                                     }
-                                )
-                                ListItem(
-                                    headlineContent = { Text("Cloud Sync") },
-                                    modifier = Modifier.clickable { 
-                                        showBottomSheet = false
-                                        navigator.push(CloudSyncScreen())
+                                    item { pos ->
+                                        SettingItem(
+                                            title = "Cloud Sync",
+                                            subtitle = "Backup and restore your data with Google Drive",
+                                            icon = Icons.Outlined.Sync,
+                                            shape = pos.shape,
+                                            onClick = {
+                                                showBottomSheet = false
+                                                navigator.push(CloudSyncScreen())
+                                            },
+                                        )
                                     }
-                                )
-                                ListItem(
-                                    headlineContent = { Text("Sign Out", color = MaterialTheme.colorScheme.error) },
-                                    modifier = Modifier.clickable { 
-                                        showBottomSheet = false
-                                        Injekt.get<eu.kanade.domain.base.BasePreferences>()
-                                            .hasCompletedInitialLogin.set(true)
-                                        authManager.signOut()
-                                        navigator.pop()
+                                    item { pos ->
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = pos.shape,
+                                            color = MaterialTheme.colorScheme.surfaceContainer,
+                                            contentColor = MaterialTheme.colorScheme.error,
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        showBottomSheet = false
+                                                        Injekt.get<eu.kanade.domain.base.BasePreferences>()
+                                                            .hasCompletedInitialLogin.set(true)
+                                                        authManager.signOut()
+                                                        navigator.pop()
+                                                    }
+                                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Outlined.Logout,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(22.dp),
+                                                )
+                                                Spacer(Modifier.width(16.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "Sign Out",
+                                                        fontSize = 15.5.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = MaterialTheme.colorScheme.error,
+                                                    )
+                                                    Spacer(Modifier.height(3.dp))
+                                                    Text(
+                                                        text = "Disconnect your account from this device",
+                                                        fontSize = 12.5.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        lineHeight = 17.sp,
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
-                                )
+                                }
                             }
                         }
                     }
@@ -583,6 +650,17 @@ class ProfileScreen : Screen {
                     if (showTrackerPicker) {
                         androidx.compose.material3.ModalBottomSheet(
                             onDismissRequest = { showTrackerPicker = false },
+                            shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+                            containerColor = MaterialTheme.colorScheme.background,
+                            dragHandle = {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 14.dp, bottom = 6.dp)
+                                        .size(width = 36.dp, height = 4.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                                )
+                            },
                             contentWindowInsets = { androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0) } 
                         ) {
                             eu.kanade.presentation.more.settings.PreferenceScreen(

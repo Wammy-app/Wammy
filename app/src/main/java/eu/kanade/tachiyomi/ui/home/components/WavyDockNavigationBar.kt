@@ -1,15 +1,32 @@
 package eu.kanade.tachiyomi.ui.home.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.History
@@ -25,20 +42,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asAndroidPath
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,249 +71,109 @@ fun WavyDockNavigationBar(
     modifier: Modifier = Modifier,
     badgeContent: @Composable ((Tab) -> Unit)? = null,
 ) {
-    val accentColor = MaterialTheme.colorScheme.primary
-    val dockBackground = MaterialTheme.colorScheme.surfaceContainer
-    val badgeBg = MaterialTheme.colorScheme.surfaceContainerHigh
-    val borderStrokeColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val baseSurface = MaterialTheme.colorScheme.surfaceContainer
+    // Nav bar background tinted with the theme color, but softer than the selected tab
+    val dockBackground = lerp(baseSurface, primaryColor, 0.14f)
+    // Selected tab highlighted more strongly with the theme color
+    val activePillColor = lerp(baseSurface, primaryColor, 0.34f)
 
     val selectedIndex = remember(tabs, currentTab) {
         tabs.indexOfFirst { it::class == currentTab::class }.coerceAtLeast(0)
     }
 
+    val outerShape = RoundedCornerShape(16.dp)
+    val activeItemShape = RoundedCornerShape(12.dp)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 14.dp, end = 14.dp, bottom = 10.dp)
-            .height(68.dp),
+            .padding(start = 26.dp, end = 26.dp, bottom = 10.dp),
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val totalWidthPx = constraints.maxWidth.toFloat()
-            val totalHeightPx = constraints.maxHeight.toFloat()
-            val tabCount = tabs.size.coerceAtLeast(1)
-            val tabWidthPx = totalWidthPx / tabCount
-
-            val targetCenterX = (selectedIndex + 0.5f) * tabWidthPx
-            val animatedCenterX by animateFloatAsState(
-                targetValue = targetCenterX,
-                animationSpec = spring(
-                    dampingRatio = 0.78f,
-                    stiffness = Spring.StiffnessMediumLow,
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .shadow(
+                    elevation = 10.dp,
+                    shape = outerShape,
+                    ambientColor = Color.Black.copy(alpha = 0.35f),
+                    spotColor = Color.Black.copy(alpha = 0.35f),
                 ),
-                label = "wavy_dock_center_x",
-            )
-
-            // 1. Floating Wavy Canvas Background with ambient drop shadow & border
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val baselineY = 12.dp.toPx()
-                val peakY = 2.dp.toPx()
-                val waveRadius = 36.dp.toPx()
-                val crTop = 18.dp.toPx()
-                val crBottom = 24.dp.toPx()
-
-                val leftStart = (animatedCenterX - waveRadius - 12.dp.toPx()).coerceAtLeast(0f)
-                val rightEnd = (animatedCenterX + waveRadius + 12.dp.toPx()).coerceAtMost(totalWidthPx)
-
-                // Enclosed Floating Capsule Path
-                val fillPath = Path().apply {
-                    moveTo(0f, baselineY + crTop)
-                    quadraticTo(0f, baselineY, crTop, baselineY)
-
-                    if (leftStart > crTop) {
-                        lineTo(leftStart, baselineY)
-                    }
-
-                    // Active wave peak
-                    cubicTo(
-                        animatedCenterX - waveRadius, baselineY,
-                        animatedCenterX - waveRadius * 0.45f, peakY,
-                        animatedCenterX, peakY,
-                    )
-                    cubicTo(
-                        animatedCenterX + waveRadius * 0.45f, peakY,
-                        animatedCenterX + waveRadius, baselineY,
-                        rightEnd, baselineY,
-                    )
-
-                    if (rightEnd < totalWidthPx - crTop) {
-                        lineTo(totalWidthPx - crTop, baselineY)
-                    }
-
-                    quadraticTo(totalWidthPx, baselineY, totalWidthPx, baselineY + crTop)
-                    lineTo(totalWidthPx, totalHeightPx - crBottom)
-                    quadraticTo(totalWidthPx, totalHeightPx, totalWidthPx - crBottom, totalHeightPx)
-                    lineTo(crBottom, totalHeightPx)
-                    quadraticTo(0f, totalHeightPx, 0f, totalHeightPx - crBottom)
-                    lineTo(0f, baselineY + crTop)
-                    close()
-                }
-
-                // A. Ambient Drop Shadow underneath the floating dock
-                val shadowColor = Color.Black.copy(alpha = 0.30f)
-                drawContext.canvas.nativeCanvas.apply {
-                    val paint = android.graphics.Paint().apply {
-                        color = shadowColor.toArgb()
-                        maskFilter = android.graphics.BlurMaskFilter(
-                            10.dp.toPx(),
-                            android.graphics.BlurMaskFilter.Blur.NORMAL,
-                        )
-                    }
-                    save()
-                    translate(0f, 4.dp.toPx())
-                    drawPath(fillPath.asAndroidPath(), paint)
-                    restore()
-                }
-
-                // B. Solid Themed Dock Background
-                drawPath(fillPath, color = dockBackground)
-
-                // C. Floating Capsule Border
-                drawPath(
-                    path = fillPath,
-                    color = borderStrokeColor,
-                    style = Stroke(width = 1.dp.toPx()),
-                )
-
-                // D. Accent Glow Stroke ONLY on the active wave hump
-                val rimPath = Path().apply {
-                    moveTo(leftStart, baselineY)
-                    cubicTo(
-                        animatedCenterX - waveRadius, baselineY,
-                        animatedCenterX - waveRadius * 0.45f, peakY,
-                        animatedCenterX, peakY,
-                    )
-                    cubicTo(
-                        animatedCenterX + waveRadius * 0.45f, peakY,
-                        animatedCenterX + waveRadius, baselineY,
-                        rightEnd, baselineY,
-                    )
-                }
-
-                val rimBrush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        accentColor.copy(alpha = 0.85f),
-                        Color.Transparent,
-                    ),
-                    startX = leftStart,
-                    endX = rightEnd,
-                )
-
-                drawPath(
-                    path = rimPath,
-                    brush = rimBrush,
-                    style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round),
-                )
-            }
-
-            // 2. Tab Items Row inside Floating Dock
+            shape = outerShape,
+            color = dockBackground,
+        ) {
             Row(
-                modifier = Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 tabs.forEachIndexed { index, tab ->
                     val isSelected = index == selectedIndex
                     val interactionSource = remember { MutableInteractionSource() }
 
+                    val itemBackgroundColor by animateColorAsState(
+                        targetValue = if (isSelected) activePillColor else Color.Transparent,
+                        animationSpec = tween(durationMillis = 220),
+                        label = "nav_item_bg",
+                    )
+
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
+                            .height(40.dp)
+                            .clip(activeItemShape)
+                            .background(itemBackgroundColor, activeItemShape)
                             .clickable(
                                 interactionSource = interactionSource,
                                 indication = null,
                                 onClick = { onTabSelected(tab) },
+                            )
+                            .padding(
+                                horizontal = if (isSelected) 12.dp else 8.dp,
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (isSelected) {
-                            // Elevated Active Tab Component
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .padding(bottom = 4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.SpaceBetween,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            TabIcon(
+                                tab = tab,
+                                isSelected = isSelected,
+                                badgeContent = badgeContent,
+                            )
+
+                            AnimatedVisibility(
+                                visible = isSelected,
+                                enter = expandHorizontally(
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                    expandFrom = Alignment.Start,
+                                ) + fadeIn(animationSpec = tween(180)),
+                                exit = shrinkHorizontally(
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                    shrinkTowards = Alignment.Start,
+                                ) + fadeOut(animationSpec = tween(120)),
                             ) {
-                                // Upward Floating Circular Active Badge
-                                Box(
-                                    modifier = Modifier.size(46.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    // Glowing Halo Accent
-                                    Box(
-                                        modifier = Modifier
-                                            .size(46.dp)
-                                            .background(
-                                                Brush.radialGradient(
-                                                    colors = listOf(
-                                                        accentColor.copy(alpha = 0.35f),
-                                                        Color.Transparent,
-                                                    ),
-                                                ),
-                                                CircleShape,
-                                            ),
-                                    )
-
-                                    // Themed Dark Badge Container with Accent Border
-                                    Surface(
-                                        modifier = Modifier.size(42.dp),
-                                        shape = CircleShape,
-                                        color = badgeBg,
-                                        border = androidx.compose.foundation.BorderStroke(1.5.dp, accentColor),
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            TabIcon(tab = tab, isSelected = true, badgeContent = badgeContent)
-                                        }
-                                    }
-                                }
-
-                                // Active Label + Theme Dot Indicator Underneath
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(1.dp),
-                                ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = tab.options.title,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 11.sp,
+                                        color = primaryColor,
+                                        fontSize = 12.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-
-                                    // Tiny Active Dot Indicator
-                                    Box(
-                                        modifier = Modifier
-                                            .size(4.dp)
-                                            .clip(CircleShape)
-                                            .background(accentColor),
-                                    )
                                 }
-                            }
-                        } else {
-                            // Secondary Inactive Tab Items
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .padding(top = 16.dp, bottom = 6.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    TabIcon(tab = tab, isSelected = false, badgeContent = badgeContent)
-                                }
-
-                                Spacer(modifier = Modifier.height(3.dp))
-
-                                Text(
-                                    text = tab.options.title,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
                             }
                         }
                     }
@@ -328,9 +200,9 @@ private fun TabIcon(
     }
 
     val iconColor = if (isSelected) {
-        MaterialTheme.colorScheme.onSurface
+        MaterialTheme.colorScheme.primary
     } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
     }
 
     val iconComposable: @Composable () -> Unit = {
@@ -340,7 +212,7 @@ private fun TabIcon(
                 imageVector = vector,
                 contentDescription = tab.options.title,
                 tint = iconColor,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(21.dp),
             )
         } else {
             val painter = tab.options.icon ?: rememberVectorPainter(Icons.Outlined.CollectionsBookmark)
@@ -348,7 +220,7 @@ private fun TabIcon(
                 painter = painter,
                 contentDescription = tab.options.title,
                 tint = iconColor,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(21.dp),
             )
         }
     }

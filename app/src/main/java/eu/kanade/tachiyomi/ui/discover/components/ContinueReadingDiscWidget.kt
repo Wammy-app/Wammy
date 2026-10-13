@@ -176,17 +176,15 @@ private fun ContinueReadingCard(
         modifier = modifier
             .fillMaxWidth()
             .height(74.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(10.dp),
         color = cardColor,
-        tonalElevation = 2.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
-                .padding(horizontal = 11.dp, vertical = 7.dp),
+                .padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Compact Vinyl Disc Graphic
@@ -194,8 +192,7 @@ private fun ContinueReadingCard(
                 modifier = Modifier
                     .size(54.dp)
                     .clip(CircleShape)
-                    .background(Color.Black)
-                    .border(1.2.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape),
+                    .background(Color.Black),
                 contentAlignment = Alignment.Center,
             ) {
                 // Cover art inside vinyl
