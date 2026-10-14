@@ -133,13 +133,13 @@ jobs:
             wammy-x86_64-r${{ env.COMMIT_COUNT }}.apk
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.WAMMY_BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Prune old releases
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'kainotch/Wammy'
         uses: dev-drprasad/delete-older-releases@dfbe6be2a006e9475dfcbe5b8d201f1824c2a9fe # v0.3.4
         env:
-          GITHUB_TOKEN: ${{ secrets.WAMMY_BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
           repo: kainotch/Wammy-nightly
           keep_latest: 28
