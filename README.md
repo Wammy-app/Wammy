@@ -43,14 +43,14 @@ Please give the repo a star if you like the project. It helps more people find i
 ## Screenshots
 
 <p align="center">
-  <img src=".github/images/splash.jpg" alt="Wammy splash screen" width="23%" />
-  <img src=".github/images/home.jpg" alt="Wammy home and library screen" width="23%" />
-  <img src=".github/images/settings.jpg" alt="Wammy reader settings screen" width="23%" />
-  <img src=".github/images/library.jpg" alt="Wammy dark library screen" width="23%" />
+  <img src=".github/images/home.jpg" alt="Wammy home screen" width="23%" />
+  <img src=".github/images/library.jpg" alt="Wammy library screen" width="23%" />
+  <img src=".github/images/details.jpg" alt="Wammy manga details screen" width="23%" />
+  <img src=".github/images/profile.jpg" alt="Wammy profile screen" width="23%" />
 </p>
 
 <p align="center">
-  <sub>Splash Screen | Home & Library | Reader Settings | Dark Library</sub>
+  <sub>Home & Recommendations | Library Grid | Manga Details & Suggestions | User Profile & Favorites</sub>
 </p>
 
 ## Highlights
