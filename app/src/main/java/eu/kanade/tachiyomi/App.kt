@@ -1,4 +1,4 @@
-﻿package eu.kanade.tachiyomi
+package eu.kanade.tachiyomi
 
 import android.annotation.SuppressLint
 import android.app.Application
@@ -83,6 +83,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     private val networkPreferences: NetworkPreferences by injectLazy()
 
     private val disableIncognitoReceiver = DisableIncognitoReceiver()
+    private var preferenceChangeListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     @SuppressLint("LaunchActivityFromNotification")
     override fun onCreate() {
@@ -205,6 +206,17 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         }
 
         initializeMigrator()
+
+        val defaultPrefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+        preferenceChangeListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key != null && !key.startsWith("wammy_sync") && !key.startsWith("incognito")) {
+                val driveSyncManager: eu.kanade.tachiyomi.data.sync.DriveSyncManager? = try { uy.kohesive.injekt.Injekt.get() } catch (_: Exception) { null }
+                if (driveSyncManager?.isRestoring != true) {
+                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(this@App)
+                }
+            }
+        }
+        defaultPrefs.registerOnSharedPreferenceChangeListener(preferenceChangeListener)
     }
 
     private fun initializeMigrator() {

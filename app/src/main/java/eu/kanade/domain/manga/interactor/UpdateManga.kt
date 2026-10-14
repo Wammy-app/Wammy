@@ -51,8 +51,21 @@ class UpdateManga(
         }
     }
 
+    private fun scheduleDriveSync() {
+        try {
+            val context = Injekt.get<android.app.Application>()
+            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN, e) { "Failed to schedule drive sync on library change" }
+        }
+    }
+
     suspend fun await(mangaUpdate: MangaUpdate): Boolean {
-        return mangaRepository.update(mangaUpdate)
+        val result = mangaRepository.update(mangaUpdate)
+        if (result && mangaUpdate.favorite != null) {
+            scheduleDriveSync()
+        }
+        return result
     }
 
     suspend fun awaitAll(mangaUpdates: List<MangaUpdate>): Boolean {
@@ -69,6 +82,7 @@ class UpdateManga(
             }
             toAdd.forEach { notifySourceTrackerFavorite(it, true) }
             toRemove.forEach { notifySourceTrackerFavorite(it, false) }
+            scheduleDriveSync()
         }
         return result
     }
@@ -242,6 +256,7 @@ class UpdateManga(
                 getLibraryManga.removeFromLibrary(mangaId)
             }
             notifySourceTrackerFavorite(mangaId, favorite)
+            scheduleDriveSync()
         }
         return result
     }

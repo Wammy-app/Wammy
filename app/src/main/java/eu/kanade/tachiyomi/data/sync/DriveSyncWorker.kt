@@ -278,6 +278,8 @@ class DriveSyncWorker(
          * - GlobalScope dies with the process — data would be lost.
          */
         fun scheduleBackup(context: Context) {
+            val appContext = context.applicationContext
+
             // Guard: skip if user is not logged in
             if (FirebaseAuth.getInstance().currentUser == null) return
 
@@ -291,7 +293,7 @@ class DriveSyncWorker(
             } catch (_: Exception) {}
 
             // Guard: skip if user disabled auto-sync
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             if (!prefs.getBoolean(KEY_AUTO_SYNC_ENABLED, true)) return
 
             // Mark data as dirty (persisted to disk)
@@ -309,7 +311,7 @@ class DriveSyncWorker(
                 .setInitialDelay(1, TimeUnit.MINUTES)
                 .build()
 
-            WorkManager.getInstance(context).enqueueUniqueWork(
+            WorkManager.getInstance(appContext).enqueueUniqueWork(
                 WORK_NAME_BACKUP,
                 ExistingWorkPolicy.REPLACE,
                 request
