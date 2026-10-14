@@ -3,14 +3,22 @@ package eu.kanade.presentation.more.settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEachIndexed
+import eu.kanade.presentation.more.groupItemShape
 import eu.kanade.presentation.more.settings.screen.SearchableSettings
 import eu.kanade.presentation.more.settings.widget.PreferenceGroupHeader
 import kotlinx.coroutines.delay
@@ -27,6 +35,7 @@ fun PreferenceScreen(
     items: List<Preference>,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    title: String? = null,
 ) {
     val state = rememberLazyListState()
     val highlightKey = SearchableSettings.highlightKey
@@ -44,38 +53,95 @@ fun PreferenceScreen(
     ScrollbarLazyColumn(
         modifier = modifier,
         state = state,
-        contentPadding = contentPadding,
+        contentPadding = PaddingValues(
+            top = contentPadding.calculateTopPadding() + 4.dp,
+            bottom = contentPadding.calculateBottomPadding() + 24.dp,
+            start = 16.dp,
+            end = 16.dp,
+        ),
     ) {
+        if (title != null) {
+            item(key = "pref_screen_header") {
+                Text(
+                    text = title,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 12.dp),
+                )
+            }
+        }
+
         items.fastForEachIndexed { i, preference ->
             when (preference) {
                 // Create Preference Group
                 is Preference.PreferenceGroup -> {
                     if (!preference.enabled) return@fastForEachIndexed
+                    val enabledItems = preference.preferenceItems.filter { it.enabled }
+                    if (enabledItems.isEmpty()) return@fastForEachIndexed
 
                     item {
                         Column {
                             PreferenceGroupHeader(title = preference.title)
                         }
                     }
-                    items(preference.preferenceItems) { item ->
-                        PreferenceItem(
-                            item = item,
-                            highlightKey = highlightKey,
-                        )
+                    itemsIndexed(enabledItems) { itemIndex, item ->
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = groupItemShape(itemIndex, enabledItems.size),
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ) {
+                            PreferenceItem(
+                                item = item,
+                                highlightKey = highlightKey,
+                            )
+                        }
+                        if (itemIndex < enabledItems.lastIndex) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                        }
                     }
                     item {
                         if (i < items.lastIndex) {
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
                 }
 
                 // Create Preference Item
-                is Preference.PreferenceItem<*, *> -> item {
-                    PreferenceItem(
-                        item = preference,
-                        highlightKey = highlightKey,
-                    )
+                is Preference.PreferenceItem<*, *> -> {
+                    if (!preference.enabled) return@fastForEachIndexed
+
+                    // Determine position among consecutive top-level enabled PreferenceItems
+                    var startIdx = i
+                    while (startIdx > 0 && items[startIdx - 1] is Preference.PreferenceItem<*, *> && items[startIdx - 1].enabled) {
+                        startIdx--
+                    }
+                    var endIdx = i
+                    while (endIdx < items.lastIndex && items[endIdx + 1] is Preference.PreferenceItem<*, *> && items[endIdx + 1].enabled) {
+                        endIdx++
+                    }
+                    val runTotal = endIdx - startIdx + 1
+                    val runIndex = i - startIdx
+
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = groupItemShape(runIndex, runTotal),
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ) {
+                            PreferenceItem(
+                                item = preference,
+                                highlightKey = highlightKey,
+                            )
+                        }
+                        if (runIndex < runTotal - 1) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                        } else if (i < items.lastIndex) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
                 }
             }
         }
@@ -87,7 +153,7 @@ private fun List<Preference>.findHighlightedIndex(highlightKey: String): Int {
         if (it is Preference.PreferenceGroup) {
             buildList<String?> {
                 add(null) // Header
-                addAll(it.preferenceItems.map { groupItem -> groupItem.title })
+                addAll(it.preferenceItems.filter { item -> item.enabled }.map { groupItem -> groupItem.title })
                 add(null) // Spacer
             }
         } else {
@@ -95,3 +161,4 @@ private fun List<Preference>.findHighlightedIndex(highlightKey: String): Int {
         }
     }.indexOfFirst { it == highlightKey }
 }
+

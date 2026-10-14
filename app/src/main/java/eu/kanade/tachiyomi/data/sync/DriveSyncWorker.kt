@@ -13,6 +13,7 @@ import androidx.work.WorkerParameters
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import eu.kanade.tachiyomi.util.system.cancelNotification
@@ -26,8 +27,8 @@ import java.util.concurrent.TimeUnit
  * Background worker for automatic Google Drive Sync.
  *
  * Architecture:
- * - WorkManager with 2-minute initial delay acts as a disk-persisted debounce.
- *   Every new trigger replaces the pending job, restarting the 2-minute timer.
+ * - WorkManager with 1-minute initial delay acts as a disk-persisted debounce.
+ *   Every new trigger replaces the pending job, restarting the 1-minute timer.
  *   Even if the app is killed, Android will still fire the backup on schedule.
  * - Login guard ensures zero battery waste for non-logged-in users.
  * - Retry logic with exponential backoff handles transient server errors.
@@ -52,7 +53,15 @@ class DriveSyncWorker(
 
         val accessToken = driveApiHelper.getAccessToken()
         if (accessToken == null) {
-            logcat(LogPriority.INFO) { "DriveSyncWorker: No access token, skipping" }
+            logcat(LogPriority.WARN) { "DriveSyncWorker: No access token available — user may need to re-authorize Drive" }
+            // Show a notification so the user knows sync didn't happen
+            context.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
+                setContentTitle("Google Drive Sync")
+                setContentText("Please open the app to authorize Google Drive sync.")
+                setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
+                setOngoing(false)
+                setTimeoutAfter(10000)
+            }
             return@withContext Result.success()
         }
 
@@ -118,16 +127,35 @@ class DriveSyncWorker(
                     prefs.edit().putLong(KEY_LAST_SYNC_TIME, cloudTime).apply()
                     context.notify(NOTIF_ID_RESTORE, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
                         setContentTitle("Google Drive")
-                        setContentText("Library restored!")
+                        setContentText(result.message)
                         setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
                         setOngoing(false)
-                        setTimeoutAfter(3000)
+                        setTimeoutAfter(4000)
                     }
                 } else {
-                    context.cancelNotification(NOTIF_ID_RESTORE)
+                    val errorMsg = if (result is SyncResult.Error) result.message else "Unknown error"
+                    logcat(LogPriority.ERROR) { "DriveSyncWorker: Restore failed: $errorMsg" }
+                    context.notify(NOTIF_ID_RESTORE, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
+                        setContentTitle("Google Drive")
+                        setContentText(errorMsg)
+                        setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
+                        setOngoing(false)
+                        setTimeoutAfter(6000)
+                    }
                 }
             } else {
                 logcat(LogPriority.INFO) { "DriveSyncWorker: Local data is up to date." }
+                if (prefs.getBoolean(KEY_DATA_DIRTY, false)) {
+                    logcat(LogPriority.INFO) { "DriveSyncWorker: Local data has unsynced changes, triggering backup..." }
+                    doBackup(driveSyncManager)
+                }
+            }
+        } else {
+            logcat(LogPriority.INFO) { "DriveSyncWorker: No cloud backup found." }
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (prefs.getBoolean(KEY_DATA_DIRTY, false)) {
+                logcat(LogPriority.INFO) { "DriveSyncWorker: No cloud backup yet but local data changed, triggering initial backup..." }
+                doBackup(driveSyncManager)
             }
         }
     }
@@ -148,9 +176,9 @@ class DriveSyncWorker(
             setProgress(0, 0, true)
         }
 
-        val success = doBackupWithRetry(driveSyncManager)
+        val result = doBackupWithRetry(driveSyncManager)
 
-        if (success) {
+        if (result is SyncResult.Success) {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             // Use Drive server timestamp (not device time) to avoid clock skew
             val driveApiHelper: DriveApiHelper = Injekt.get()
@@ -168,18 +196,24 @@ class DriveSyncWorker(
 
             context.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
                 setContentTitle("Google Drive")
-                setContentText("Sync complete!")
+                setContentText(result.message)
                 setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
                 setOngoing(false)
-                setTimeoutAfter(3000)
+                setTimeoutAfter(4000)
             }
         } else {
-            context.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
-                setContentTitle("Google Drive")
-                setContentText("Sync failed.")
-                setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
-                setOngoing(false)
-                setTimeoutAfter(5000)
+            val errorMsg = if (result is SyncResult.Error) result.message else "Sync failed."
+            if (result is SyncResult.Error && result.message.contains("0 books")) {
+                logcat(LogPriority.INFO) { "DriveSyncWorker: Background backup skipped (local library has 0 books)" }
+                context.cancelNotification(NOTIF_ID_BACKUP)
+            } else {
+                context.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
+                    setContentTitle("Google Drive")
+                    setContentText(errorMsg)
+                    setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
+                    setOngoing(false)
+                    setTimeoutAfter(5000)
+                }
             }
         }
     }
@@ -187,27 +221,31 @@ class DriveSyncWorker(
     /**
      * Retry backup up to 3 times with exponential backoff (2s, 4s).
      */
-    private suspend fun doBackupWithRetry(driveSyncManager: DriveSyncManager): Boolean {
-        var lastError: Exception? = null
+    private suspend fun doBackupWithRetry(driveSyncManager: DriveSyncManager): SyncResult {
+        var lastResult: SyncResult = SyncResult.Error("Unknown backup error")
         for (attempt in 1..3) {
             try {
                 val result = driveSyncManager.backup()
                 if (result is SyncResult.Success) {
                     logcat(LogPriority.INFO) { "DriveSyncWorker: Backup succeeded on attempt $attempt" }
-                    return true
+                    return result
                 } else if (result is SyncResult.Error) {
+                    lastResult = result
                     logcat(LogPriority.WARN) { "DriveSyncWorker: Backup attempt $attempt failed: ${result.message}" }
+                    if (result.message.contains("0 books") || result.message.contains("Restore in progress")) {
+                        return result
+                    }
                 }
             } catch (e: Exception) {
-                lastError = e
+                lastResult = SyncResult.Error(e.message ?: "Backup threw exception")
                 logcat(LogPriority.WARN, e) { "DriveSyncWorker: Backup attempt $attempt threw exception" }
             }
             if (attempt < 3) {
                 delay(2000L * attempt) // 2s, then 4s
             }
         }
-        logcat(LogPriority.ERROR, lastError) { "DriveSyncWorker: Backup failed after 3 retries" }
-        return false
+        logcat(LogPriority.ERROR) { "DriveSyncWorker: Backup failed after 3 retries" }
+        return lastResult
     }
 
     companion object {
@@ -219,6 +257,8 @@ class DriveSyncWorker(
         const val KEY_LAST_SYNC_TIME = "last_sync_time"
         const val KEY_DATA_DIRTY = "data_dirty"
         const val KEY_AUTO_SYNC_ENABLED = "auto_sync_enabled"
+        const val KEY_WIFI_ONLY = "sync_only_wifi"
+        const val KEY_SYNC_INTERVAL_HOURS = "sync_interval_hours"
 
         private const val NOTIF_ID_BACKUP = -510
         private const val NOTIF_ID_RESTORE = -511
@@ -227,10 +267,10 @@ class DriveSyncWorker(
          * Schedule an auto-backup with 2-minute debounce using WorkManager.
          *
          * How the debounce works:
-         * - Each call enqueues a WorkManager job with a 2-minute delay using REPLACE policy.
-         * - If another call comes in before the 2 minutes are up, the old job is cancelled
-         *   and a new 2-minute timer starts.
-         * - This means: save 10 manga in 2 minutes = 1 single backup.
+         * - Each call enqueues a WorkManager job with a 1-minute delay using REPLACE policy.
+         * - If another call comes in before the 1 minute is up, the old job is cancelled
+         *   and a new 1-minute timer starts.
+         * - This means: save 10 manga in 1 minute = 1 single backup.
          *
          * Why WorkManager instead of GlobalScope:
          * - WorkManager persists its job queue to disk. Even if the user kills the app
@@ -238,74 +278,200 @@ class DriveSyncWorker(
          * - GlobalScope dies with the process — data would be lost.
          */
         fun scheduleBackup(context: Context) {
+            val appContext = context.applicationContext
+
             // Guard: skip if user is not logged in
             if (FirebaseAuth.getInstance().currentUser == null) return
 
+            // Guard: skip if restore is currently in progress
+            try {
+                val driveSyncManager: DriveSyncManager = Injekt.get()
+                if (driveSyncManager.isRestoring) {
+                    logcat(LogPriority.INFO) { "DriveSyncWorker: Restore is in progress, skipping backup schedule" }
+                    return
+                }
+            } catch (_: Exception) {}
+
             // Guard: skip if user disabled auto-sync
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             if (!prefs.getBoolean(KEY_AUTO_SYNC_ENABLED, true)) return
 
             // Mark data as dirty (persisted to disk)
             prefs.edit().putBoolean(KEY_DATA_DIRTY, true).apply()
 
-            // Enqueue a delayed WorkManager backup.
-            // REPLACE policy = debounce. Every new call resets the 2-minute timer.
+            val wifiOnly = prefs.getBoolean(KEY_WIFI_ONLY, false)
+            val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
+
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiredNetworkType(networkType)
                 .build()
 
             val request = OneTimeWorkRequestBuilder<DriveSyncWorker>()
                 .setConstraints(constraints)
-                .setInitialDelay(2, TimeUnit.MINUTES)
+                .setInitialDelay(1, TimeUnit.MINUTES)
                 .build()
 
-            WorkManager.getInstance(context).enqueueUniqueWork(
+            WorkManager.getInstance(appContext).enqueueUniqueWork(
                 WORK_NAME_BACKUP,
                 ExistingWorkPolicy.REPLACE,
                 request
             )
 
-            logcat(LogPriority.INFO) { "DriveSyncWorker: Backup scheduled (2-minute debounce)" }
+            logcat(LogPriority.INFO) { "DriveSyncWorker: Backup scheduled (1-minute debounce, wifiOnly=$wifiOnly)" }
         }
 
         /**
-         * Schedule a restore check on app startup.
+         * Schedule a restore check on app startup or post-login.
          * Only runs if user is logged in.
+         * If [immediate] is true, kicks off a coroutine right away for instant feedback.
          */
-        fun scheduleRestoreCheck(context: Context) {
+        fun scheduleRestoreCheck(context: Context, immediate: Boolean = true) {
             // Guard: skip if user is not logged in
             if (FirebaseAuth.getInstance().currentUser == null) return
 
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
+            val appContext = context.applicationContext
 
-            val request = OneTimeWorkRequestBuilder<DriveSyncWorker>()
-                .setConstraints(constraints)
-                .setInputData(androidx.work.Data.Builder().putBoolean(KEY_IS_RESTORE_CHECK, true).build())
-                .build()
+            if (immediate) {
+                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val driveSyncManager: DriveSyncManager = Injekt.get()
+                        val driveApiHelper: DriveApiHelper = Injekt.get()
+                        val accessToken = driveApiHelper.getAccessToken()
+                        if (accessToken == null) {
+                            logcat(LogPriority.INFO) { "DriveSyncWorker: Immediate restore check skipped (no token yet)" }
+                            return@launch
+                        }
 
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                WORK_NAME_RESTORE,
-                ExistingWorkPolicy.KEEP,
-                request
-            )
+                        val cloudModifiedStr = driveApiHelper.getSyncFileModifiedTime(accessToken)
+                        if (cloudModifiedStr != null) {
+                            val cloudTime = try {
+                                java.time.Instant.parse(cloudModifiedStr).toEpochMilli()
+                            } catch (e: Exception) {
+                                0L
+                            }
+                            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                            val localSyncTime = prefs.getLong(KEY_LAST_SYNC_TIME, 0L)
+
+                            if (cloudTime > localSyncTime) {
+                                logcat(LogPriority.INFO) { "DriveSyncWorker: Cloud backup is newer ($cloudTime > $localSyncTime), restoring immediately..." }
+                                appContext.notify(NOTIF_ID_RESTORE, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_PROGRESS) {
+                                    setContentTitle("Google Drive")
+                                    setContentText("Restoring your library...")
+                                    setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
+                                    setOngoing(true)
+                                    setProgress(0, 0, true)
+                                }
+
+                                val result = driveSyncManager.restore()
+                                if (result is SyncResult.Success) {
+                                    prefs.edit().putLong(KEY_LAST_SYNC_TIME, cloudTime).apply()
+                                    appContext.notify(NOTIF_ID_RESTORE, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
+                                        setContentTitle("Google Drive")
+                                        setContentText(result.message)
+                                        setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
+                                        setOngoing(false)
+                                        setTimeoutAfter(4000)
+                                    }
+                                } else {
+                                    val errorMsg = if (result is SyncResult.Error) result.message else "Unknown error"
+                                    appContext.notify(NOTIF_ID_RESTORE, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
+                                        setContentTitle("Google Drive")
+                                        setContentText(errorMsg)
+                                        setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
+                                        setOngoing(false)
+                                        setTimeoutAfter(6000)
+                                    }
+                                }
+                            } else if (prefs.getBoolean(KEY_DATA_DIRTY, false)) {
+                                logcat(LogPriority.INFO) { "DriveSyncWorker: Local data is dirty, syncing immediately..." }
+                                appContext.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_PROGRESS) {
+                                    setContentTitle("Google Drive")
+                                    setContentText("Syncing...")
+                                    setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
+                                    setOngoing(true)
+                                    setProgress(0, 0, true)
+                                }
+                                val result = driveSyncManager.backup()
+                                if (result is SyncResult.Success) {
+                                    val token = driveApiHelper.getAccessToken()
+                                    val serverTime = if (token != null) {
+                                        val modStr = driveApiHelper.getSyncFileModifiedTime(token)
+                                        if (modStr != null) {
+                                            try { java.time.Instant.parse(modStr).toEpochMilli() } catch (_: Exception) { System.currentTimeMillis() }
+                                        } else System.currentTimeMillis()
+                                    } else System.currentTimeMillis()
+                                    prefs.edit().putLong(KEY_LAST_SYNC_TIME, serverTime).putBoolean(KEY_DATA_DIRTY, false).apply()
+                                    appContext.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
+                                        setContentTitle("Google Drive")
+                                        setContentText(result.message)
+                                        setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
+                                        setOngoing(false)
+                                        setTimeoutAfter(4000)
+                                    }
+                                } else {
+                                    val errorMsg = if (result is SyncResult.Error) result.message else "Sync failed."
+                                    appContext.notify(NOTIF_ID_BACKUP, eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE) {
+                                        setContentTitle("Google Drive")
+                                        setContentText(errorMsg)
+                                        setSmallIcon(eu.kanade.tachiyomi.R.drawable.ic_mihon)
+                                        setOngoing(false)
+                                        setTimeoutAfter(5000)
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        logcat(LogPriority.ERROR, e) { "DriveSyncWorker: Immediate restore check failed" }
+                    }
+                }
+            } else {
+                val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val wifiOnly = prefs.getBoolean(KEY_WIFI_ONLY, false)
+                val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
+
+                val constraints = Constraints.Builder()
+                    .setRequiredNetworkType(networkType)
+                    .build()
+
+                val request = OneTimeWorkRequestBuilder<DriveSyncWorker>()
+                    .setConstraints(constraints)
+                    .setInputData(androidx.work.Data.Builder().putBoolean(KEY_IS_RESTORE_CHECK, true).build())
+                    .build()
+
+                WorkManager.getInstance(appContext).enqueueUniqueWork(
+                    WORK_NAME_RESTORE,
+                    ExistingWorkPolicy.REPLACE,
+                    request
+                )
+            }
         }
 
         /**
-         * Schedule a periodic backup every 12 hours as a fallback.
+         * Schedule a periodic backup with configurable interval.
          * Only runs if user is logged in.
          */
-        fun schedulePeriodicBackup(context: Context) {
+        fun schedulePeriodicBackup(context: Context, intervalHours: Long? = null) {
             // Guard: skip if user is not logged in
             if (FirebaseAuth.getInstance().currentUser == null) return
 
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (!prefs.getBoolean(KEY_AUTO_SYNC_ENABLED, true)) return
+
+            val hours = intervalHours ?: prefs.getLong(KEY_SYNC_INTERVAL_HOURS, 6L)
+            if (hours <= 0L) {
+                WorkManager.getInstance(context).cancelUniqueWork("DriveSyncPeriodic")
+                return
+            }
+
+            val wifiOnly = prefs.getBoolean(KEY_WIFI_ONLY, false)
+            val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
+
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiredNetworkType(networkType)
                 .build()
 
             val request = androidx.work.PeriodicWorkRequestBuilder<DriveSyncWorker>(
-                12, TimeUnit.HOURS
+                hours, TimeUnit.HOURS
             )
                 .setConstraints(constraints)
                 .build()

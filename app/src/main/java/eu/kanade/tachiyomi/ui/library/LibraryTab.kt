@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -15,11 +16,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -58,6 +61,7 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryManga
+import tachiyomi.presentation.core.util.plus
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.novel.TDMR
@@ -106,6 +110,17 @@ data object LibraryTab : Tab {
             },
         )
         val state by viewModel.state.collectAsState()
+        var reopenCategoryDialogOnReturn by androidx.compose.runtime.saveable.rememberSaveable {
+            androidx.compose.runtime.mutableStateOf(false)
+        }
+        LaunchedEffect(navigator.lastItem) {
+            if (navigator.lastItem is HomeScreen && reopenCategoryDialogOnReturn) {
+                reopenCategoryDialogOnReturn = false
+                if (state.selection.isNotEmpty()) {
+                    viewModel.openChangeCategoryDialog()
+                }
+            }
+        }
         val titleMaxLines by settingsViewModel.libraryPreferences.titleMaxLines.changes().collectAsState(
             settingsViewModel.libraryPreferences.titleMaxLines.get(),
         )
@@ -162,9 +177,10 @@ data object LibraryTab : Tab {
                     onSearch = viewModel::commitSearch,
                     onSearchClear = viewModel::clearSearch,
                     // For scroll overlay when no tab
-                    scrollBehavior = scrollBehavior.takeIf { !state.showCategoryTabs },
+                    scrollBehavior = scrollBehavior.takeIf { !state.showCategoryTabs && !state.hasUserCategories },
                     onClickMassImport = viewModel::openMassImportDialog,
                     onClickFindDuplicates = { navigator.push(DuplicateDetectionScreen()) },
+                    onClickEditCategories = { navigator.push(CategoryScreen()) },
                     onClickCategoryActions = {
                         state.activeCategory?.let(viewModel::openCategoryActionsDialog)
                     },
@@ -201,7 +217,7 @@ data object LibraryTab : Tab {
                 state.isLoading -> {
                     LoadingScreen(Modifier.padding(contentPadding))
                 }
-                state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty -> {
+                state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty && !state.hasUserCategories -> {
                     val handler = LocalUriHandler.current
                     EmptyScreen(
                         stringRes = MR.strings.information_empty_library,
@@ -220,11 +236,11 @@ data object LibraryTab : Tab {
                         categories = state.displayedCategories,
                         searchQuery = state.searchQuery,
                         selection = state.selection,
-                        contentPadding = contentPadding,
+                        contentPadding = contentPadding + PaddingValues(bottom = 84.dp),
                         currentPage = state.coercedActiveCategoryIndex,
                         hasActiveFilters = state.hasActiveFilters,
                         isQueryRunning = state.isQueryRunning,
-                        showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
+                        showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty() || state.hasUserCategories,
                         onChangeCurrentPage = viewModel::updateActiveCategoryIndex,
                         onClickManga = { navigator.push(MangaScreen(it)) },
                         onContinueReadingClicked = { it: LibraryManga ->
@@ -279,7 +295,7 @@ data object LibraryTab : Tab {
                     initialSelection = dialog.initialSelection,
                     onDismissRequest = onDismissRequest,
                     onEditCategories = {
-                        viewModel.clearSelection()
+                        reopenCategoryDialogOnReturn = true
                         navigator.push(CategoryScreen())
                     },
                     onConfirm = { include, exclude ->

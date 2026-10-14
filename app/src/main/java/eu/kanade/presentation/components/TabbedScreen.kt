@@ -87,7 +87,7 @@ fun TabbedScreen(
                 verticalAlignment = Alignment.Top,
             ) { page ->
                 tabs[page].content(
-                    PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                    PaddingValues(bottom = contentPadding.calculateBottomPadding() + 84.dp),
                     snackbarHostState,
                 )
             }

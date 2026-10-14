@@ -695,6 +695,10 @@ class ReaderActivity : BaseActivity() {
             viewModel.updateHistory()
         }
 
+        if (viewModel.hasProgressChanged) {
+            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(this)
+        }
+
         if (!isChangingConfigurations && !readerPreferences.novelTtsBackgroundPlayback.get()) {
             stopAnyActiveNovelTts()
             stopBackgroundTtsIfRunning()

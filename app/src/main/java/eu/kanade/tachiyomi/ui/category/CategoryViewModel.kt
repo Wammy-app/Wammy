@@ -48,11 +48,18 @@ class CategoryViewModel(
         }
     }
 
+    private fun scheduleDriveSync() {
+        try {
+            val context = uy.kohesive.injekt.Injekt.get<android.app.Application>()
+            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+        } catch (_: Exception) {}
+    }
+
     fun createCategory(name: String, contentType: Int = Category.CONTENT_TYPE_ALL) {
         viewModelScope.launch {
             when (createCategoryWithName.await(name, contentType)) {
                 is CreateCategoryWithName.Result.InternalError -> _events.send(CategoryEvent.InternalError)
-                else -> {}
+                else -> scheduleDriveSync()
             }
         }
     }
@@ -77,6 +84,7 @@ class CategoryViewModel(
                             removeCategories = listOf(categoryId),
                         )
                     }
+                    scheduleDriveSync()
                 }
             }
         }
@@ -86,7 +94,7 @@ class CategoryViewModel(
         viewModelScope.launch {
             when (reorderCategory.await(category, newIndex)) {
                 is ReorderCategory.Result.InternalError -> _events.send(CategoryEvent.InternalError)
-                else -> {}
+                else -> scheduleDriveSync()
             }
         }
     }
@@ -95,7 +103,7 @@ class CategoryViewModel(
         viewModelScope.launch {
             when (renameCategory.await(category, name)) {
                 is RenameCategory.Result.InternalError -> _events.send(CategoryEvent.InternalError)
-                else -> {}
+                else -> scheduleDriveSync()
             }
         }
     }

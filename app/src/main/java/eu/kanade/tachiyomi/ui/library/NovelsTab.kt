@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -15,11 +16,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -63,6 +66,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
+import tachiyomi.presentation.core.util.plus
 import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.collectAsState
@@ -101,18 +105,31 @@ data object NovelsTab : Tab {
         val isJoined by libraryPreferences.joinedLibrary.collectAsState()
         val libraryType = if (isJoined) LibraryViewModel.LibraryType.All else LibraryViewModel.LibraryType.Novel
         val viewModel = viewModel<LibraryViewModel>(
+            key = "LibraryViewModel_${libraryType.name}",
             factory = LibraryViewModel.Factory,
             extras = CreationExtras {
                 set(LibraryViewModel.TYPE_KEY, libraryType)
             },
         )
         val settingsViewModel = viewModel<LibrarySettingsViewModel>(
+            key = "LibrarySettingsViewModel_${libraryType.name}",
             factory = LibrarySettingsViewModel.Factory,
             extras = CreationExtras {
                 set(LibrarySettingsViewModel.TYPE_KEY, libraryType)
             },
         )
         val state by viewModel.state.collectAsState()
+        var reopenCategoryDialogOnReturn by androidx.compose.runtime.saveable.rememberSaveable {
+            androidx.compose.runtime.mutableStateOf(false)
+        }
+        LaunchedEffect(navigator.lastItem) {
+            if (navigator.lastItem is HomeScreen && reopenCategoryDialogOnReturn) {
+                reopenCategoryDialogOnReturn = false
+                if (state.selection.isNotEmpty()) {
+                    viewModel.openChangeCategoryDialog()
+                }
+            }
+        }
         val titleMaxLines by settingsViewModel.libraryPreferences.titleMaxLines.changes().collectAsState(
             settingsViewModel.libraryPreferences.titleMaxLines.get(),
         )
@@ -178,10 +195,11 @@ data object NovelsTab : Tab {
                     onSearch = viewModel::commitSearch,
                     onSearchClear = viewModel::clearSearch,
                     // For scroll overlay when no tab
-                    scrollBehavior = scrollBehavior.takeIf { !state.showCategoryTabs },
+                    scrollBehavior = scrollBehavior.takeIf { !state.showCategoryTabs && !state.hasUserCategories },
                     onClickMassImport = viewModel::openMassImportDialog,
                     onClickImportEpub = { navigator.push(ImportEpubScreen()) },
                     onClickFindDuplicates = { navigator.push(DuplicateDetectionScreen()) },
+                    onClickEditCategories = { navigator.push(CategoryScreen()) },
                     onClickCategoryActions = {
                         state.activeCategory?.let(viewModel::openCategoryActionsDialog)
                     },
@@ -221,7 +239,7 @@ data object NovelsTab : Tab {
                 state.isLoading -> {
                     LoadingScreen(Modifier.padding(contentPadding))
                 }
-                state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty -> {
+                state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty && !state.hasUserCategories -> {
                     val handler = LocalUriHandler.current
                     EmptyScreen(
                         stringRes = MR.strings.information_empty_library,
@@ -240,11 +258,11 @@ data object NovelsTab : Tab {
                         categories = state.displayedCategories,
                         searchQuery = state.searchQuery,
                         selection = state.selection,
-                        contentPadding = contentPadding,
+                        contentPadding = contentPadding + PaddingValues(bottom = 84.dp),
                         currentPage = state.coercedActiveCategoryIndex,
                         hasActiveFilters = state.hasActiveFilters,
                         isQueryRunning = state.isQueryRunning,
-                        showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
+                        showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty() || state.hasUserCategories,
                         onChangeCurrentPage = viewModel::updateActiveCategoryIndex,
                         onClickManga = { navigator.push(MangaScreen(it)) },
                         onContinueReadingClicked = { it: LibraryManga ->
@@ -299,7 +317,7 @@ data object NovelsTab : Tab {
                     initialSelection = dialog.initialSelection,
                     onDismissRequest = onDismissRequest,
                     onEditCategories = {
-                        viewModel.clearSelection()
+                        reopenCategoryDialogOnReturn = true
                         navigator.push(CategoryScreen())
                     },
                     onConfirm = { include, exclude ->

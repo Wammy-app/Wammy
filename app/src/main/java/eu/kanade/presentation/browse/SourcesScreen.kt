@@ -1,17 +1,22 @@
 package eu.kanade.presentation.browse
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FilterList
@@ -21,12 +26,10 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.browse.components.BaseSourceItem
@@ -48,7 +53,6 @@ import tachiyomi.domain.source.model.Source
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.novel.TDMR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
-import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues
 import tachiyomi.presentation.core.i18n.stringResource
@@ -57,6 +61,7 @@ import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.theme.header
 import tachiyomi.presentation.core.util.plus
 import tachiyomi.source.local.isLocal
+import tachiyomi.source.local.isLocalNovel
 
 @Composable
 fun SourcesScreen(
@@ -67,6 +72,7 @@ fun SourcesScreen(
     onLongClickPin: (Source) -> Unit,
     onRemoveFromGroup: (Source, String) -> Unit,
     onLongClickItem: (Source) -> Unit,
+    onClickUninstall: (Source) -> Unit = {},
 ) {
     when {
         state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
@@ -111,6 +117,7 @@ fun SourcesScreen(
                             onClickPin = onClickPin,
                             onLongClickPin = onLongClickPin,
                             onRemoveFromGroup = onRemoveFromGroup,
+                            onClickUninstall = onClickUninstall,
                         )
                     }
                 }
@@ -144,8 +151,10 @@ private fun SourceItem(
     onClickPin: (Source) -> Unit,
     onLongClickPin: (Source) -> Unit,
     onRemoveFromGroup: (Source, String) -> Unit,
+    onClickUninstall: (Source) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val canUninstall = !source.isLocal() && !source.isLocalNovel()
     BaseSourceItem(
         modifier = modifier,
         source = source,
@@ -161,23 +170,50 @@ private fun SourceItem(
                     )
                 }
             }
-            if (source.supportsLatest) {
-                TextButton(onClick = { onClickItem(source, Listing.Latest) }) {
-                    Text(
-                        text = stringResource(MR.strings.latest),
-                        style = LocalTextStyle.current.copy(
-                            color = MaterialTheme.colorScheme.primary,
-                        ),
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val pinShape = if (canUninstall) {
+                    RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, topEnd = 5.dp, bottomEnd = 5.dp)
+                } else {
+                    RoundedCornerShape(16.dp)
+                }
+                SourcePinButton(
+                    source = source,
+                    groupSection = groupSection,
+                    shape = pinShape,
+                    onClickPin = onClickPin,
+                    onLongClickPin = onLongClickPin,
+                    onRemoveFromGroup = onRemoveFromGroup,
+                )
+                if (canUninstall) {
+                    val uninstallShape = RoundedCornerShape(
+                        topStart = 5.dp,
+                        bottomStart = 5.dp,
+                        topEnd = 16.dp,
+                        bottomEnd = 16.dp,
                     )
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(uninstallShape)
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .clickable(
+                                onClick = { onClickUninstall(source) },
+                                role = androidx.compose.ui.semantics.Role.Button,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            contentDescription = stringResource(MR.strings.ext_uninstall),
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
                 }
             }
-            SourcePinButton(
-                source = source,
-                groupSection = groupSection,
-                onClickPin = onClickPin,
-                onLongClickPin = onLongClickPin,
-                onRemoveFromGroup = onRemoveFromGroup,
-            )
         },
     )
 }
@@ -186,6 +222,7 @@ private fun SourceItem(
 private fun SourcePinButton(
     source: Source,
     groupSection: String?,
+    shape: Shape,
     onClickPin: (Source) -> Unit,
     onLongClickPin: (Source) -> Unit,
     onRemoveFromGroup: (Source, String) -> Unit,
@@ -202,7 +239,7 @@ private fun SourcePinButton(
     val tint = when {
         showGroupIcon -> MaterialTheme.colorScheme.secondary
         isPinned -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA)
+        else -> MaterialTheme.colorScheme.onSecondaryContainer
     }
     val description = when {
         groupSection != null -> MR.strings.action_remove
@@ -225,13 +262,15 @@ private fun SourcePinButton(
 
     Box(
         modifier = Modifier
-            .minimumInteractiveComponentSize()
+            .size(32.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.secondaryContainer)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = { onLongClickPin(source) },
                 role = androidx.compose.ui.semantics.Role.Button,
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = false, radius = 24.dp),
+                indication = ripple(bounded = true),
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -239,6 +278,7 @@ private fun SourcePinButton(
             imageVector = icon,
             tint = tint,
             contentDescription = stringResource(description),
+            modifier = Modifier.size(16.dp),
         )
     }
 }

@@ -4,13 +4,21 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -68,6 +76,7 @@ import soup.compose.material.motion.animation.materialFadeThroughOut
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.NavigationBar
+import eu.kanade.tachiyomi.ui.home.components.WavyDockNavigationBar
 import tachiyomi.presentation.core.components.material.NavigationRail
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.pluralStringResource
@@ -112,19 +121,26 @@ object HomeScreen : Screen() {
         val authManager: AuthManager = remember { Injekt.get() }
         val user: FirebaseUser? by authManager.currentUser.collectAsState()
         val driveApiHelper: DriveApiHelper = remember { Injekt.get() }
+        val context = androidx.compose.ui.platform.LocalContext.current
         val repo: FirestoreUserRepository = remember { Injekt.get() }
         
         // Re-check whenever auth state changes OR user navigates back to HomeScreen
         val currentScreen = navigator.lastItem
         LaunchedEffect(user, currentScreen) {
             val uid = user?.uid
+            if (uid != null) {
+                basePreferences.hasCompletedInitialLogin.set(true)
+            }
             if (uid != null && currentScreen is HomeScreen) {
+                // Keep background periodic backup active
+                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(context)
+
                 val hasProfile = repo.hasProfile(uid)
                 if (hasProfile == false) {
                     navigator.push(UsernamePickerScreen())
                 } else if (hasProfile == null) {
-                    // Network error — show toast, will re-check on next navigation
                     android.util.Log.w("HomeScreen", "Could not verify profile (network error), will retry")
+                    android.widget.Toast.makeText(context, "Could not verify profile with server. Check internet connection.", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -140,57 +156,111 @@ object HomeScreen : Screen() {
             CompositionLocalProvider(LocalNavigator provides navigator) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     Scaffold(
-                    startBar = {
-                        if (isTabletUi()) {
-                            NavigationRail {
-                                tabs.fastForEach {
-                                    NavigationRailItem(it)
-                                }
-                            }
-                        }
-                    },
-                    bottomBar = {
-                        if (!isTabletUi()) {
-                            val bottomNavVisible by produceState(initialValue = true) {
-                                showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
-                            }
-                            AnimatedVisibility(
-                                visible = bottomNavVisible,
-                                enter = expandVertically(),
-                                exit = shrinkVertically(),
-                            ) {
-                                NavigationBar {
+                        startBar = {
+                            if (isTabletUi()) {
+                                NavigationRail {
                                     tabs.fastForEach {
-                                        NavigationBarItem(it)
+                                        NavigationRailItem(it)
                                     }
                                 }
                             }
-                        }
-                    },
-                    contentWindowInsets = WindowInsets(0),
-                ) { contentPadding ->
-                    Box(
-                        modifier = Modifier
-                            .padding(contentPadding)
-                            .consumeWindowInsets(contentPadding),
-                    ) {
-                        AnimatedContent(
-                            targetState = tabNavigator.current,
-                            transitionSpec = {
-                                materialFadeThroughIn(initialScale = 1f, durationMillis = TabFadeDuration) togetherWith
-                                    materialFadeThroughOut(durationMillis = TabFadeDuration)
-                            },
-                            label = "tabContent",
+                        },
+                        contentWindowInsets = WindowInsets(0),
+                    ) { contentPadding ->
+                        Box(
+                            modifier = Modifier
+                                .padding(contentPadding)
+                                .consumeWindowInsets(contentPadding),
                         ) {
-                            tabNavigator.saveableState(key = "currentTab", it) {
-                                it.Content()
+                            AnimatedContent(
+                                targetState = tabNavigator.current,
+                                transitionSpec = {
+                                    materialFadeThroughIn(initialScale = 1f, durationMillis = TabFadeDuration) togetherWith
+                                        materialFadeThroughOut(durationMillis = TabFadeDuration)
+                                },
+                                label = "tabContent",
+                            ) {
+                                tabNavigator.saveableState(key = "currentTab", it) {
+                                    it.Content()
+                                }
                             }
                         }
                     }
-                }
+
+                    if (!isTabletUi()) {
+                        val bottomNavVisible by produceState(initialValue = true) {
+                            showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
+                        }
+                        AnimatedVisibility(
+                            visible = bottomNavVisible,
+                            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        ) {
+                            val scope = rememberCoroutineScope()
+                            WavyDockNavigationBar(
+                                tabs = tabs,
+                                currentTab = tabNavigator.current,
+                                onTabSelected = { tab ->
+                                    if (tabNavigator.current::class != tab::class) {
+                                        tabNavigator.current = tab
+                                    } else {
+                                        scope.launch { tab.onReselect(navigator) }
+                                    }
+                                },
+                                badgeContent = { tab ->
+                                    when {
+                                        tab is UpdatesTab -> {
+                                            val count by produceState(initialValue = 0) {
+                                                val pref = Injekt.get<LibraryPreferences>()
+                                                combine(
+                                                    pref.newShowUpdatesCount.changes(),
+                                                    pref.newUpdatesCount.changes(),
+                                                ) { show, count -> if (show) count else 0 }
+                                                    .collectLatest { value = it }
+                                            }
+                                            if (count > 0) {
+                                                Badge {
+                                                    val desc = pluralStringResource(
+                                                        MR.plurals.notification_chapters_generic,
+                                                        count = count,
+                                                        count,
+                                                    )
+                                                    Text(
+                                                        text = count.toString(),
+                                                        modifier = Modifier.semantics { contentDescription = desc },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        BrowseTab::class.isInstance(tab) -> {
+                                            val count by produceState(initialValue = 0) {
+                                                Injekt.get<SourcePreferences>().extensionUpdatesCount.changes()
+                                                    .collectLatest { value = it }
+                                            }
+                                            if (count > 0) {
+                                                Badge {
+                                                    val desc = pluralStringResource(
+                                                        MR.plurals.update_check_notification_ext_updates,
+                                                        count = count,
+                                                        count,
+                                                    )
+                                                    Text(
+                                                        text = count.toString(),
+                                                        modifier = Modifier.semantics { contentDescription = desc },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                            )
+                        }
+                    }
 
                 val hasShownOnboarding by basePreferences.shownOnboardingFlow.collectAsState()
-                if (user == null && hasShownOnboarding) {
+                val hasCompletedInitialLogin by basePreferences.hasCompletedInitialLogin.collectAsState()
+                if (user == null && hasShownOnboarding && !hasCompletedInitialLogin) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -198,7 +268,9 @@ object HomeScreen : Screen() {
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = {}
+                                onClick = {
+                                    basePreferences.hasCompletedInitialLogin.set(true)
+                                }
                             )
                     )
                     LoginBottomSheet(navigator = navigator, driveApiHelper = driveApiHelper)

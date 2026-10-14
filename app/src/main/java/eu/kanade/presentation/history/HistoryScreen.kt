@@ -2,6 +2,7 @@ package eu.kanade.presentation.history
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -153,7 +154,9 @@ private fun HistoryScreenContent(
     onClickFavorite: (HistoryWithRelations) -> Unit,
     onLoadNextPage: () -> Unit,
 ) {
-    FastScrollLazyColumn {
+    FastScrollLazyColumn(
+        contentPadding = PaddingValues(bottom = 84.dp),
+    ) {
         items(
             items = history,
             key = { "history-${it.hashCode()}" },

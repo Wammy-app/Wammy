@@ -136,6 +136,25 @@ class NovelSourcesViewModel(
         toggleSource.await(source)
     }
 
+    fun uninstallSource(source: Source) {
+        val ext = source.installedExtension
+        if (ext != null) {
+            Injekt.get<eu.kanade.tachiyomi.extension.ExtensionManager>().uninstallExtension(ext)
+            return
+        }
+        if (source.isJsSource) {
+            viewModelScope.launchIO {
+                val jsPluginManager = Injekt.get<eu.kanade.tachiyomi.jsplugin.JsPluginManager>()
+                val installed = jsPluginManager.installedPlugins.value.find { it.plugin.sourceId() == source.id }
+                if (installed != null) {
+                    jsPluginManager.uninstallPlugin(installed.plugin.id)
+                }
+            }
+            return
+        }
+        Injekt.get<eu.kanade.tachiyomi.source.custom.CustomSourceManager>().deleteSource(source.id)
+    }
+
     fun togglePin(source: Source) {
         toggleSourcePin.await(source)
     }

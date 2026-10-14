@@ -94,6 +94,13 @@ import eu.kanade.tachiyomi.ui.history.HistoryTab
 import eu.kanade.tachiyomi.ui.history.HistoryFilter
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import tachiyomi.domain.source.interactor.GetRemoteManga
+import eu.kanade.tachiyomi.ui.discover.components.ContinueReadingCarouselWidget
+import eu.kanade.tachiyomi.ui.discover.components.ContinueReadingDiscWidget
+import eu.kanade.tachiyomi.ui.discover.components.HeroFeaturedCard
+import eu.kanade.tachiyomi.ui.discover.components.HomeMediaSection
+import eu.kanade.tachiyomi.ui.discover.components.HomeTopBar
+import eu.kanade.tachiyomi.ui.discover.components.RecentlyUploadedCard
+import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 
 object DiscoverTab : Tab {
 
@@ -131,61 +138,14 @@ object DiscoverTab : Tab {
         Scaffold(
             modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
             topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = if (state.isNovel) "Novels" else "Manga",
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    },
-                    actions = {
-                        IconButton(onClick = { navigator.push(eu.kanade.tachiyomi.ui.updates.UpdatesTab) }) {
-                                BadgedBox(
-                                    badge = {
-                                        if (updatesCount > 0) {
-                                            Badge(containerColor = MaterialTheme.colorScheme.primary)
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Update,
-                                        contentDescription = stringResource(MR.strings.label_recent_updates),
-                                        tint = MaterialTheme.colorScheme.onBackground
-                                    )
-                                }
-                            }
-                            IconButton(onClick = { navigator.push(eu.kanade.tachiyomi.ui.search.UserSearchScreen()) }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Search,
-                                    contentDescription = "Search Users",
-                                    tint = MaterialTheme.colorScheme.onBackground
-                                )
-                            }
-                            IconButton(onClick = { navigator.push(eu.kanade.tachiyomi.ui.profile.ProfileScreen()) }) {
-                            if (user?.photoUrl != null) {
-                                coil3.compose.AsyncImage(
-                                    model = user?.photoUrl,
-                                    contentDescription = "Profile",
-                                    modifier = Modifier.size(28.dp).clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Outlined.AccountCircle,
-                                    contentDescription = "Profile",
-                                    modifier = Modifier.size(28.dp),
-                                    tint = MaterialTheme.colorScheme.onBackground
-                                )
-                            }
-                        }
-                    },
+                HomeTopBar(
+                    isNovel = state.isNovel,
+                    updatesCount = updatesCount,
+                    user = user,
+                    onUpdatesClick = { navigator.push(eu.kanade.tachiyomi.ui.updates.UpdatesTab) },
+                    onSearchClick = { navigator.push(eu.kanade.tachiyomi.ui.search.UserSearchScreen()) },
+                    onProfileClick = { navigator.push(eu.kanade.tachiyomi.ui.profile.ProfileScreen()) },
                     scrollBehavior = scrollBehavior,
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        scrolledContainerColor = MaterialTheme.colorScheme.background
-                    )
                 )
             },
             floatingActionButton = {
@@ -194,244 +154,190 @@ object DiscoverTab : Tab {
         ) { contentPadding ->
             androidx.compose.animation.Crossfade(targetState = state, animationSpec = tween(400), modifier = Modifier.padding(contentPadding).fillMaxSize(), label = "discover") { animatedState ->
                 if (animatedState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                val recentlyRead by viewModel.recentlyRead.collectAsState()
-                val featuredManga = remember(viewModel.popularCache.toMap(), animatedState.isNovel) {
-                    val result = mutableListOf<Manga>()
-                    var index = 0
-                    while (result.size < 5) {
-                        var added = false
-                        for (source in animatedState.sources) {
-                            val list = viewModel.popularCache[source.id]
-                            if (list != null && index < list.size) {
-                                if (result.none { it.title == list[index].title }) {
-                                    result.add(list[index])
-                                    added = true
-                                }
-                                if (result.size == 5) break
-                            }
-                        }
-                        if (!added) break
-                        index++
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
                     }
-                    result
-                }
-
-                val allCachesLoaded = animatedState.sources.all { viewModel.popularCache.containsKey(it.id) }
-                val hasNoMangaAtAll = allCachesLoaded && viewModel.popularCache.values.all { it.isEmpty() }
-
-                if (animatedState.sources.isEmpty() || hasNoMangaAtAll) {
-                    EmptyDiscoverScreen(
-                        isNovel = animatedState.isNovel,
-                        onBrowseExtensions = { tabNavigator.current = BrowseTab }
-                    )
                 } else {
-                    LazyColumn(
-                        contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        item {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            HeroCarousel(
-                                featuredManga = featuredManga,
-                                onClick = { manga ->
-                                    scope.launch {
-                                        val localManga = viewModel.getNetworkToLocalManga(manga)
-                                        navigator.push(MangaScreen(localManga.id))
+                    val recentlyRead by viewModel.recentlyRead.collectAsState()
+
+                    val trendingAggregated = remember(viewModel.popularCache.toMap(), animatedState.sources) {
+                        val result = mutableListOf<Manga>()
+                        val seenTitles = mutableSetOf<String>()
+                        val lists = animatedState.sources.mapNotNull { viewModel.popularCache[it.id] }
+                        val maxLen = lists.maxOfOrNull { it.size } ?: 0
+                        for (i in 0 until maxLen) {
+                            for (list in lists) {
+                                if (i < list.size) {
+                                    val manga = list[i]
+                                    val normalized = manga.title.trim().lowercase()
+                                    if (seenTitles.add(normalized)) {
+                                        result.add(manga)
                                     }
                                 }
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
+                            }
                         }
+                        result
+                    }
 
-                        if (recentlyRead.isNotEmpty()) {
-                        item {
-                            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                                SectionHeader(title = "Recently Read", onSeeAll = {
-                                      val filter = if (animatedState.isNovel) HistoryFilter.NOVELS else HistoryFilter.MANGA
-                                      HistoryTab.filterEvent.trySend(filter)
-                                      tabNavigator.current = HistoryTab
-                                  })
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    items(recentlyRead) { history ->
-                                        Box(modifier = Modifier.width(90.dp)) {
-                                            MangaCompactGridItem(
-                                                isSelected = false,
-                                                title = history.title,
-                                                coverData = history.coverData,
-                                                coverBadgeStart = {},
-                                                coverBadgeEnd = {},
-                                                onLongClick = {},
-                                                onClick = {
-                                                    scope.launch {
-                                                        navigator.push(MangaScreen(history.mangaId))
-                                                    }
-                                                },
-                                                onClickContinueReading = null
-                                            )
+                    val latestAggregated = remember(viewModel.latestCache.toMap(), animatedState.sources) {
+                        val result = mutableListOf<Manga>()
+                        val seenTitles = mutableSetOf<String>()
+                        val lists = animatedState.sources.mapNotNull { viewModel.latestCache[it.id] }
+                        val maxLen = lists.maxOfOrNull { it.size } ?: 0
+                        for (i in 0 until maxLen) {
+                            for (list in lists) {
+                                if (i < list.size) {
+                                    val manga = list[i]
+                                    val normalized = manga.title.trim().lowercase()
+                                    if (seenTitles.add(normalized)) {
+                                        result.add(manga)
+                                    }
+                                }
+                            }
+                        }
+                        result
+                    }
+
+                    val featuredManga = remember(trendingAggregated) {
+                        trendingAggregated.take(5)
+                    }
+
+                    LaunchedEffect(featuredManga) {
+                        if (featuredManga.isNotEmpty()) {
+                            viewModel.fetchFeaturedDetails(featuredManga)
+                        }
+                    }
+
+                    val allCachesLoaded = animatedState.sources.all { viewModel.popularCache.containsKey(it.id) }
+                    val hasNoMangaAtAll = allCachesLoaded && viewModel.popularCache.values.all { it.isEmpty() }
+
+                    if (animatedState.sources.isEmpty() || hasNoMangaAtAll) {
+                        EmptyDiscoverScreen(
+                            isNovel = animatedState.isNovel,
+                            onBrowseExtensions = { tabNavigator.current = BrowseTab }
+                        )
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            // 1. Hero Featured Card
+                            item {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                HeroFeaturedCard(
+                                    items = featuredManga,
+                                    onClick = { manga ->
+                                        scope.launch {
+                                            val localManga = viewModel.getNetworkToLocalManga(manga)
+                                            navigator.push(MangaScreen(localManga.id))
                                         }
                                     }
-                                }
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
                             }
-                        }
-                    }
 
-                        if (animatedState.sources.isNotEmpty()) {
-                            val firstSource = animatedState.sources.first()
-
-                            item {
-                                val cached = viewModel.popularCache[firstSource.id]
-                                if (cached == null) {
-                                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                                        val titleText = firstSource.name
-                                        val subtitleText = if (firstSource.lang == "all" || firstSource.lang.isEmpty()) null else eu.kanade.tachiyomi.util.system.LocaleHelper.getLocalizedDisplayName(firstSource.lang)
-                                        SectionHeader(title = titleText, subtitle = subtitleText, onSeeAll = { navigator.push(BrowseSourceScreen(firstSource.id, GetRemoteManga.QUERY_POPULAR, isFeed = true)) })
-                                        SkeletonCarousel()
-                                    }
-                                    LaunchedEffect(firstSource.id) {
-                                        val result = viewModel.loadSourcePopular(firstSource)
-                                        viewModel.popularCache[firstSource.id] = result
-                                    }
-                                } else if (cached.isNotEmpty()) {
-                                    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                                        val titleText = firstSource.name
-                                        val subtitleText = if (firstSource.lang == "all" || firstSource.lang.isEmpty()) null else eu.kanade.tachiyomi.util.system.LocaleHelper.getLocalizedDisplayName(firstSource.lang)
-                                        SectionHeader(title = titleText, subtitle = subtitleText, onSeeAll = { navigator.push(BrowseSourceScreen(firstSource.id, GetRemoteManga.QUERY_POPULAR, isFeed = true)) })
-                                        LazyRow(
-                                            contentPadding = PaddingValues(horizontal = 16.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            items(cached) { manga ->
-                                                Box(modifier = Modifier.width(90.dp)) {
-                                                    MangaCompactGridItem(
-                                                        isSelected = false,
-                                                        title = manga.title,
-                                                        coverData = manga.asMangaCover(),
-                                                        coverBadgeStart = {},
-                                                        coverBadgeEnd = {},
-                                                        onLongClick = {},
-                                                        onClick = {
-                                                            scope.launch {
-                                                                val localManga = viewModel.getNetworkToLocalManga(manga)
-                                                                navigator.push(MangaScreen(localManga.id))
-                                                            }
-                                                        },
-                                                        onClickContinueReading = null
-                                                    )
+                            // 2. Continue Reading (Vinyl Disc Carousel)
+                            if (recentlyRead.isNotEmpty()) {
+                                item {
+                                    val continueReadingItems = remember(recentlyRead) { recentlyRead.take(5) }
+                                    val context = androidx.compose.ui.platform.LocalContext.current
+                                    ContinueReadingCarouselWidget(
+                                        items = continueReadingItems,
+                                        onClick = { history ->
+                                            if (history.chapterId > 0) {
+                                                val intent = ReaderActivity.newIntent(context, history.mangaId, history.chapterId)
+                                                context.startActivity(intent)
+                                            } else {
+                                                scope.launch {
+                                                    navigator.push(MangaScreen(history.mangaId))
                                                 }
                                             }
-                                        }
-                                    }
+                                        },
+                                    )
+                                    Spacer(modifier = Modifier.height(14.dp))
                                 }
                             }
 
-                            item {
-                                SectionHeader(title = "Recently Updated", onSeeAll = { navigator.push(BrowseSourceScreen(firstSource.id, GetRemoteManga.QUERY_LATEST, isFeed = true)) })
+                            // 3. Recently Uploaded Card (with expand chevron & timestamps)
+                            if (latestAggregated.isNotEmpty()) {
+                                item {
+                                    RecentlyUploadedCard(
+                                        items = latestAggregated,
+                                        onClick = { manga ->
+                                            scope.launch {
+                                                val localManga = viewModel.getNetworkToLocalManga(manga)
+                                                navigator.push(MangaScreen(localManga.id))
+                                            }
+                                        },
+                                        onFilterClick = {
+                                            navigator.push(DiscoverFeedScreen(isLatest = true))
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                }
+                            }
 
-                                val latest = viewModel.latestCache[firstSource.id]
-
-                                if (latest == null) {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().height(100.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator()
-                                    }
-                                    LaunchedEffect(firstSource.id) {
-                                        viewModel.latestCache[firstSource.id] = viewModel.loadSourceLatest(firstSource)
-                                    }
-                                } else if (latest.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "No recent updates",
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    }
-                                } else {
+                            // Loading shimmer if caches are still loading
+                            if (trendingAggregated.isEmpty() && latestAggregated.isEmpty()) {
+                                item {
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 16.dp)
-                                            .padding(bottom = 24.dp)
+                                            .padding(horizontal = 16.dp, vertical = 8.dp)
                                     ) {
-                                        latest.take(5).forEach { manga ->
-                                            RecentlyUpdatedItem(
-                                                manga = manga,
-                                                onClick = {
-                                                    scope.launch {
-                                                        val localManga = viewModel.getNetworkToLocalManga(manga)
-                                                        navigator.push(MangaScreen(localManga.id))
-                                                    }
-                                                }
-                                            )
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                        }
+                                        SkeletonCarousel()
                                     }
                                 }
                             }
 
-                            items(animatedState.sources.drop(1), key = { "popular_${it.id}" }) { source ->
-                                val cached = viewModel.popularCache[source.id]
-                                if (cached == null) {
-                                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                                        val titleText = source.name
-                                        val subtitleText = if (source.lang == "all" || source.lang.isEmpty()) null else eu.kanade.tachiyomi.util.system.LocaleHelper.getLocalizedDisplayName(source.lang)
-                                        SectionHeader(title = titleText, subtitle = subtitleText, onSeeAll = { navigator.push(BrowseSourceScreen(source.id, GetRemoteManga.QUERY_POPULAR, isFeed = true)) })
-                                        SkeletonCarousel()
-                                    }
-                                    LaunchedEffect(source.id) {
-                                        val result = viewModel.loadSourcePopular(source)
-                                        viewModel.popularCache[source.id] = result
-                                    }
-                                } else if (cached.isNotEmpty()) {
-                                    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                                        val titleText = source.name
-                                        val subtitleText = if (source.lang == "all" || source.lang.isEmpty()) null else eu.kanade.tachiyomi.util.system.LocaleHelper.getLocalizedDisplayName(source.lang)
-                                        SectionHeader(title = titleText, subtitle = subtitleText, onSeeAll = { navigator.push(BrowseSourceScreen(source.id, GetRemoteManga.QUERY_POPULAR, isFeed = true)) })
-                                        LazyRow(
-                                            contentPadding = PaddingValues(horizontal = 16.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            items(cached) { manga ->
-                                                Box(modifier = Modifier.width(90.dp)) {
-                                                    MangaCompactGridItem(
-                                                        isSelected = false,
-                                                        title = manga.title,
-                                                        coverData = manga.asMangaCover(),
-                                                        coverBadgeStart = {},
-                                                        coverBadgeEnd = {},
-                                                        onLongClick = {},
-                                                        onClick = {
-                                                            scope.launch {
-                                                                val localManga = viewModel.getNetworkToLocalManga(manga)
-                                                                navigator.push(MangaScreen(localManga.id))
-                                                            }
-                                                        },
-                                                        onClickContinueReading = null
-                                                    )
-                                                }
+                            // 4. Trending Section (2 stacked LazyRows, merged across all sources)
+                            if (trendingAggregated.isNotEmpty()) {
+                                item {
+                                    HomeMediaSection(
+                                        title = "Trending",
+                                        items = trendingAggregated,
+                                        onSeeAll = {
+                                            navigator.push(DiscoverFeedScreen(isLatest = false))
+                                        },
+                                        onClick = { manga ->
+                                            scope.launch {
+                                                val localManga = viewModel.getNetworkToLocalManga(manga)
+                                                navigator.push(MangaScreen(localManga.id))
                                             }
                                         }
-                                    }
+                                    )
                                 }
+                            }
+
+                            // 5. Latest Section (2 stacked LazyRows, merged across all sources)
+                            if (latestAggregated.isNotEmpty()) {
+                                item {
+                                    HomeMediaSection(
+                                        title = "Latest",
+                                        items = latestAggregated,
+                                        onSeeAll = {
+                                            navigator.push(DiscoverFeedScreen(isLatest = true))
+                                        },
+                                        onClick = { manga ->
+                                            scope.launch {
+                                                val localManga = viewModel.getNetworkToLocalManga(manga)
+                                                navigator.push(MangaScreen(localManga.id))
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+
+                            // Bottom Spacer for clean clearance above dock
+                            item {
+                                Spacer(modifier = Modifier.height(96.dp))
                             }
                         }
                     }
                 }
             }
         }
-
-            }    }
+    }
 }
 
 @Composable

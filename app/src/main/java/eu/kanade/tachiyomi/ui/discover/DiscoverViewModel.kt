@@ -20,7 +20,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import mihon.core.viewmodel.StateViewModel
+import eu.kanade.domain.manga.model.copyFrom
+import eu.kanade.domain.manga.model.toSManga
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.manga.interactor.GetMangaByUrlAndSourceId
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
@@ -39,6 +42,7 @@ class DiscoverViewModel(
     private val jsPluginManager: JsPluginManager = Injekt.get(),
     private val preferences: BasePreferences = Injekt.get(),
     private val networkToLocalManga: NetworkToLocalManga = Injekt.get(),
+    private val getMangaByUrlAndSourceId: GetMangaByUrlAndSourceId = Injekt.get(),
     private val updateManga: eu.kanade.domain.manga.interactor.UpdateManga = Injekt.get(),
     private val getHistory: tachiyomi.domain.history.interactor.GetHistory = Injekt.get(),
     private val context: android.app.Application = Injekt.get(),
@@ -96,12 +100,17 @@ class DiscoverViewModel(
                 mutableState.update { 
                     it.copy(isLoading = false, sources = sources, isNovel = isNovel)
                 }
-                // Pre-fetch the first 3 sources to speed up the initial banner load
+                // Pre-fetch active sources to populate Trending, Latest, and Hero
                 viewModelScope.launch {
-                    sources.take(3).forEach { source ->
+                    sources.forEach { source ->
                         if (!popularCache.containsKey(source.id)) {
                             launch {
                                 popularCache[source.id] = loadSourcePopular(source)
+                            }
+                        }
+                        if (!latestCache.containsKey(source.id)) {
+                            launch {
+                                latestCache[source.id] = loadSourceLatest(source)
                             }
                         }
                     }
@@ -124,8 +133,16 @@ class DiscoverViewModel(
                 try {
                     val cachedList = json.decodeFromString<List<Manga>>(cacheFile.readText())
                     if (cachedList.isNotEmpty()) {
-                        popularCache[source.id] = cachedList
-                        returnList = cachedList
+                        val enrichedList = cachedList.map { m ->
+                            if (m.author.isNullOrBlank()) {
+                                val local = getMangaByUrlAndSourceId.await(m.url, m.source)
+                                if (local != null && !local.author.isNullOrBlank()) {
+                                    m.copy(author = local.author, artist = local.artist, genre = local.genre)
+                                } else m
+                            } else m
+                        }
+                        popularCache[source.id] = enrichedList
+                        returnList = enrichedList
                     }
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e) { "Failed to read popular cache" }
@@ -144,11 +161,16 @@ class DiscoverViewModel(
             try {
                 val page = source.getPopularManga(1)
                 val newList = page.mangas.map { sManga ->
+                    val local = getMangaByUrlAndSourceId.await(sManga.url, source.id)
                     Manga.create().copy(
                         source = source.id,
                         url = sManga.url,
                         title = sManga.title,
-                        thumbnailUrl = sManga.thumbnail_url,
+                        author = sManga.author ?: local?.author,
+                        artist = sManga.artist ?: local?.artist,
+                        description = sManga.description ?: local?.description,
+                        genre = sManga.getGenres() ?: local?.genre,
+                        thumbnailUrl = sManga.thumbnail_url ?: local?.thumbnailUrl,
                         initialized = sManga.initialized,
                         isNovel = source.isNovelSource()
                     )
@@ -175,8 +197,16 @@ class DiscoverViewModel(
                 try {
                     val cachedList = json.decodeFromString<List<Manga>>(cacheFile.readText())
                     if (cachedList.isNotEmpty()) {
-                        latestCache[source.id] = cachedList
-                        returnList = cachedList
+                        val enrichedList = cachedList.map { m ->
+                            if (m.author.isNullOrBlank()) {
+                                val local = getMangaByUrlAndSourceId.await(m.url, m.source)
+                                if (local != null && !local.author.isNullOrBlank()) {
+                                    m.copy(author = local.author, artist = local.artist, genre = local.genre)
+                                } else m
+                            } else m
+                        }
+                        latestCache[source.id] = enrichedList
+                        returnList = enrichedList
                     }
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e) { "Failed to read latest cache" }
@@ -193,11 +223,16 @@ class DiscoverViewModel(
             try {
                 val page = source.getLatestUpdates(1)
                 val newList = page.mangas.map { sManga ->
+                    val local = getMangaByUrlAndSourceId.await(sManga.url, source.id)
                     Manga.create().copy(
                         source = source.id,
                         url = sManga.url,
                         title = sManga.title,
-                        thumbnailUrl = sManga.thumbnail_url,
+                        author = sManga.author ?: local?.author,
+                        artist = sManga.artist ?: local?.artist,
+                        description = sManga.description ?: local?.description,
+                        genre = sManga.getGenres() ?: local?.genre,
+                        thumbnailUrl = sManga.thumbnail_url ?: local?.thumbnailUrl,
                         initialized = sManga.initialized,
                         isNovel = source.isNovelSource()
                     )
@@ -211,6 +246,44 @@ class DiscoverViewModel(
                     latestCache[source.id] = emptyList()
                 }
                 return@withContext returnList
+            }
+        }
+    }
+
+    private val featuredDetailsFetched = mutableSetOf<String>()
+
+    fun fetchFeaturedDetails(items: List<Manga>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            items.take(5).forEach { manga ->
+                if (manga.author.isNullOrBlank() && featuredDetailsFetched.add("${manga.source}_${manga.url}")) {
+                    try {
+                        val local = getMangaByUrlAndSourceId.await(manga.url, manga.source)
+                        if (local != null && !local.author.isNullOrBlank()) {
+                            updateCachedManga(manga.source, local)
+                        } else {
+                            val source = sourceManager.get(manga.source) as? CatalogueSource
+                            if (source != null) {
+                                val updateResult = source.getMangaUpdate(manga.toSManga(), emptyList(), fetchDetails = true, fetchChapters = false)
+                                val updated = (local ?: manga).copyFrom(updateResult.manga)
+                                networkToLocalManga(updated)
+                                updateCachedManga(manga.source, updated)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        logcat(LogPriority.WARN, e) { "Failed to load featured manga details for ${manga.title}" }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun updateCachedManga(sourceId: Long, updated: Manga) {
+        withContext(Dispatchers.Main) {
+            val currentList = popularCache[sourceId]?.toMutableList() ?: return@withContext
+            val idx = currentList.indexOfFirst { it.url == updated.url }
+            if (idx != -1) {
+                currentList[idx] = updated
+                popularCache[sourceId] = currentList
             }
         }
     }

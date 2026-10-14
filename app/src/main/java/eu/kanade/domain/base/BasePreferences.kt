@@ -19,10 +19,20 @@ class BasePreferences(
 
     val incognitoMode: Preference<Boolean> = preferenceStore.getBoolean(Preference.appStateKey("incognito_mode"), false)
 
+    val sandboxExtensionsEnabled: Preference<Boolean> = preferenceStore.getBoolean(
+        "pref_sandbox_extensions_enabled",
+        false,
+    )
+
     val extensionInstaller: ExtensionInstallerPreference = ExtensionInstallerPreference(context, preferenceStore)
 
     val shownOnboardingFlow: Preference<Boolean> = preferenceStore.getBoolean(
         Preference.appStateKey("onboarding_complete"),
+        false,
+    )
+
+    val hasCompletedInitialLogin: Preference<Boolean> = preferenceStore.getBoolean(
+        Preference.appStateKey("has_completed_initial_login"),
         false,
     )
 

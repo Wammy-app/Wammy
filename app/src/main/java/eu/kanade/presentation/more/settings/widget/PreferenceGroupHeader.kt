@@ -8,7 +8,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun PreferenceGroupHeader(title: String) {
@@ -19,10 +21,13 @@ fun PreferenceGroupHeader(title: String) {
             .padding(bottom = 8.dp, top = 14.dp),
     ) {
         Text(
-            text = title,
-            color = MaterialTheme.colorScheme.secondary,
-            modifier = Modifier.padding(horizontal = PrefsHorizontalPadding),
-            style = MaterialTheme.typography.bodyMedium,
+            text = title.uppercase(),
+            color = MaterialTheme.colorScheme.primary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.8.sp,
+            modifier = Modifier.padding(horizontal = 14.dp),
         )
     }
 }
+

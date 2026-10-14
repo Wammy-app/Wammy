@@ -138,10 +138,29 @@ class MainActivity : BaseActivity() {
 
         super.onCreate(savedInstanceState)
         
-        // Schedule Google Drive background restore check on app launch
-        eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(this)
-        // Also ensure a periodic sync happens every 12 hours as a fallback
+        // Request notification permission on Android 13+ so sync and backup notifications appear
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                androidx.core.app.ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                    1001
+                )
+            }
+        }
+
+        // Ensure periodic cloud backup happens in the background
         eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(this)
+
+        // If local data was marked dirty before process killed, ensure backup is queued
+        val syncPrefs = getSharedPreferences(eu.kanade.tachiyomi.data.sync.DriveSyncWorker.PREFS_NAME, MODE_PRIVATE)
+        if (syncPrefs.getBoolean(eu.kanade.tachiyomi.data.sync.DriveSyncWorker.KEY_DATA_DIRTY, false)) {
+            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(this)
+        }
 
         Migrator.awaitAndRelease()
 

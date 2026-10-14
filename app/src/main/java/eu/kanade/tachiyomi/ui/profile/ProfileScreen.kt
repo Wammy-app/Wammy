@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ModalBottomSheet
@@ -23,7 +24,11 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.foundation.clickable
+import eu.kanade.presentation.more.SettingItem
+import eu.kanade.presentation.more.SettingsGroup
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.MultipartBody
@@ -47,6 +52,7 @@ import coil3.compose.AsyncImage
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.CustomCredential
@@ -68,6 +74,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+
+private fun android.content.Context.findActivity(): android.app.Activity? {
+    var ctx = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is android.app.Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
 
 class ProfileScreen : Screen {
 
@@ -98,8 +113,9 @@ class ProfileScreen : Screen {
             contract = ActivityResultContracts.StartIntentSenderForResult()
         ) { result ->
             if (result.resultCode == android.app.Activity.RESULT_OK) {
-                // If they successfully authorized Drive, trigger the restore check!
-                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context)
+                driveApiHelper.handleAuthorizationResult(result.data)
+                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context, immediate = true)
+                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(context)
                 Toast.makeText(context, "Google Drive connected! Checking for restore...", Toast.LENGTH_SHORT).show()
             }
             if (navigator.size == 1) navigator.replaceAll(eu.kanade.tachiyomi.ui.home.HomeScreen)
@@ -152,7 +168,116 @@ class ProfileScreen : Screen {
             }
         }
 
+        var isSigningIn by remember { mutableStateOf(false) }
+        var authErrorMessage by remember { mutableStateOf<String?>(null) }
+
         val webClientId = eu.kanade.tachiyomi.data.auth.AuthConstants.WEB_CLIENT_ID
+
+        fun signInWithFirebaseToken(idToken: String) {
+            isSigningIn = true
+            val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+            FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).addOnCompleteListener { authTask ->
+                isSigningIn = false
+                if (authTask.isSuccessful) {
+                    Injekt.get<eu.kanade.domain.base.BasePreferences>().hasCompletedInitialLogin.set(true)
+                    Toast.makeText(context, "Signed in successfully!", Toast.LENGTH_SHORT).show()
+
+                    val currentUid = authTask.result?.user?.uid
+                    if (currentUid != null) {
+                        scope.launch {
+                            val hasProfile = repo.hasProfile(currentUid)
+                            if (hasProfile == false) {
+                                navigator.push(UsernamePickerScreen())
+                            }
+                        }
+                    }
+
+                    scope.launch {
+                        try {
+                            when (val authResult = driveApiHelper.requestDriveAuthorization()) {
+                                is AuthorizationResult.NeedsConsent -> {
+                                    val intentSenderRequest = IntentSenderRequest.Builder(authResult.pendingIntent).build()
+                                    driveConsentLauncher.launch(intentSenderRequest)
+                                }
+                                is AuthorizationResult.Success -> {
+                                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context, immediate = true)
+                                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(context)
+                                }
+                                is AuthorizationResult.Error -> {
+                                    android.util.Log.e("ProfileScreen", "Drive Auth Error: ${authResult.message}")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("ProfileScreen", "Drive Auth Exception", e)
+                        }
+                    }
+                } else {
+                    val ex = authTask.exception
+                    android.util.Log.e("ProfileScreen", "Firebase Auth Failed", ex)
+                    authErrorMessage = "Firebase Authentication Failed:\n\n${ex?.localizedMessage ?: ex?.message ?: "Unknown Firebase error"}\n\nPlease check Firebase Console -> Authentication -> Sign-in method -> Google."
+                }
+            }
+        }
+
+        val legacyGoogleSignInLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            val data = result.data
+            if (data != null) {
+                val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(data)
+                try {
+                    val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                    val idToken = account?.idToken
+                    if (!idToken.isNullOrBlank()) {
+                        signInWithFirebaseToken(idToken)
+                    } else {
+                        isSigningIn = false
+                        authErrorMessage = "Sign in failed: Google returned an empty ID token."
+                    }
+                } catch (e: com.google.android.gms.common.api.ApiException) {
+                    isSigningIn = false
+                    if (e.statusCode == com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes.SIGN_IN_CANCELLED) {
+                        android.util.Log.d("ProfileScreen", "User cancelled Google Sign-In picker")
+                    } else {
+                        val message = when (e.statusCode) {
+                            10 -> "Developer Error (Code 10):\n\n" +
+                                  "The signing SHA-1/SHA-256 fingerprint or package name is not registered in Firebase Console.\n\n" +
+                                  "• App Package: ${context.packageName}\n" +
+                                  "• Action: Open Firebase Console -> Project Settings -> Your Apps and verify SHA-1 and SHA-256 fingerprints."
+                            12500 -> "Sign in failed (Code 12500):\n\nGoogle Play Services could not authenticate this account. Make sure your Google account is properly logged in on this device."
+                            7 -> "Network error (Code 7):\n\nCannot reach Google authentication servers. Please check your internet connection."
+                            16 -> "Sign in failed (Code 16):\n\nAccount cannot be accessed or credentials mismatch."
+                            else -> "Google Sign-In failed (Code ${e.statusCode}):\n\n${e.message.orEmpty()}"
+                        }
+                        android.util.Log.e("ProfileScreen", message, e)
+                        authErrorMessage = message
+                    }
+                }
+            } else {
+                isSigningIn = false
+                if (result.resultCode != android.app.Activity.RESULT_CANCELED) {
+                    authErrorMessage = "Sign in failed with result code: ${result.resultCode}"
+                }
+            }
+        }
+
+        fun launchLegacyGoogleSignIn() {
+            try {
+                val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestIdToken(webClientId)
+                    .requestEmail()
+                    .requestScopes(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive.appdata"))
+                    .build()
+                val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+                client.signOut().addOnCompleteListener {
+                    legacyGoogleSignInLauncher.launch(client.signInIntent)
+                }
+            } catch (e: Exception) {
+                isSigningIn = false
+                android.util.Log.e("ProfileScreen", "Failed to launch legacy Google Sign In", e)
+                authErrorMessage = "Google Play Services sign-in unavailable:\n${e.message}"
+            }
+        }
 
         if (user != null) {
             val highResPhotoUrl = user?.photoUrl?.toString()?.replace("s96-c", "s800-c")
@@ -223,31 +348,99 @@ class ProfileScreen : Screen {
                         @OptIn(ExperimentalMaterial3Api::class)
                         ModalBottomSheet(
                             onDismissRequest = { showBottomSheet = false },
-                            containerColor = MaterialTheme.colorScheme.surface
+                            shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+                            containerColor = MaterialTheme.colorScheme.background,
+                            dragHandle = {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 14.dp, bottom = 6.dp)
+                                        .size(width = 36.dp, height = 4.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                                )
+                            },
                         ) {
-                            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
-                                ListItem(
-                                    headlineContent = { Text("Settings") },
-                                    modifier = Modifier.clickable { 
-                                        showBottomSheet = false
-                                        navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen())
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 6.dp, bottom = 32.dp),
+                            ) {
+                                SettingsGroup {
+                                    item { pos ->
+                                        SettingItem(
+                                            title = "Settings",
+                                            subtitle = "Appearance, library, reader, and preferences",
+                                            icon = Icons.Outlined.Settings,
+                                            shape = pos.shape,
+                                            onClick = {
+                                                showBottomSheet = false
+                                                navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen())
+                                            },
+                                        )
                                     }
-                                )
-                                ListItem(
-                                    headlineContent = { Text("Cloud Sync") },
-                                    modifier = Modifier.clickable { 
-                                        showBottomSheet = false
-                                        navigator.push(CloudSyncScreen())
+                                    item { pos ->
+                                        SettingItem(
+                                            title = "Cloud Sync",
+                                            subtitle = "Backup and restore your data with Google Drive",
+                                            icon = Icons.Outlined.Sync,
+                                            shape = pos.shape,
+                                            onClick = {
+                                                showBottomSheet = false
+                                                navigator.push(CloudSyncScreen())
+                                            },
+                                        )
                                     }
-                                )
-                                ListItem(
-                                    headlineContent = { Text("Sign Out", color = MaterialTheme.colorScheme.error) },
-                                    modifier = Modifier.clickable { 
-                                        showBottomSheet = false
-                                        authManager.signOut()
-                                        navigator.pop()
+                                    item { pos ->
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = pos.shape,
+                                            color = MaterialTheme.colorScheme.surfaceContainer,
+                                            contentColor = MaterialTheme.colorScheme.error,
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        showBottomSheet = false
+                                                        Injekt.get<eu.kanade.domain.base.BasePreferences>()
+                                                            .hasCompletedInitialLogin.set(true)
+                                                        authManager.signOut()
+                                                        androidx.work.WorkManager.getInstance(context).cancelUniqueWork("DriveSyncPeriodic")
+                                                        androidx.work.WorkManager.getInstance(context).cancelUniqueWork("DriveSyncBackup")
+                                                        androidx.work.WorkManager.getInstance(context).cancelUniqueWork("DriveSyncRestoreCheck")
+                                                        context.getSharedPreferences(eu.kanade.tachiyomi.data.sync.DriveSyncWorker.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                                                            .edit().clear().apply()
+                                                        navigator.pop()
+                                                    }
+                                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Outlined.Logout,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(22.dp),
+                                                )
+                                                Spacer(Modifier.width(16.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "Sign Out",
+                                                        fontSize = 15.5.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = MaterialTheme.colorScheme.error,
+                                                    )
+                                                    Spacer(Modifier.height(3.dp))
+                                                    Text(
+                                                        text = "Disconnect your account from this device",
+                                                        fontSize = 12.5.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        lineHeight = 17.sp,
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
-                                )
+                                }
                             }
                         }
                     }
@@ -581,6 +774,17 @@ class ProfileScreen : Screen {
                     if (showTrackerPicker) {
                         androidx.compose.material3.ModalBottomSheet(
                             onDismissRequest = { showTrackerPicker = false },
+                            shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+                            containerColor = MaterialTheme.colorScheme.background,
+                            dragHandle = {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 14.dp, bottom = 6.dp)
+                                        .size(width = 36.dp, height = 4.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                                )
+                            },
                             contentWindowInsets = { androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0) } 
                         ) {
                             eu.kanade.presentation.more.settings.PreferenceScreen(
@@ -917,71 +1121,57 @@ class ProfileScreen : Screen {
                         modifier = Modifier.padding(top = 16.dp, bottom = 48.dp)
                     )
                     
+                    if (authErrorMessage != null) {
+                        AlertDialog(
+                            onDismissRequest = { authErrorMessage = null },
+                            title = { Text("Sign-In Status") },
+                            text = { Text(authErrorMessage!!) },
+                            confirmButton = {
+                                TextButton(onClick = { authErrorMessage = null }) {
+                                    Text("OK")
+                                }
+                            }
+                        )
+                    }
+
                     // Sign In Button
                     Surface(
                         onClick = {
+                            if (isSigningIn) return@Surface
+                            isSigningIn = true
                             scope.launch {
+                                var credentialSuccess = false
                                 try {
+                                    val activity = context.findActivity() ?: (context as? android.app.Activity)
                                     val credentialManager = CredentialManager.create(context)
-                                    val request1: GetCredentialRequest = GetCredentialRequest.Builder()
+                                    val request = GetCredentialRequest.Builder()
                                         .addCredentialOption(GetGoogleIdOption.Builder()
-                                            .setFilterByAuthorizedAccounts(true)
+                                            .setFilterByAuthorizedAccounts(false)
                                             .setServerClientId(webClientId)
+                                            .setAutoSelectEnabled(false)
                                             .build())
                                         .build()
-                                        
-                                    val result = try {
-                                        credentialManager.getCredential(context, request1)
-                                    } catch (e: androidx.credentials.exceptions.NoCredentialException) {
-                                        val request2 = GetCredentialRequest.Builder()
-                                            .addCredentialOption(GetGoogleIdOption.Builder()
-                                                .setFilterByAuthorizedAccounts(false)
-                                                .setServerClientId(webClientId)
-                                                .build())
-                                            .build()
-                                        credentialManager.getCredential(context, request2)
-                                    }
+
+                                    val result = credentialManager.getCredential(activity ?: context, request)
                                     val credential = result.credential
                                     if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                                         val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                                        val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
-                                        FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).addOnCompleteListener { task ->
-                                            if (task.isSuccessful) {
-                                                Toast.makeText(context, "Signed in successfully!", Toast.LENGTH_SHORT).show()
-                                                
-                                                // Request Google Drive permission for sync immediately after login
-                                                  scope.launch {
-                                                      // Wait for their profile to be fully created/loaded first
-                                                      val currentUid = FirebaseAuth.getInstance().currentUser?.uid
-                                                      if (currentUid != null) {
-                                                          androidx.compose.runtime.snapshotFlow { cloudUser }.first { it != null }
-                                                      }
-                                                    when (val authResult = driveApiHelper.requestDriveAuthorization()) {
-                                                        is AuthorizationResult.NeedsConsent -> {
-                                                            // New device/account -> prompt for Drive permission
-                                                            val intentSenderRequest = IntentSenderRequest.Builder(authResult.pendingIntent).build()
-                                                            driveConsentLauncher.launch(intentSenderRequest)
-                                                        }
-                                                        is AuthorizationResult.Success -> {
-                                                            // Already authorized (silently got token) -> trigger restore check now!
-                                                            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context)
-                                                            if (navigator.size == 1) navigator.replaceAll(eu.kanade.tachiyomi.ui.home.HomeScreen)
-                                                        }
-                                                        is AuthorizationResult.Error -> {
-                                                            android.util.Log.e("ProfileScreen", "Drive Auth Error: ${authResult.message}")
-                                                            if (navigator.size == 1) navigator.replaceAll(eu.kanade.tachiyomi.ui.home.HomeScreen)
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                android.util.Log.e("ProfileScreen", "Auth Failed", task.exception)
-                                                Toast.makeText(context, "Firebase Auth Failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
-                                            }
+                                        val idToken = googleIdTokenCredential.idToken
+                                        if (idToken.isNotBlank()) {
+                                            credentialSuccess = true
+                                            signInWithFirebaseToken(idToken)
                                         }
                                     }
+                                } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+                                    android.util.Log.d("ProfileScreen", "User cancelled credential picker")
+                                    isSigningIn = false
+                                    return@launch
                                 } catch (e: Exception) {
-                                    android.util.Log.e("ProfileScreen", "Sign in failed", e)
-                                    Toast.makeText(context, "Sign in failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                    android.util.Log.w("ProfileScreen", "CredentialManager failed (${e::class.java.simpleName}: ${e.message}), trying legacy fallback...", e)
+                                }
+
+                                if (!credentialSuccess) {
+                                    launchLegacyGoogleSignIn()
                                 }
                             }
                         },
@@ -1013,19 +1203,26 @@ class ProfileScreen : Screen {
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Text(
-                                    text = "Sign in with Google",
+                                    text = if (isSigningIn) "Signing in..." else "Sign in with Google",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                             
-                            // Arrow icon
-                            Icon(
-                                androidx.compose.material.icons.Icons.Filled.ArrowForward,
-                                contentDescription = "Forward",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                            if (isSigningIn) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    androidx.compose.material.icons.Icons.Filled.ArrowForward,
+                                    contentDescription = "Forward",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
                 }

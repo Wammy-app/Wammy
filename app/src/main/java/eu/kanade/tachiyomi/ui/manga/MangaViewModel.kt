@@ -550,13 +550,16 @@ class MangaViewModel(
                 }
 
                 // Now check if user previously set categories, when available
-                // Filter categories based on content type (manga vs novel)
                 val isNovel = state.manga.isNovel
                 val contentType = if (isNovel) Category.CONTENT_TYPE_NOVEL else Category.CONTENT_TYPE_MANGA
                 val allCategories = getCategories()
-                // Show content-type specific + universal (CONTENT_TYPE_ALL) categories
-                val categories = allCategories.filter {
-                    it.contentType == contentType || it.contentType == Category.CONTENT_TYPE_ALL
+                val isJoinedLibrary = libraryPreferences.joinedLibrary.get()
+                val categories = if (isJoinedLibrary) {
+                    allCategories
+                } else {
+                    allCategories.filter {
+                        it.contentType == contentType || it.contentType == Category.CONTENT_TYPE_ALL
+                    }
                 }
                 // Normalize URL to ensure leading slash for JsSource/CustomNovelSource path convention
                 state.source?.let { src ->
@@ -598,14 +601,17 @@ class MangaViewModel(
 
     fun showChangeCategoryDialog() {
         val manga = successState?.manga ?: return
-        val source = successState?.source ?: return
         viewModelScope.launch {
-            // Filter categories based on content type (manga vs novel)
             val isNovel = manga.isNovel
             val contentType = if (isNovel) Category.CONTENT_TYPE_NOVEL else Category.CONTENT_TYPE_MANGA
             val allCategories = getCategories()
-            val categories = allCategories.filter {
-                it.contentType == contentType || it.contentType == Category.CONTENT_TYPE_ALL
+            val isJoinedLibrary = libraryPreferences.joinedLibrary.get()
+            val categories = if (isJoinedLibrary) {
+                allCategories
+            } else {
+                allCategories.filter {
+                    it.contentType == contentType || it.contentType == Category.CONTENT_TYPE_ALL
+                }
             }
             val selection = getMangaCategoryIds(manga)
             updateSuccessState { successState ->
@@ -701,11 +707,12 @@ class MangaViewModel(
     }
 
     fun moveMangaToCategoriesAndAddToLibrary(manga: Manga, categories: List<Long>) {
-        moveMangaToCategory(categories)
-        if (manga.favorite) return
-
         viewModelScope.launchIO {
-            updateManga.awaitUpdateFavorite(manga.id, true)
+            setMangaCategories.await(mangaId, categories)
+            if (!manga.favorite) {
+                updateManga.awaitUpdateFavorite(manga.id, true)
+                getLibraryManga.setCategoriesForManga(listOf(manga.id), categories)
+            }
             val context = uy.kohesive.injekt.Injekt.get<android.app.Application>()
             eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
         }
