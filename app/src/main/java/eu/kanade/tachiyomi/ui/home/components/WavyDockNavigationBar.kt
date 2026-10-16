@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.ui.home.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
@@ -16,6 +16,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -88,7 +89,7 @@ fun WavyDockNavigationBar(
     val barContent = cs.onSurface
     val selectedContainer = cs.primaryContainer
     val selectedContent = cs.onPrimaryContainer
-    val unselectedContent = cs.onSurfaceVariant
+    val unselectedContent = cs.onSurface.copy(alpha = 0.78f)
 
     val selectedIndex = remember(tabs, currentTab) {
         tabs.indexOfFirst { it::class == currentTab::class }.coerceAtLeast(0)
@@ -98,7 +99,7 @@ fun WavyDockNavigationBar(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(start = 8.dp, end = 8.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -112,9 +113,8 @@ fun WavyDockNavigationBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(50.dp)
                     .padding(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 tabs.forEachIndexed { index, tab ->
@@ -136,7 +136,6 @@ fun WavyDockNavigationBar(
                         isSelected = isSelected,
                         itemBackgroundColor = itemBackgroundColor,
                         itemContentColor = itemContentColor,
-                        moreThanFourTabs = tabs.size > 4,
                         onClick = { onTabSelected(tab) },
                         badgeContent = badgeContent,
                     )
@@ -145,10 +144,10 @@ fun WavyDockNavigationBar(
         }
 
         if (onReadingClick != null) {
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Surface(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(50.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -177,22 +176,30 @@ fun WavyDockNavigationBar(
 }
 
 @Composable
-private fun FloatingNavItem(
+private fun RowScope.FloatingNavItem(
     tab: Tab,
     isSelected: Boolean,
     itemBackgroundColor: Color,
     itemContentColor: Color,
-    moreThanFourTabs: Boolean,
     onClick: () -> Unit,
     badgeContent: @Composable ((Tab) -> Unit)?,
 ) {
     val title = tab.options.title
     val interactionSource = remember { MutableInteractionSource() }
 
+    val animatedWeight by animateFloatAsState(
+        targetValue = if (isSelected) 2.0f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "tabWeight",
+    )
+
     Box(
         modifier = Modifier
-            .height(42.dp)
-            .background(color = itemBackgroundColor, shape = CircleShape)
+            .weight(animatedWeight)
+            .height(50.dp)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -205,48 +212,53 @@ private fun FloatingNavItem(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Row(
-            modifier = Modifier.padding(
-                horizontal = if (isSelected) 10.dp else 6.dp,
-            ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+        Box(
+            modifier = Modifier
+                .height(38.dp)
+                .background(color = itemBackgroundColor, shape = CircleShape)
+                .padding(horizontal = if (isSelected) 8.dp else 2.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            TabIcon(
-                tab = tab,
-                title = title,
-                isSelected = isSelected,
-                contentColor = itemContentColor,
-                badgeContent = badgeContent,
-            )
-
-            AnimatedVisibility(
-                visible = isSelected,
-                enter = expandHorizontally(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
-                    expandFrom = Alignment.Start,
-                ) + fadeIn(animationSpec = tween(180)),
-                exit = shrinkHorizontally(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
-                    shrinkTowards = Alignment.Start,
-                ) + fadeOut(animationSpec = tween(120)),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
             ) {
-                Text(
-                    text = title,
-                    color = itemContentColor,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 4.dp),
+                TabIcon(
+                    tab = tab,
+                    title = title,
+                    isSelected = isSelected,
+                    contentColor = itemContentColor,
+                    badgeContent = badgeContent,
                 )
+
+                AnimatedVisibility(
+                    visible = isSelected,
+                    enter = expandHorizontally(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMedium,
+                        ),
+                        expandFrom = Alignment.Start,
+                    ) + fadeIn(animationSpec = tween(180)),
+                    exit = shrinkHorizontally(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMedium,
+                        ),
+                        shrinkTowards = Alignment.Start,
+                    ) + fadeOut(animationSpec = tween(120)),
+                ) {
+                    Text(
+                        text = title,
+                        color = itemContentColor,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                }
             }
         }
     }
