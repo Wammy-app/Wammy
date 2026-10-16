@@ -1,5 +1,6 @@
 package eu.kanade.presentation.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -10,7 +11,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
@@ -19,9 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import dev.icerock.moko.resources.StringResource
 import kotlinx.coroutines.launch
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -44,53 +45,59 @@ fun TabbedScreen(
             val tab = tabs[state.currentPage]
             val searchEnabled = tab.searchEnabled
 
-            SearchToolbar(
-                titleContent = { AppBarTitle(stringResource(titleRes)) },
-                searchEnabled = searchEnabled,
-                searchQuery = if (searchEnabled) searchQuery else null,
-                onChangeSearchQuery = onChangeSearchQuery,
-                actions = { AppBarActions(tab.actions) },
-            )
+            Column(
+                modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+            ) {
+                SearchToolbar(
+                    titleContent = { AppBarTitle(stringResource(titleRes)) },
+                    searchEnabled = searchEnabled,
+                    searchQuery = if (searchEnabled) searchQuery else null,
+                    onChangeSearchQuery = onChangeSearchQuery,
+                    actions = { AppBarActions(tab.actions) },
+                )
+                PrimaryScrollableTabRow(
+                    selectedTabIndex = state.currentPage,
+                    edgePadding = 8.dp,
+                    modifier = Modifier.layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        val overlap = 10.dp.roundToPx()
+                        layout(placeable.width, (placeable.height - overlap).coerceAtLeast(0)) {
+                            placeable.placeRelative(0, -overlap)
+                        }
+                    },
+                ) {
+                    tabs.forEachIndexed { index, tab ->
+                        val selected = state.currentPage == index
+                        Tab(
+                            selected = selected,
+                            onClick = { scope.launch { state.animateScrollToPage(index) } },
+                            selectedContentColor = MaterialTheme.colorScheme.primary,
+                            unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = {
+                                TabText(text = stringResource(tab.titleRes), badgeCount = tab.badgeNumber)
+                            },
+                        )
+                    }
+                }
+            }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { contentPadding ->
-        Column(
-            modifier = Modifier.padding(
-                top = contentPadding.calculateTopPadding(),
-                start = contentPadding.calculateStartPadding(LocalLayoutDirection.current),
-                end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
-            ),
-        ) {
-            androidx.compose.material3.PrimaryScrollableTabRow(
-                selectedTabIndex = state.currentPage,
-                edgePadding = 8.dp,
-                modifier = Modifier.zIndex(1f),
-                // Remove indicator={} to use default primary indicator
-            ) {
-                tabs.forEachIndexed { index, tab ->
-                    val selected = state.currentPage == index
-                    Tab(
-                        selected = selected,
-                        onClick = { scope.launch { state.animateScrollToPage(index) } },
-                        selectedContentColor = MaterialTheme.colorScheme.primary,
-                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        text = {
-                            TabText(text = stringResource(tab.titleRes), badgeCount = tab.badgeNumber)
-                        }
-                    )
-                }
-            }
-
-            HorizontalPager(
-                modifier = Modifier.fillMaxSize(),
-                state = state,
-                verticalAlignment = Alignment.Top,
-            ) { page ->
-                tabs[page].content(
-                    PaddingValues(bottom = contentPadding.calculateBottomPadding() + 84.dp),
-                    snackbarHostState,
-                )
-            }
+        HorizontalPager(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    top = contentPadding.calculateTopPadding(),
+                    start = contentPadding.calculateStartPadding(LocalLayoutDirection.current),
+                    end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
+                ),
+            state = state,
+            verticalAlignment = Alignment.Top,
+        ) { page ->
+            tabs[page].content(
+                PaddingValues(bottom = contentPadding.calculateBottomPadding() + 84.dp),
+                snackbarHostState,
+            )
         }
     }
 }
