@@ -135,10 +135,10 @@ fun HeroFeaturedCardSkeleton(
                     .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.Top,
             ) {
-                // Cover poster placeholder (compact 88dp, 3:4)
+                // Cover poster placeholder (108dp, 3:4)
                 Box(
                     modifier = Modifier
-                        .width(88.dp)
+                        .width(108.dp)
                         .aspectRatio(3f / 4f)
                         .clip(RoundedCornerShape(10.dp))
                         .background(shimmerBrush),

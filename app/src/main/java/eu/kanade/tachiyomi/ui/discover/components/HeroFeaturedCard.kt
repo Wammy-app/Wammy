@@ -197,8 +197,8 @@ fun HeroFeaturedCard(
         }
     }
 
-    val gradientEndY = with(density) { 160.dp.toPx() }
-    val borderEndY = with(density) { 90.dp.toPx() }
+    val gradientEndY = with(density) { 200.dp.toPx() }
+    val borderEndY = with(density) { 110.dp.toPx() }
 
     Surface(
         modifier = modifier
@@ -244,7 +244,7 @@ fun HeroFeaturedCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 6.dp),
+                        .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -324,7 +324,7 @@ fun HeroFeaturedCard(
                     }
                 }
 
-                // Pager Body: Compact 2-column layout
+                // Pager Body: 2-column layout
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxWidth(),
@@ -366,15 +366,15 @@ fun HeroFeaturedCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onClick(manga) }
-                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                            .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
                         verticalAlignment = Alignment.Top,
                     ) {
                         // Left Column: Clean rounded poster cover
                         Box(
                             modifier = Modifier
-                                .width(88.dp)
-                                .aspectRatio(3.2f / 4f)
-                                .clip(RoundedCornerShape(8.dp)),
+                                .width(108.dp)
+                                .aspectRatio(3f / 4f)
+                                .clip(RoundedCornerShape(10.dp)),
                         ) {
                             AsyncImage(
                                 model = coverData,
@@ -508,7 +508,7 @@ fun HeroFeaturedCard(
                                 }
                             }
 
-                            // Synopsis / Description (max 2 lines)
+                            // Synopsis / Description (max 3 lines)
                             val description = manga.description?.trim().orEmpty()
                             if (description.isNotBlank()) {
                                 Text(
@@ -518,7 +518,7 @@ fun HeroFeaturedCard(
                                         lineHeight = 14.sp,
                                     ),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                                    maxLines = 2,
+                                    maxLines = 3,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
