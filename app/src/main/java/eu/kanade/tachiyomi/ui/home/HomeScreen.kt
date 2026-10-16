@@ -83,6 +83,12 @@ import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import eu.kanade.tachiyomi.ui.news.NewsTab
+import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.tachiyomi.util.system.toast
+import tachiyomi.core.common.util.lang.withIOContext
+import tachiyomi.domain.history.interactor.GetNextChapters
+import tachiyomi.domain.history.repository.HistoryRepository
 
 object HomeScreen : Screen() {
 
@@ -102,6 +108,7 @@ object HomeScreen : Screen() {
         LibraryTab,
         HistoryTab,
         BrowseTab,
+        NewsTab,
         MoreTab,
     )
 
@@ -110,6 +117,7 @@ object HomeScreen : Screen() {
         NovelsTab,
         HistoryTab,
         BrowseTab,
+        NewsTab,
         MoreTab,
     )
 
@@ -123,6 +131,8 @@ object HomeScreen : Screen() {
         val driveApiHelper: DriveApiHelper = remember { Injekt.get() }
         val context = androidx.compose.ui.platform.LocalContext.current
         val repo: FirestoreUserRepository = remember { Injekt.get() }
+        val historyRepository: HistoryRepository = remember { Injekt.get() }
+        val getNextChapters: GetNextChapters = remember { Injekt.get() }
         
         LaunchedEffect(Unit) {
             (context as? eu.kanade.tachiyomi.ui.main.MainActivity)?.ready = true
@@ -212,8 +222,36 @@ object HomeScreen : Screen() {
                                         scope.launch { tab.onReselect(navigator) }
                                     }
                                 },
-                                onNewsClick = {
-                                    navigator.push(eu.kanade.presentation.news.NewsScreen())
+                                onReadingClick = {
+                                    scope.launch {
+                                        try {
+                                            val lastHistory = withIOContext { historyRepository.getLastHistory() }
+                                            if (lastHistory != null) {
+                                                val targetChapter = withIOContext {
+                                                    if (!lastHistory.chapterRead) {
+                                                        null
+                                                    } else {
+                                                        getNextChapters.await(
+                                                            lastHistory.mangaId,
+                                                            lastHistory.chapterId,
+                                                            onlyUnread = true,
+                                                        ).firstOrNull()
+                                                    }
+                                                }
+                                                val (mangaId, chapterId) = if (targetChapter != null) {
+                                                    targetChapter.mangaId to targetChapter.id
+                                                } else {
+                                                    lastHistory.mangaId to lastHistory.chapterId
+                                                }
+                                                context.startActivity(ReaderActivity.newIntent(context, mangaId, chapterId))
+                                            } else {
+                                                context.toast(MR.strings.no_next_chapter)
+                                            }
+                                        } catch (e: Throwable) {
+                                            android.util.Log.e("HomeScreen", "Error resuming reading", e)
+                                            context.toast(MR.strings.no_next_chapter)
+                                        }
+                                    }
                                 },
                                 badgeContent = { tab ->
                                     when {
@@ -308,6 +346,7 @@ object HomeScreen : Screen() {
                                 }
                                 BrowseTab
                             }
+                            Tab.News -> NewsTab
                             is Tab.More -> MoreTab
                         }
 
@@ -453,6 +492,7 @@ object HomeScreen : Screen() {
         data object Updates : Tab
         data object History : Tab
         data class Browse(val toExtensions: Boolean = false) : Tab
+        data object News : Tab
         data class More(val toDownloads: Boolean) : Tab
     }
 }

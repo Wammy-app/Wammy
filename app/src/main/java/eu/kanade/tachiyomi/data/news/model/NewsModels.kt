@@ -16,7 +16,7 @@ data class NewsItem(
     val trailerUrl: String? = null,
     val trailerUrls: List<String> = emptyList(),
     val source: String = "Anime News Network",
-)
+) : java.io.Serializable
 
 @Keep
 @Serializable
@@ -32,7 +32,7 @@ data class NewsArticle(
     val trailerUrls: List<String> = emptyList(),
     val source: String = "Anime News Network",
     val content: List<String> = emptyList(),
-)
+) : java.io.Serializable
 
 @Keep
 @Serializable

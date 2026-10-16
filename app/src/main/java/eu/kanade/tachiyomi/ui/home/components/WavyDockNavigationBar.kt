@@ -68,8 +68,10 @@ import eu.kanade.tachiyomi.ui.more.MoreTab
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Newspaper
 import androidx.compose.ui.draw.clip
+import eu.kanade.tachiyomi.ui.news.NewsTab
 
 @Composable
 fun WavyDockNavigationBar(
@@ -78,7 +80,7 @@ fun WavyDockNavigationBar(
     onTabSelected: (Tab) -> Unit,
     modifier: Modifier = Modifier,
     badgeContent: @Composable ((Tab) -> Unit)? = null,
-    onNewsClick: (() -> Unit)? = null,
+    onReadingClick: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     // DropSauce design tokens dynamically mapped to MaterialTheme
@@ -96,7 +98,7 @@ fun WavyDockNavigationBar(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(horizontal = 4.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -109,8 +111,8 @@ fun WavyDockNavigationBar(
         ) {
             Row(
                 modifier = Modifier
-                    .heightIn(min = 58.dp)
-                    .padding(horizontal = 6.dp, vertical = 6.dp)
+                    .heightIn(min = 50.dp)
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
                     .animateContentSize(
                         animationSpec = spring(
                             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -147,18 +149,18 @@ fun WavyDockNavigationBar(
             }
         }
 
-        if (onNewsClick != null) {
-            Spacer(modifier = Modifier.width(6.dp))
+        if (onReadingClick != null) {
+            Spacer(modifier = Modifier.width(4.dp))
             Surface(
                 modifier = Modifier
-                    .size(54.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = androidx.compose.material3.ripple(),
-                        onClick = onNewsClick,
+                        onClick = onReadingClick,
                     ),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = selectedContainer,
                 contentColor = selectedContent,
                 shadowElevation = 4.dp,
@@ -168,9 +170,9 @@ fun WavyDockNavigationBar(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Newspaper,
-                        contentDescription = "Anime & Manga News",
-                        modifier = Modifier.size(24.dp),
+                        imageVector = Icons.AutoMirrored.Outlined.MenuBook,
+                        contentDescription = "Resume Reading",
+                        modifier = Modifier.size(22.dp),
                         tint = selectedContent,
                     )
                 }
@@ -194,7 +196,7 @@ private fun FloatingNavItem(
 
     Box(
         modifier = Modifier
-            .height(46.dp)
+            .height(38.dp)
             .background(color = itemBackgroundColor, shape = CircleShape)
             .clickable(
                 interactionSource = interactionSource,
@@ -211,9 +213,9 @@ private fun FloatingNavItem(
         Row(
             modifier = Modifier.padding(
                 horizontal = if (moreThanFourTabs) {
-                    if (isSelected) 10.dp else 6.dp
+                    if (isSelected) 8.dp else 4.dp
                 } else {
-                    12.dp
+                    10.dp
                 },
             ),
             verticalAlignment = Alignment.CenterVertically,
@@ -247,12 +249,12 @@ private fun FloatingNavItem(
                 Text(
                     text = title,
                     color = itemContentColor,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier.padding(start = 6.dp),
                 )
             }
         }
@@ -272,6 +274,7 @@ private fun TabIcon(
             is DiscoverTab -> Pair(Icons.Filled.Home, Icons.Outlined.Home)
             is HistoryTab -> Pair(Icons.Filled.History, Icons.Outlined.History)
             is BrowseTab -> Pair(Icons.Filled.Explore, Icons.Outlined.Explore)
+            is NewsTab -> Pair(Icons.Outlined.Newspaper, Icons.Outlined.Newspaper)
             is MoreTab -> Pair(Icons.Filled.MoreHoriz, Icons.Outlined.MoreHoriz)
             else -> Pair(null, null)
         }
@@ -284,7 +287,7 @@ private fun TabIcon(
                 imageVector = vector,
                 contentDescription = title,
                 tint = contentColor,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(20.dp),
             )
         } else {
             val painter = tab.options.icon ?: rememberVectorPainter(Icons.Outlined.CollectionsBookmark)
@@ -292,7 +295,7 @@ private fun TabIcon(
                 painter = painter,
                 contentDescription = title,
                 tint = contentColor,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(20.dp),
             )
         }
     }

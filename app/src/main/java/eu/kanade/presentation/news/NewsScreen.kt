@@ -35,6 +35,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.news.components.NewsCard
+import eu.kanade.tachiyomi.ui.news.NewsState
 import eu.kanade.tachiyomi.ui.news.NewsViewModel
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -79,77 +80,98 @@ class NewsScreen : Screen {
                 )
             },
         ) { contentPadding ->
-            PullRefresh(
-                refreshing = state.isRefreshing,
+            NewsContent(
+                state = state,
+                contentPadding = contentPadding,
                 onRefresh = { viewModel.loadNews(forceRefresh = true) },
-                enabled = !state.isLoading,
-            ) {
-                when {
-                    state.isLoading -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(contentPadding),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                    state.error != null && state.items.isEmpty() -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(contentPadding)
-                                .padding(24.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Newspaper,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(bottom = 12.dp),
-                                )
-                                Text(
-                                    text = state.error ?: "Unable to load news",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(onClick = { viewModel.loadNews(forceRefresh = true) }) {
-                                    Text("Retry")
-                                }
-                            }
-                        }
-                    }
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(contentPadding),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            items(
-                                items = state.items,
-                                key = { it.id.ifBlank { it.url } },
-                            ) { item ->
-                                val relativeTime = viewModel.formatRelativeTime(item.publishedAt)
-                                NewsCard(
-                                    item = item,
-                                    relativeTime = relativeTime,
-                                    onClick = {
-                                        navigator.push(NewsArticleScreen(item, relativeTime))
-                                    },
-                                )
-                            }
+                formatRelativeTime = { viewModel.formatRelativeTime(it) },
+                onArticleClick = { item, relativeTime ->
+                    navigator.push(NewsArticleScreen(item, relativeTime))
+                },
+            )
+        }
+    }
+}
 
-                            item {
-                                Spacer(modifier = Modifier.height(84.dp))
-                            }
+@Composable
+fun NewsContent(
+    state: NewsState,
+    contentPadding: PaddingValues,
+    onRefresh: () -> Unit,
+    formatRelativeTime: (String) -> String,
+    onArticleClick: (eu.kanade.tachiyomi.data.news.model.NewsItem, String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    PullRefresh(
+        refreshing = state.isRefreshing,
+        onRefresh = onRefresh,
+        enabled = !state.isLoading,
+        modifier = modifier,
+    ) {
+        when {
+            state.isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(contentPadding),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            state.error != null && state.items.isEmpty() -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(contentPadding)
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Newspaper,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 12.dp),
+                        )
+                        Text(
+                            text = state.error ?: "Unable to load news",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = onRefresh) {
+                            Text("Retry")
                         }
+                    }
+                }
+            }
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(contentPadding),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    items(
+                        items = state.items,
+                        key = { it.id.ifBlank { it.url } },
+                    ) { item ->
+                        val relativeTime = formatRelativeTime(item.publishedAt)
+                        NewsCard(
+                            item = item,
+                            relativeTime = relativeTime,
+                            onClick = {
+                                onArticleClick(item, relativeTime)
+                            },
+                        )
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(84.dp))
                     }
                 }
             }
