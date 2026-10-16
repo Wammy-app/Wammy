@@ -113,7 +113,7 @@ fun WavyDockNavigationBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                    .padding(start = 6.dp, end = 10.dp, top = 4.dp, bottom = 4.dp)
                     .animateContentSize(
                         animationSpec = spring(
                             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -213,7 +213,7 @@ private fun FloatingNavItem(
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = if (isSelected) 12.dp else 8.dp,
+                horizontal = if (isSelected) 12.dp else if (tab is MoreTab) 6.dp else 8.dp,
             ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
@@ -272,19 +272,20 @@ private fun TabIcon(
             is HistoryTab -> Pair(Icons.Filled.History, Icons.Outlined.History)
             is BrowseTab -> Pair(Icons.Filled.Explore, Icons.Outlined.Explore)
             is NewsTab -> Pair(Icons.Outlined.Newspaper, Icons.Outlined.Newspaper)
-            is MoreTab -> Pair(Icons.Filled.MoreHoriz, Icons.Outlined.MoreHoriz)
+            is MoreTab -> Pair(Icons.Filled.MoreHoriz, Icons.Filled.MoreHoriz)
             else -> Pair(null, null)
         }
     }
 
     val iconComposable: @Composable () -> Unit = {
+        val iconSize = if (tab is MoreTab) 26.dp else 22.dp
         if (filledIcon != null && outlinedIcon != null) {
             val vector = if (isSelected) filledIcon else outlinedIcon
             Icon(
                 imageVector = vector,
                 contentDescription = title,
                 tint = contentColor,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(iconSize),
             )
         } else {
             val painter = tab.options.icon ?: rememberVectorPainter(Icons.Outlined.CollectionsBookmark)
@@ -292,7 +293,7 @@ private fun TabIcon(
                 painter = painter,
                 contentDescription = title,
                 tint = contentColor,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(iconSize),
             )
         }
     }
