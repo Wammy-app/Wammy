@@ -1,4 +1,4 @@
-﻿package eu.kanade.presentation.webview
+package eu.kanade.presentation.webview
 
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
@@ -342,9 +342,13 @@ fun WebViewScreenContent(
                         WebView.setWebContentsDebuggingEnabled(true)
                     }
 
-                    webView.setUserAgent(headers["user-agent"] ?: defaultUserAgentProvider())
+                    val customUa = headers.entries.firstOrNull { it.key.equals("user-agent", ignoreCase = true) }?.value
+                    webView.setUserAgent(if (!customUa.isNullOrBlank()) customUa else defaultUserAgentProvider())
                 },
                 onDispose = { webView ->
+                    try {
+                        android.webkit.CookieManager.getInstance().flush()
+                    } catch (_: Exception) {}
                     val window = windowStack.items.find { it.webView == webView }
                     if (window == null) {
                         // If we couldn't find any window on the stack that owns this WebView, it means that we can

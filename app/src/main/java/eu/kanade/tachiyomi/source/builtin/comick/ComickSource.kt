@@ -39,7 +39,6 @@ class ComickSource(
         get() = network.client
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
         .add("Referer", "$baseUrl/")
 
     // =========================== Popular ===========================

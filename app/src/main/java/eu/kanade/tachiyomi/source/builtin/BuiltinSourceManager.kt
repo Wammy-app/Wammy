@@ -81,7 +81,7 @@ class BuiltinSourceManager(
         BuiltinSourceRecord(
             id = 80010004L,
             name = "Asura Comic",
-            baseUrl = "https://asuracomic.net",
+            baseUrl = "https://asurascans.com",
             lang = "en",
             engineType = BuiltinEngineType.MADARA,
             isDefaultEnabled = true,

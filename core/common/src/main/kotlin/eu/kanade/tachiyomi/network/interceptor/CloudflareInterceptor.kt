@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.network.interceptor
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -21,6 +22,7 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class CloudflareInterceptor(
     private val context: Context,
@@ -31,22 +33,50 @@ class CloudflareInterceptor(
     private val executor = ContextCompat.getMainExecutor(context)
 
     override fun shouldIntercept(response: Response): Boolean {
-        // Check if Cloudflare anti-bot is on
-        return if (response.code in ERROR_CODES && response.header("Server") in SERVER_CHECK) {
-            if (response.header("cf-mitigated")?.equals("challenge", ignoreCase = true) == true) {
-                return true
-            }
-            val document = Jsoup.parse(
-                response.peekBody(Long.MAX_VALUE).string(),
-                response.request.url.toString(),
-            )
+        // Only 403 and 503 can be Cloudflare challenge responses
+        if (response.code !in ERROR_CODES) return false
 
-            // solve with webview only on captcha, not on geo block
-            document.getElementById("challenge-error-title") != null ||
-                document.getElementById("challenge-error-text") != null
-        } else {
-            false
+        val serverHeader = response.header("Server").orEmpty().lowercase()
+        val isCloudflareServer = SERVER_CHECK.any { serverHeader.contains(it) }
+        val hasCfHeaders = response.header("cf-mitigated")?.equals("challenge", ignoreCase = true) == true ||
+            response.header("cf-ray") != null ||
+            response.header("cf-chl-bypass") != null
+
+        if (!isCloudflareServer && !hasCfHeaders) {
+            return false
         }
+
+        if (response.header("cf-mitigated")?.equals("challenge", ignoreCase = true) == true) {
+            return true
+        }
+
+        val bodySample = try {
+            response.peekBody(256 * 1024L).string()
+        } catch (_: Exception) {
+            ""
+        }
+
+        if (bodySample.contains("_cf_chl_opt") ||
+            bodySample.contains("/challenge-platform/") ||
+            bodySample.contains("challenges.cloudflare.com")
+        ) {
+            return true
+        }
+
+        val document = Jsoup.parse(bodySample, response.request.url.toString())
+        val title = document.title()
+        if (title.contains("Just a moment", ignoreCase = true) ||
+            title.contains("Attention Required", ignoreCase = true)
+        ) {
+            return true
+        }
+
+        return document.getElementById("challenge-error-title") != null ||
+            document.getElementById("challenge-error-text") != null ||
+            document.getElementById("challenge-form") != null ||
+            document.getElementById("challenge-stage") != null ||
+            document.getElementById("turnstile-wrapper") != null ||
+            document.getElementsByClass("cf-turnstile").isNotEmpty()
     }
 
     override fun intercept(
@@ -56,9 +86,9 @@ class CloudflareInterceptor(
     ): Response {
         try {
             response.close()
-            cookieManager.remove(request.url, COOKIE_NAMES, 0)
             val oldCookie = cookieManager.get(request.url)
                 .firstOrNull { it.name == "cf_clearance" }
+            cookieManager.remove(request.url, COOKIE_NAMES, 0)
             resolveWithWebView(request, oldCookie)
 
             return chain.proceed(request)
@@ -79,57 +109,89 @@ class CloudflareInterceptor(
         val latch = CountDownLatch(1)
 
         var webview: WebView? = null
-
-        var challengeFound = false
         var cloudflareBypassed = false
         var isWebViewOutdated = false
 
         val origRequestUrl = originalRequest.url.toString()
+        val httpUrl = origRequestUrl.toHttpUrl()
         val headers = parseHeaders(originalRequest.headers)
 
+        fun isClearancePassed(): Boolean {
+            val clearance = cookieManager.get(httpUrl)
+                .firstOrNull { it.name == "cf_clearance" && it.value.isNotBlank() }
+            return clearance != null && (oldCookie == null || clearance.value != oldCookie.value)
+        }
+
         executor.execute {
-            webview = createWebView(originalRequest)
-
-            webview.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String) {
-                    fun isCloudFlareBypassed(): Boolean {
-                        return cookieManager.get(origRequestUrl.toHttpUrl())
-                            .firstOrNull { it.name == "cf_clearance" }
-                            .let { it != null && it != oldCookie }
-                    }
-
-                    if (isCloudFlareBypassed()) {
-                        cloudflareBypassed = true
-                        latch.countDown()
-                    }
-
-                    if (url == origRequestUrl && !challengeFound) {
-                        // The first request didn't return the challenge, abort.
-                        latch.countDown()
-                    }
+            try {
+                webview = createWebView(originalRequest).apply {
+                    onResume()
+                    resumeTimers()
                 }
 
-                override fun onReceivedHttpError(
-                    view: WebView?,
-                    request: WebResourceRequest?,
-                    errorResponse: WebResourceResponse?,
-                ) {
-                    if (request?.isForMainFrame == true) {
-                        if (errorResponse?.statusCode in ERROR_CODES) {
-                            // Found the Cloudflare challenge page.
-                            challengeFound = true
-                        } else {
-                            // Unlock thread, the challenge wasn't found.
+                webview?.webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                        super.onPageStarted(view, url, favicon)
+                        if (isClearancePassed()) {
+                            cloudflareBypassed = true
+                            latch.countDown()
+                        }
+                    }
+
+                    override fun onPageFinished(view: WebView, url: String) {
+                        super.onPageFinished(view, url)
+                        if (isClearancePassed()) {
+                            cloudflareBypassed = true
+                            latch.countDown()
+                        }
+                    }
+
+                    override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                        super.doUpdateVisitedHistory(view, url, isReload)
+                        if (isClearancePassed()) {
+                            cloudflareBypassed = true
+                            latch.countDown()
+                        }
+                    }
+
+                    override fun onReceivedHttpError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        errorResponse: WebResourceResponse?,
+                    ) {
+                        if (isClearancePassed()) {
+                            cloudflareBypassed = true
                             latch.countDown()
                         }
                     }
                 }
-            }
 
-            webview.loadUrl(origRequestUrl, headers)
+                webview?.loadUrl(origRequestUrl, headers)
+            } catch (_: Exception) {
+                latch.countDown()
+            }
         }
 
-        latch.awaitFor30Seconds()
+        // Active polling loop: Checks CookieManager every 250ms for up to 25 seconds
+        val startTime = System.currentTimeMillis()
+        val timeoutMs = 25_000L
+        val pollIntervalMs = 250L
+
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            if (isClearancePassed()) {
+                cloudflareBypassed = true
+                latch.countDown()
+                break
+            }
+            if (latch.await(pollIntervalMs, TimeUnit.MILLISECONDS)) {
+                break
+            }
+        }
+
+        // Flush cookies so OkHttp sees them immediately
+        try {
+            android.webkit.CookieManager.getInstance().flush()
+        } catch (_: Exception) {}
 
         executor.execute {
             if (!cloudflareBypassed) {
@@ -138,6 +200,7 @@ class CloudflareInterceptor(
 
             webview?.run {
                 stopLoading()
+                pauseTimers()
                 destroy()
             }
         }
