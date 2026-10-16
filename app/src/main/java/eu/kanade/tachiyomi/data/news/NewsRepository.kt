@@ -4,6 +4,7 @@ import android.util.Log
 import eu.kanade.tachiyomi.data.news.model.NewsArticle
 import eu.kanade.tachiyomi.data.news.model.NewsFeedResponse
 import eu.kanade.tachiyomi.data.news.model.NewsItem
+import eu.kanade.tachiyomi.data.news.model.extractYouTubeVideoId
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -109,8 +110,29 @@ class NewsRepository(
                     val bodyString = response.body.string()
                     val article = json.decodeFromString<NewsArticle>(bodyString)
                     if (article.title.isNotBlank()) {
-                        articleCache[url] = Pair(article, now)
-                        return@withContext Result.success(article)
+                        val finalArticle = if (article.trailerUrl.isNullOrBlank() && article.trailerUrls.isEmpty()) {
+                            val candidateImages = listOfNotNull(article.imageUrl) + article.images
+                            var fallbackTrailer: String? = null
+                            for (img in candidateImages) {
+                                val ytId = extractYouTubeVideoId(img)
+                                if (ytId != null) {
+                                    fallbackTrailer = "https://www.youtube.com/embed/$ytId"
+                                    break
+                                }
+                            }
+                            if (fallbackTrailer != null) {
+                                article.copy(
+                                    trailerUrl = fallbackTrailer,
+                                    trailerUrls = listOf(fallbackTrailer),
+                                )
+                            } else {
+                                article
+                            }
+                        } else {
+                            article
+                        }
+                        articleCache[url] = Pair(finalArticle, now)
+                        return@withContext Result.success(finalArticle)
                     }
                 }
             }
@@ -280,8 +302,41 @@ class NewsRepository(
                 // Trailers
                 scope.select("iframe, div[data-youtube-id]").forEach { el ->
                     val src = el.attr("src").ifBlank { el.attr("data-src") }
-                    if (src.contains("youtube") || src.contains("youtu.be")) {
-                        trailers.add(src)
+                    val ytId = extractYouTubeVideoId(src)
+                    if (ytId != null) {
+                        val embed = "https://www.youtube.com/embed/$ytId"
+                        if (!trailers.contains(embed)) trailers.add(embed)
+                    }
+                }
+            }
+
+            // Document-wide trailer detection (e.g. ANN / Anime Corner PV links or iframes)
+            doc.select("iframe, a, div[data-video-id], div[data-youtube-id]").forEach { el ->
+                val candidate = el.attr("src")
+                    .ifBlank { el.attr("data-src") }
+                    .ifBlank { el.attr("data-lazy-src") }
+                    .ifBlank { el.attr("href") }
+                    .ifBlank { el.attr("data-video-id") }
+                    .ifBlank { el.attr("data-youtube-id") }
+
+                val ytId = extractYouTubeVideoId(candidate)
+                if (ytId != null) {
+                    val embedUrl = "https://www.youtube.com/embed/$ytId"
+                    if (!trailers.contains(embedUrl)) {
+                        trailers.add(embedUrl)
+                    }
+                }
+            }
+
+            // Fallback: Check ogImage and bodyImages for YouTube thumbnails
+            if (trailers.isEmpty()) {
+                val allImageCandidates = listOf(ogImage) + bodyImages
+                for (img in allImageCandidates) {
+                    val ytId = extractYouTubeVideoId(img)
+                    if (ytId != null) {
+                        val embedUrl = "https://www.youtube.com/embed/$ytId"
+                        trailers.add(embedUrl)
+                        break
                     }
                 }
             }

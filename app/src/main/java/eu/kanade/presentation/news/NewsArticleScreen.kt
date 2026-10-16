@@ -60,6 +60,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.news.components.FormattedNewsParagraph
+import eu.kanade.presentation.news.components.NewsVideoPlayer
 import eu.kanade.tachiyomi.data.news.model.NewsItem
 import eu.kanade.tachiyomi.ui.news.NewsArticleViewModel
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -308,56 +309,26 @@ class NewsArticleScreen(
                     }
                 }
 
-                // 8. Video Trailer Preview Card (if PV exists)
-                val trailer = article.trailerUrl?.takeIf { it.isNotBlank() }
-                    ?: article.trailerUrls.firstOrNull { it.isNotBlank() }
-                if (!trailer.isNullOrBlank()) {
+                // 8. Video Trailer(s) with embedded player
+                val trailers = (article.trailerUrls.ifEmpty { listOfNotNull(article.trailerUrl) })
+                    .filter { it.isNotBlank() }
+                    .distinct()
+
+                if (trailers.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                .padding(16.dp),
-                        ) {
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.PlayCircleOutline,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(22.dp),
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Official Video Trailer",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                        ),
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Watch the teaser promotional video for this announcement.",
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    ),
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Button(
-                                    onClick = {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(trailer))
-                                        context.startActivity(intent)
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                    ),
-                                ) {
-                                    Text("Watch Trailer")
-                                }
-                            }
+                    }
+                    itemsIndexed(trailers) { index, trailerUrl ->
+                        val trailerTitle = if (trailers.size > 1) {
+                            "Official Video Trailer (${index + 1})"
+                        } else {
+                            "Official Video Trailer"
                         }
+                        NewsVideoPlayer(
+                            videoUrl = trailerUrl,
+                            title = trailerTitle,
+                            modifier = Modifier.padding(bottom = 12.dp),
+                        )
                     }
                 }
 
