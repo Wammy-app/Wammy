@@ -43,8 +43,12 @@ import eu.kanade.tachiyomi.data.sync.AuthorizationResult
 import eu.kanade.tachiyomi.data.sync.DriveApiHelper
 import eu.kanade.tachiyomi.data.sync.DriveSyncWorker
 import eu.kanade.tachiyomi.ui.home.HomeScreen
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -113,43 +117,54 @@ fun LoginBottomSheet(
     fun signInWithFirebaseToken(idToken: String) {
         isSigningIn = true
         val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
-        FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                val appContext = context.applicationContext
-                kotlinx.coroutines.CoroutineScope(Dispatchers.Main).launch {
-                    try {
-                        when (val authResult = driveApiHelper.requestDriveAuthorization()) {
-                            is AuthorizationResult.NeedsConsent -> {
-                                val intentSenderRequest = IntentSenderRequest.Builder(authResult.pendingIntent).build()
-                                driveConsentLauncher.launch(intentSenderRequest)
-                                // Do not mark initial login complete yet; consent launcher will dismiss
-                            }
-                            is AuthorizationResult.Success -> {
-                                isSigningIn = false
-                                basePreferences.hasCompletedInitialLogin.set(true)
-                                Toast.makeText(context, "Signed in successfully! Checking for restore...", Toast.LENGTH_SHORT).show()
-                                DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
-                                DriveSyncWorker.schedulePeriodicBackup(appContext)
-                            }
-                            is AuthorizationResult.Error -> {
-                                isSigningIn = false
-                                basePreferences.hasCompletedInitialLogin.set(true)
-                                android.util.Log.e("LoginSheet", "Drive Auth Error: ${authResult.message}")
-                                DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        isSigningIn = false
-                        basePreferences.hasCompletedInitialLogin.set(true)
-                        android.util.Log.e("LoginSheet", "Drive Auth Exception", e)
-                        DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
-                    }
+        scope.launch {
+            try {
+                val authResult = withTimeoutOrNull(15_000L) {
+                    FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).await()
                 }
-            } else {
+                if (authResult == null) {
+                    isSigningIn = false
+                    authErrorMessage = "Connection timed out while authenticating with Firebase.\n\nPlease check your internet connection, or disable any active Private DNS/adblockers and try again."
+                    return@launch
+                }
+
+                val appContext = context.applicationContext
+                try {
+                    when (val driveResult = withTimeoutOrNull(10_000L) { driveApiHelper.requestDriveAuthorization() }) {
+                        is AuthorizationResult.NeedsConsent -> {
+                            val intentSenderRequest = IntentSenderRequest.Builder(driveResult.pendingIntent).build()
+                            driveConsentLauncher.launch(intentSenderRequest)
+                        }
+                        is AuthorizationResult.Success -> {
+                            isSigningIn = false
+                            basePreferences.hasCompletedInitialLogin.set(true)
+                            Toast.makeText(context, "Signed in successfully! Checking for restore...", Toast.LENGTH_SHORT).show()
+                            DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
+                            DriveSyncWorker.schedulePeriodicBackup(appContext)
+                        }
+                        is AuthorizationResult.Error -> {
+                            isSigningIn = false
+                            basePreferences.hasCompletedInitialLogin.set(true)
+                            android.util.Log.e("LoginSheet", "Drive Auth Error: ${driveResult.message}")
+                            DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
+                        }
+                        null -> {
+                            isSigningIn = false
+                            basePreferences.hasCompletedInitialLogin.set(true)
+                            Toast.makeText(context, "Signed in! Google Drive sync can be connected in settings.", Toast.LENGTH_SHORT).show()
+                            DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
+                        }
+                    }
+                } catch (e: Exception) {
+                    isSigningIn = false
+                    basePreferences.hasCompletedInitialLogin.set(true)
+                    android.util.Log.e("LoginSheet", "Drive Auth Exception", e)
+                    DriveSyncWorker.scheduleRestoreCheck(appContext, immediate = true)
+                }
+            } catch (ex: Exception) {
                 isSigningIn = false
-                val ex = task.exception
                 android.util.Log.e("LoginSheet", "Firebase Auth Failed", ex)
-                authErrorMessage = "Firebase Authentication Failed:\n\n${ex?.localizedMessage ?: ex?.message ?: "Unknown Firebase error"}\n\nPlease verify that the Google sign-in provider is enabled in Firebase Console (Authentication -> Sign-in method)."
+                authErrorMessage = "Firebase Authentication Failed:\n\n${ex.localizedMessage ?: ex.message ?: "Unknown Firebase error"}\n\nPlease check your internet connection."
             }
         }
     }
@@ -204,19 +219,36 @@ fun LoginBottomSheet(
                 .requestScopes(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive.appdata"))
                 .build()
             val client = GoogleSignIn.getClient(context, gso)
-            client.signOut().addOnCompleteListener {
-                legacyGoogleSignInLauncher.launch(client.signInIntent)
-            }
+            // Non-blocking best-effort sign-out so account picker resets without stalling
+            try { client.signOut() } catch (_: Exception) {}
+            // Launch sign-in picker immediately without waiting on an async callback
+            legacyGoogleSignInLauncher.launch(client.signInIntent)
         } catch (e: Exception) {
             isSigningIn = false
             android.util.Log.e("LoginSheet", "Failed to launch legacy Google Sign In", e)
-            authErrorMessage = "Google Play Services sign-in unavailable:\n${e.message}"
+            authErrorMessage = "Google Play Services sign-in unavailable on this device:\n${e.message}"
         }
     }
 
     fun startGoogleSignIn() {
         if (isSigningIn) return
         isSigningIn = true
+
+        // 1. Pre-flight check: Is Google Play Services installed and operational on this device?
+        val gmsAvailability = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
+        if (gmsAvailability != ConnectionResult.SUCCESS) {
+            isSigningIn = false
+            val reason = when (gmsAvailability) {
+                ConnectionResult.SERVICE_MISSING -> "Google Play Services is not installed on this device."
+                ConnectionResult.SERVICE_DISABLED -> "Google Play Services is disabled on this device."
+                ConnectionResult.SERVICE_VERSION_UPDATE_REQUIRED -> "Google Play Services requires an update on this device."
+                ConnectionResult.SERVICE_INVALID -> "Google Play Services signature verification failed."
+                else -> "Google Play Services error (code: $gmsAvailability)."
+            }
+            authErrorMessage = "$reason\n\nGoogle Sign-In is unavailable on devices without functioning Google services (such as Huawei, Amazon Fire, or custom de-Googled ROMs).\n\nYou can continue using Wammy offline by tapping 'Skip for now'."
+            return
+        }
+
         scope.launch {
             var credentialSuccess = false
             try {
@@ -232,22 +264,29 @@ fun LoginBottomSheet(
                     .addCredentialOption(googleIdOption)
                     .build()
 
-                val result = credentialManager.getCredential(activity ?: context, request)
-                val credential = result.credential
-                if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                    val idToken = googleIdTokenCredential.idToken
-                    if (idToken.isNotBlank()) {
-                        credentialSuccess = true
-                        signInWithFirebaseToken(idToken)
+                val result = withTimeoutOrNull(10_000L) {
+                    credentialManager.getCredential(activity ?: context, request)
+                }
+
+                if (result != null) {
+                    val credential = result.credential
+                    if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                        val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                        val idToken = googleIdTokenCredential.idToken
+                        if (idToken.isNotBlank()) {
+                            credentialSuccess = true
+                            signInWithFirebaseToken(idToken)
+                        }
                     }
+                } else {
+                    android.util.Log.w("LoginSheet", "CredentialManager timed out after 10s, falling back to legacy Google Sign-In")
                 }
             } catch (e: GetCredentialCancellationException) {
                 android.util.Log.d("LoginSheet", "User cancelled credential picker")
                 isSigningIn = false
                 return@launch
             } catch (e: Exception) {
-                android.util.Log.w("LoginSheet", "CredentialManager failed (${e::class.java.simpleName}: ${e.message}), falling back to GoogleSignInClient", e)
+                android.util.Log.w("LoginSheet", "CredentialManager failed (${e::class.java.simpleName}: ${e.message}), trying legacy fallback...", e)
             }
 
             if (!credentialSuccess) {

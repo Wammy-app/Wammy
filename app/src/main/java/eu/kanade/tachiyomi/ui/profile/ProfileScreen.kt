@@ -70,7 +70,11 @@ import eu.kanade.tachiyomi.data.sync.AuthorizationResult
 import eu.kanade.tachiyomi.data.sync.DriveSyncManager
 import eu.kanade.tachiyomi.data.sync.SyncResult
 import androidx.activity.result.IntentSenderRequest
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -176,13 +180,22 @@ class ProfileScreen : Screen {
         fun signInWithFirebaseToken(idToken: String) {
             isSigningIn = true
             val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
-            FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).addOnCompleteListener { authTask ->
-                isSigningIn = false
-                if (authTask.isSuccessful) {
+            scope.launch {
+                try {
+                    val authResult = withTimeoutOrNull(15_000L) {
+                        FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).await()
+                    }
+                    if (authResult == null) {
+                        isSigningIn = false
+                        authErrorMessage = "Connecting to authentication servers timed out.\n\nPlease check your internet connection, or disable any active Private DNS/adblockers and try again."
+                        return@launch
+                    }
+
+                    isSigningIn = false
                     Injekt.get<eu.kanade.domain.base.BasePreferences>().hasCompletedInitialLogin.set(true)
                     Toast.makeText(context, "Signed in successfully!", Toast.LENGTH_SHORT).show()
 
-                    val currentUid = authTask.result?.user?.uid
+                    val currentUid = authResult.user?.uid
                     if (currentUid != null) {
                         scope.launch {
                             val hasProfile = repo.hasProfile(currentUid)
@@ -194,9 +207,9 @@ class ProfileScreen : Screen {
 
                     scope.launch {
                         try {
-                            when (val authResult = driveApiHelper.requestDriveAuthorization()) {
+                            when (val driveResult = withTimeoutOrNull(10_000L) { driveApiHelper.requestDriveAuthorization() }) {
                                 is AuthorizationResult.NeedsConsent -> {
-                                    val intentSenderRequest = IntentSenderRequest.Builder(authResult.pendingIntent).build()
+                                    val intentSenderRequest = IntentSenderRequest.Builder(driveResult.pendingIntent).build()
                                     driveConsentLauncher.launch(intentSenderRequest)
                                 }
                                 is AuthorizationResult.Success -> {
@@ -204,17 +217,20 @@ class ProfileScreen : Screen {
                                     eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(context)
                                 }
                                 is AuthorizationResult.Error -> {
-                                    android.util.Log.e("ProfileScreen", "Drive Auth Error: ${authResult.message}")
+                                    android.util.Log.e("ProfileScreen", "Drive Auth Error: ${driveResult.message}")
+                                }
+                                null -> {
+                                    android.util.Log.w("ProfileScreen", "Drive authorization timed out after 10s")
                                 }
                             }
                         } catch (e: Exception) {
                             android.util.Log.e("ProfileScreen", "Drive Auth Exception", e)
                         }
                     }
-                } else {
-                    val ex = authTask.exception
+                } catch (ex: Exception) {
+                    isSigningIn = false
                     android.util.Log.e("ProfileScreen", "Firebase Auth Failed", ex)
-                    authErrorMessage = "Firebase Authentication Failed:\n\n${ex?.localizedMessage ?: ex?.message ?: "Unknown Firebase error"}\n\nPlease check Firebase Console -> Authentication -> Sign-in method -> Google."
+                    authErrorMessage = "Firebase Authentication Failed:\n\n${ex.localizedMessage ?: ex.message ?: "Unknown Firebase error"}\n\nPlease check your internet connection."
                 }
             }
         }
@@ -269,13 +285,77 @@ class ProfileScreen : Screen {
                     .requestScopes(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive.appdata"))
                     .build()
                 val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
-                client.signOut().addOnCompleteListener {
-                    legacyGoogleSignInLauncher.launch(client.signInIntent)
-                }
+                // Non-blocking best-effort sign out so account picker resets cleanly
+                try { client.signOut() } catch (_: Exception) {}
+                // Launch immediately without blocking on an async callback
+                legacyGoogleSignInLauncher.launch(client.signInIntent)
             } catch (e: Exception) {
                 isSigningIn = false
                 android.util.Log.e("ProfileScreen", "Failed to launch legacy Google Sign In", e)
-                authErrorMessage = "Google Play Services sign-in unavailable:\n${e.message}"
+                authErrorMessage = "Google Play Services sign-in unavailable on this device:\n${e.message}"
+            }
+        }
+
+        fun startGoogleSignIn() {
+            if (isSigningIn) return
+            isSigningIn = true
+
+            // 1. Pre-flight check: Is Google Play Services installed and operational on this device?
+            val gmsAvailability = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
+            if (gmsAvailability != ConnectionResult.SUCCESS) {
+                isSigningIn = false
+                val reason = when (gmsAvailability) {
+                    ConnectionResult.SERVICE_MISSING -> "Google Play Services is not installed on this device."
+                    ConnectionResult.SERVICE_DISABLED -> "Google Play Services is disabled on this device."
+                    ConnectionResult.SERVICE_VERSION_UPDATE_REQUIRED -> "Google Play Services requires an update on this device."
+                    ConnectionResult.SERVICE_INVALID -> "Google Play Services signature verification failed."
+                    else -> "Google Play Services error (code: $gmsAvailability)."
+                }
+                authErrorMessage = "$reason\n\nGoogle Sign-In is unavailable on devices without functioning Google services (such as Huawei, Amazon Fire, or custom de-Googled ROMs).\n\nYou can continue using Wammy offline without logging in."
+                return
+            }
+
+            scope.launch {
+                var credentialSuccess = false
+                try {
+                    val activity = context.findActivity() ?: (context as? android.app.Activity)
+                    val credentialManager = CredentialManager.create(context)
+                    val request = GetCredentialRequest.Builder()
+                        .addCredentialOption(GetGoogleIdOption.Builder()
+                            .setFilterByAuthorizedAccounts(false)
+                            .setServerClientId(webClientId)
+                            .setAutoSelectEnabled(false)
+                            .build())
+                        .build()
+
+                    val result = withTimeoutOrNull(10_000L) {
+                        credentialManager.getCredential(activity ?: context, request)
+                    }
+
+                    if (result != null) {
+                        val credential = result.credential
+                        if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                            val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                            val idToken = googleIdTokenCredential.idToken
+                            if (idToken.isNotBlank()) {
+                                credentialSuccess = true
+                                signInWithFirebaseToken(idToken)
+                            }
+                        }
+                    } else {
+                        android.util.Log.w("ProfileScreen", "CredentialManager timed out after 10s, trying legacy Google Sign-In")
+                    }
+                } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+                    android.util.Log.d("ProfileScreen", "User cancelled credential picker")
+                    isSigningIn = false
+                    return@launch
+                } catch (e: Exception) {
+                    android.util.Log.w("ProfileScreen", "CredentialManager failed (${e::class.java.simpleName}: ${e.message}), trying legacy fallback...", e)
+                }
+
+                if (!credentialSuccess) {
+                    launchLegacyGoogleSignIn()
+                }
             }
         }
 
@@ -1136,45 +1216,7 @@ class ProfileScreen : Screen {
 
                     // Sign In Button
                     Surface(
-                        onClick = {
-                            if (isSigningIn) return@Surface
-                            isSigningIn = true
-                            scope.launch {
-                                var credentialSuccess = false
-                                try {
-                                    val activity = context.findActivity() ?: (context as? android.app.Activity)
-                                    val credentialManager = CredentialManager.create(context)
-                                    val request = GetCredentialRequest.Builder()
-                                        .addCredentialOption(GetGoogleIdOption.Builder()
-                                            .setFilterByAuthorizedAccounts(false)
-                                            .setServerClientId(webClientId)
-                                            .setAutoSelectEnabled(false)
-                                            .build())
-                                        .build()
-
-                                    val result = credentialManager.getCredential(activity ?: context, request)
-                                    val credential = result.credential
-                                    if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                                        val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                                        val idToken = googleIdTokenCredential.idToken
-                                        if (idToken.isNotBlank()) {
-                                            credentialSuccess = true
-                                            signInWithFirebaseToken(idToken)
-                                        }
-                                    }
-                                } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
-                                    android.util.Log.d("ProfileScreen", "User cancelled credential picker")
-                                    isSigningIn = false
-                                    return@launch
-                                } catch (e: Exception) {
-                                    android.util.Log.w("ProfileScreen", "CredentialManager failed (${e::class.java.simpleName}: ${e.message}), trying legacy fallback...", e)
-                                }
-
-                                if (!credentialSuccess) {
-                                    launchLegacyGoogleSignIn()
-                                }
-                            }
-                        },
+                        onClick = { if (!isSigningIn) startGoogleSignIn() },
                         shape = RoundedCornerShape(percent = 50),
                         color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 4.dp,
