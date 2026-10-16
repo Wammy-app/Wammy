@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -80,92 +81,111 @@ fun HeroFeaturedCardSkeleton(
     shimmerBrush: Brush,
     modifier: Modifier = Modifier,
 ) {
-    Box(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(215.dp)
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(shimmerBrush),
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
-        // Bottom gradient overlay for realistic depth
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0.0f to Color.Transparent,
-                        0.5f to Color.Black.copy(alpha = 0.25f),
-                        1.0f to Color.Black.copy(alpha = 0.65f),
-                    )
-                ),
-        )
-
-        // Placeholder content at the bottom
         Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            // Title placeholder
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.55f)
-                    .height(22.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color.White.copy(alpha = 0.35f)),
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Author / subtitle placeholder
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.35f)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color.White.copy(alpha = 0.25f)),
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Genre tags placeholder
+            // Header Row placeholder
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                repeat(3) {
-                    Box(
-                        modifier = Modifier
-                            .width(52.dp)
-                            .height(18.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color.White.copy(alpha = 0.25f)),
-                    )
-                }
-            }
-        }
-
-        // Pager indicator dots placeholder at bottom center
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Box(
                 modifier = Modifier
-                    .size(width = 16.dp, height = 4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color.White.copy(alpha = 0.7f)),
-            )
-            repeat(3) {
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(width = 6.dp, height = 4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color.White.copy(alpha = 0.3f)),
+                        .width(140.dp)
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(shimmerBrush),
                 )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 18.dp, height = 5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(shimmerBrush),
+                    )
+                    repeat(3) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(shimmerBrush),
+                        )
+                    }
+                }
+            }
+
+            // Body 2-column layout placeholder
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                // Cover poster placeholder
+                Box(
+                    modifier = Modifier
+                        .width(100.dp)
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(shimmerBrush),
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Details Column placeholder
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 2.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.85f)
+                            .height(18.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shimmerBrush),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.55f)
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shimmerBrush),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        repeat(2) {
+                            Box(
+                                modifier = Modifier
+                                    .width(50.dp)
+                                    .height(16.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(shimmerBrush),
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.95f)
+                            .height(28.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shimmerBrush),
+                    )
+                }
             }
         }
     }

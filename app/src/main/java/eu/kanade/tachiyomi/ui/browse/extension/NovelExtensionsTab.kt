@@ -81,14 +81,41 @@ fun novelExtensionsTab(
                 onClickItemCancel = extensionsViewModel::cancelInstallUpdateExtension,
                 onClickUpdateAll = extensionsViewModel::updateAllExtensions,
                 onOpenWebView = { extension ->
-                    extension.sources.getOrNull(0)?.let {
-                        navigator.push(
-                            WebViewScreen(
-                                url = it.baseUrl,
-                                initialTitle = it.name,
-                                sourceId = it.id,
-                            ),
-                        )
+                    when (extension) {
+                        is Extension.Available -> {
+                            extension.sources.firstOrNull()?.let {
+                                navigator.push(
+                                    WebViewScreen(
+                                        url = it.baseUrl,
+                                        initialTitle = it.name,
+                                        sourceId = it.id,
+                                    ),
+                                )
+                            }
+                        }
+                        is Extension.Installed -> {
+                            (extension.sources.firstOrNull() as? eu.kanade.tachiyomi.source.online.HttpSource)?.let {
+                                navigator.push(
+                                    WebViewScreen(
+                                        url = it.baseUrl,
+                                        initialTitle = it.name,
+                                        sourceId = it.id,
+                                    ),
+                                )
+                            }
+                        }
+                        is Extension.JsPlugin -> {
+                            extension.sources.firstOrNull()?.let {
+                                navigator.push(
+                                    WebViewScreen(
+                                        url = it.baseUrl,
+                                        initialTitle = it.name,
+                                        sourceId = it.id,
+                                    ),
+                                )
+                            }
+                        }
+                        else -> {}
                     }
                 },
                 onInstallExtension = {

@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Label
@@ -26,6 +28,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -171,45 +174,32 @@ private fun SourceItem(
                 }
             }
             Row(
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val pinShape = if (canUninstall) {
-                    RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, topEnd = 5.dp, bottomEnd = 5.dp)
-                } else {
-                    RoundedCornerShape(16.dp)
-                }
                 SourcePinButton(
                     source = source,
                     groupSection = groupSection,
-                    shape = pinShape,
                     onClickPin = onClickPin,
                     onLongClickPin = onLongClickPin,
                     onRemoveFromGroup = onRemoveFromGroup,
                 )
                 if (canUninstall) {
-                    val uninstallShape = RoundedCornerShape(
-                        topStart = 5.dp,
-                        bottomStart = 5.dp,
-                        topEnd = 16.dp,
-                        bottomEnd = 16.dp,
-                    )
-                    Box(
+                    VerticalDivider(
                         modifier = Modifier
-                            .size(32.dp)
-                            .clip(uninstallShape)
-                            .background(MaterialTheme.colorScheme.secondaryContainer)
-                            .clickable(
-                                onClick = { onClickUninstall(source) },
-                                role = androidx.compose.ui.semantics.Role.Button,
-                            ),
-                        contentAlignment = Alignment.Center,
+                            .height(20.dp)
+                            .padding(horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        thickness = 1.dp,
+                    )
+                    IconButton(
+                        onClick = { onClickUninstall(source) },
+                        modifier = Modifier.size(36.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             contentDescription = stringResource(MR.strings.ext_uninstall),
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
@@ -222,7 +212,6 @@ private fun SourceItem(
 private fun SourcePinButton(
     source: Source,
     groupSection: String?,
-    shape: Shape,
     onClickPin: (Source) -> Unit,
     onLongClickPin: (Source) -> Unit,
     onRemoveFromGroup: (Source, String) -> Unit,
@@ -239,7 +228,7 @@ private fun SourcePinButton(
     val tint = when {
         showGroupIcon -> MaterialTheme.colorScheme.secondary
         isPinned -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
     }
     val description = when {
         groupSection != null -> MR.strings.action_remove
@@ -262,9 +251,8 @@ private fun SourcePinButton(
 
     Box(
         modifier = Modifier
-            .size(32.dp)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .size(36.dp)
+            .clip(CircleShape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = { onLongClickPin(source) },
@@ -278,7 +266,7 @@ private fun SourcePinButton(
             imageVector = icon,
             tint = tint,
             contentDescription = stringResource(description),
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(20.dp),
         )
     }
 }

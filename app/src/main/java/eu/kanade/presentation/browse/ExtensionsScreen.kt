@@ -10,10 +10,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Public
@@ -25,6 +28,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.VerticalDivider
+import eu.kanade.tachiyomi.source.online.HttpSource
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
@@ -78,7 +83,7 @@ fun ExtensionScreen(
     searchQuery: String?,
     onLongClickItem: (Extension) -> Unit,
     onClickItemCancel: (Extension) -> Unit,
-    onOpenWebView: (Extension.Available) -> Unit,
+    onOpenWebView: (Extension) -> Unit,
     onInstallExtension: (Extension) -> Unit,
     onUninstallExtension: (Extension) -> Unit,
     onUpdateExtension: (Extension) -> Unit,
@@ -140,7 +145,7 @@ private fun ExtensionContent(
     contentPadding: PaddingValues,
     onLongClickItem: (Extension) -> Unit,
     onClickItemCancel: (Extension) -> Unit,
-    onOpenWebView: (Extension.Available) -> Unit,
+    onOpenWebView: (Extension) -> Unit,
     onInstallExtension: (Extension) -> Unit,
     onUninstallExtension: (Extension) -> Unit,
     onUpdateExtension: (Extension) -> Unit,
@@ -247,23 +252,7 @@ private fun ExtensionContent(
                     },
                     onLongClickItem = onLongClickItem,
                     onClickItemSecondaryAction = {
-                        when (it) {
-                            is Extension.Available -> onOpenWebView(it)
-                            is Extension.Installed -> onOpenExtension(it)
-                            is Extension.JsPlugin -> {
-                                // Handle web view for JS plugins using sources
-                                it.sources.getOrNull(0)?.let { source ->
-                                    navigator.push(
-                                        WebViewScreen(
-                                            url = source.baseUrl,
-                                            initialTitle = source.name,
-                                            sourceId = source.id,
-                                        ),
-                                    )
-                                }
-                            }
-                            else -> {}
-                        }
+                        onOpenWebView(it)
                     },
                     onClickItemCancel = onClickItemCancel,
                     onClickItemAction = {
@@ -324,11 +313,7 @@ private fun ExtensionItem(
 ) {
     val (extension, installStep) = item
     BaseBrowseItem(
-        modifier = modifier
-            .combinedClickable(
-                onClick = { onClickItem(extension) },
-                onLongClick = { onLongClickItem(extension) },
-            ),
+        modifier = modifier,
         onClickItem = { onClickItem(extension) },
         onLongClickItem = { onLongClickItem(extension) },
         icon = {
@@ -472,107 +457,157 @@ private fun ExtensionItemActions(
 ) {
     val isIdle = installStep.isCompleted()
 
+    val hasWebView = when (extension) {
+        is Extension.Available -> extension.sources.isNotEmpty()
+        is Extension.Installed -> extension.sources.any { it is HttpSource }
+        is Extension.JsPlugin -> extension.sources.isNotEmpty()
+        else -> false
+    }
+
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (hasWebView) {
+            IconButton(
+                onClick = { onClickItemSecondaryAction(extension) },
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Public,
+                    contentDescription = stringResource(MR.strings.action_open_in_web_view),
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            VerticalDivider(
+                modifier = Modifier
+                    .height(20.dp)
+                    .padding(horizontal = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                thickness = 1.dp,
+            )
+        }
+
         when {
             !isIdle -> {
-                IconButton(onClick = { onClickItemCancel(extension) }) {
+                IconButton(
+                    onClick = { onClickItemCancel(extension) },
+                    modifier = Modifier.size(36.dp),
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = stringResource(MR.strings.action_cancel),
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             installStep == InstallStep.Error -> {
-                IconButton(onClick = { onClickItemAction(extension) }) {
+                IconButton(
+                    onClick = { onClickItemAction(extension) },
+                    modifier = Modifier.size(36.dp),
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Refresh,
                         contentDescription = stringResource(MR.strings.action_retry),
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.error,
                     )
                 }
             }
             installStep == InstallStep.Idle -> {
                 when (extension) {
                     is Extension.Installed -> {
-                        IconButton(onClick = { onClickItemSecondaryAction(extension) }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Settings,
-                                contentDescription = stringResource(MR.strings.action_settings),
-                            )
-                        }
-
                         if (extension.hasUpdate) {
-                            IconButton(onClick = { onClickItemAction(extension) }) {
+                            IconButton(
+                                onClick = { onClickItemAction(extension) },
+                                modifier = Modifier.size(36.dp),
+                            ) {
                                 Icon(
                                     imageVector = Icons.Outlined.GetApp,
                                     contentDescription = stringResource(MR.strings.ext_update),
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = { onClickItemAction(extension) },
+                                modifier = Modifier.size(36.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = stringResource(MR.strings.ext_installed),
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color(0xFF4CAF50),
                                 )
                             }
                         }
                     }
                     is Extension.Untrusted -> {
-                        IconButton(onClick = { onClickItemAction(extension) }) {
+                        IconButton(
+                            onClick = { onClickItemAction(extension) },
+                            modifier = Modifier.size(36.dp),
+                        ) {
                             Icon(
                                 imageVector = Icons.Outlined.VerifiedUser,
                                 contentDescription = stringResource(MR.strings.ext_trust),
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.error,
                             )
                         }
                     }
                     is Extension.Available -> {
-                        if (extension.sources.isNotEmpty()) {
-                            IconButton(
-                                onClick = { onClickItemSecondaryAction(extension) },
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Public,
-                                    contentDescription = stringResource(MR.strings.action_open_in_web_view),
-                                )
-                            }
-                        }
-
-                        IconButton(onClick = { onClickItemAction(extension) }) {
+                        IconButton(
+                            onClick = { onClickItemAction(extension) },
+                            modifier = Modifier.size(36.dp),
+                        ) {
                             Icon(
-                                imageVector = Icons.Outlined.GetApp,
+                                imageVector = Icons.Default.Add,
                                 contentDescription = stringResource(MR.strings.ext_install),
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                     is Extension.JsPlugin -> {
                         if (extension.isInstalled) {
-                            // Settings gear for installed JS plugins - navigate to source preferences
-                            IconButton(onClick = { onClickItemAction(extension) }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Settings,
-                                    contentDescription = stringResource(MR.strings.action_settings),
-                                )
-                            }
-                        }
-                        if (extension.sources.isNotEmpty()) {
-                            IconButton(
-                                onClick = { onClickItemSecondaryAction(extension) },
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Public,
-                                    contentDescription = stringResource(MR.strings.action_open_in_web_view),
-                                )
-                            }
-                        }
-                        if (extension.isInstalled) {
                             if (extension.hasUpdate) {
-                                IconButton(onClick = { onClickItemAction(extension) }) {
+                                IconButton(
+                                    onClick = { onClickItemAction(extension) },
+                                    modifier = Modifier.size(36.dp),
+                                ) {
                                     Icon(
                                         imageVector = Icons.Outlined.GetApp,
                                         contentDescription = stringResource(MR.strings.ext_update),
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = { onClickItemAction(extension) },
+                                    modifier = Modifier.size(36.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = stringResource(MR.strings.ext_installed),
+                                        modifier = Modifier.size(20.dp),
+                                        tint = Color(0xFF4CAF50),
                                     )
                                 }
                             }
                         } else {
-                            IconButton(onClick = { onClickItemAction(extension) }) {
+                            IconButton(
+                                onClick = { onClickItemAction(extension) },
+                                modifier = Modifier.size(36.dp),
+                            ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.GetApp,
+                                    imageVector = Icons.Default.Add,
                                     contentDescription = stringResource(MR.strings.ext_install),
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
