@@ -34,6 +34,7 @@ import eu.kanade.tachiyomi.ui.profile.UsernamePickerScreen
 import com.google.firebase.auth.FirebaseUser
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
@@ -209,10 +210,13 @@ object HomeScreen : Screen() {
                             visible = bottomNavVisible,
                             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                             exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-                            modifier = Modifier.align(Alignment.BottomCenter),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter),
                         ) {
                             val scope = rememberCoroutineScope()
                             WavyDockNavigationBar(
+                                modifier = Modifier.fillMaxWidth(),
                                 tabs = tabs,
                                 currentTab = tabNavigator.current,
                                 onTabSelected = { tab ->

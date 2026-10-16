@@ -113,13 +113,7 @@ fun WavyDockNavigationBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .padding(start = 6.dp, end = 10.dp, top = 4.dp, bottom = 4.dp)
-                    .animateContentSize(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium,
-                        ),
-                    ),
+                    .padding(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -213,7 +207,7 @@ private fun FloatingNavItem(
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = if (isSelected) 12.dp else if (tab is MoreTab) 6.dp else 8.dp,
+                horizontal = if (isSelected) 10.dp else 6.dp,
             ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
@@ -251,7 +245,7 @@ private fun FloatingNavItem(
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 6.dp),
+                    modifier = Modifier.padding(start = 4.dp),
                 )
             }
         }
@@ -278,7 +272,7 @@ private fun TabIcon(
     }
 
     val iconComposable: @Composable () -> Unit = {
-        val iconSize = if (tab is MoreTab) 26.dp else 22.dp
+        val iconSize = if (tab is MoreTab) 24.dp else 22.dp
         if (filledIcon != null && outlinedIcon != null) {
             val vector = if (isSelected) filledIcon else outlinedIcon
             Icon(
