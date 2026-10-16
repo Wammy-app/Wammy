@@ -81,143 +81,122 @@ fun HeroFeaturedCard(
                     .background(Color.Black)
                     .clickable { onClick(manga) },
             ) {
-                // Layer 1: Blurred artwork background across the entire card
+                // Layer 1: Cover artwork filling the full card
                 AsyncImage(
                     model = coverData,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .blur(14.dp),
+                    contentDescription = manga.title,
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    alignment = Alignment.CenterStart,
+                    alignment = Alignment.Center,
                 )
 
-                // Layer 2: Smooth dark gradient over the blurred background for text contrast
+                // Layer 2: Deep vertical cinematic gradient for text readability
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            Brush.horizontalGradient(
+                            Brush.verticalGradient(
                                 0.0f to Color.Transparent,
-                                0.35f to Color.Black.copy(alpha = 0.35f),
-                                0.65f to Color.Black.copy(alpha = 0.75f),
-                                1.0f to Color.Black.copy(alpha = 0.92f),
+                                0.35f to Color.Black.copy(alpha = 0.20f),
+                                0.65f to Color.Black.copy(alpha = 0.70f),
+                                1.0f to Color.Black.copy(alpha = 0.95f),
                             ),
                         ),
                 )
 
-                // Layer 3: Sharp foreground artwork that smoothly dissolves/fades into the blur on the right
-                AsyncImage(
-                    model = coverData,
-                    contentDescription = manga.title,
+                // Layer 3: Manga Information at Bottom-Start matching skeleton structure
+                Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    0.0f to Color.Black,
-                                    0.30f to Color.Black,
-                                    0.55f to Color.Transparent,
-                                    1.0f to Color.Transparent,
-                                ),
-                                blendMode = BlendMode.DstIn,
-                            )
-                        },
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.CenterStart,
-                )
-
-                // Layer 4: Text information and [ ▶ READ ] button on the right
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(vertical = 14.dp, horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 18.dp, top = 8.dp),
                 ) {
-                    // Left spacer reserved for the visible sharp character art
-                    Spacer(modifier = Modifier.weight(0.48f))
+                    // Title
+                    Text(
+                        text = manga.title,
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.SansSerif,
+                        letterSpacing = 0.2.sp,
+                        lineHeight = 22.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
 
-                    // Right column for title, genres, author, and Read button
-                    Column(
-                        modifier = Modifier
-                            .weight(0.52f)
-                            .fillMaxHeight()
-                            .padding(start = 6.dp),
-                        verticalArrangement = Arrangement.SpaceBetween,
-                        horizontalAlignment = Alignment.End,
+                    // Subtitle / Author
+                    if (authorText.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = authorText,
+                            color = Color.White.copy(alpha = 0.75f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = FontFamily.SansSerif,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Row: Genre pills and READ button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                text = manga.title,
-                                color = Color.White,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                fontFamily = FontFamily.SansSerif,
-                                letterSpacing = 0.3.sp,
-                                lineHeight = 19.sp,
-                                maxLines = 2,
-                                textAlign = TextAlign.End,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-
-                            if (authorText.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(3.dp))
-                                Text(
-                                    text = authorText,
-                                    color = Color.White.copy(alpha = 0.70f),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    fontFamily = FontFamily.SansSerif,
-                                    letterSpacing = 0.2.sp,
-                                    maxLines = 1,
-                                    textAlign = TextAlign.End,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                        // Genre pills matching the skeleton boxes
+                        val genres = manga.genre?.take(3) ?: emptyList()
+                        if (genres.isNotEmpty()) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f, fill = false),
+                            ) {
+                                genres.forEach { genre ->
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color.White.copy(alpha = 0.20f),
+                                    ) {
+                                        Text(
+                                            text = genre,
+                                            color = Color.White.copy(alpha = 0.95f),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
                             }
-
-                            if (genresText.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(3.dp))
-                                Text(
-                                    text = genresText,
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    fontFamily = FontFamily.SansSerif,
-                                    letterSpacing = 0.2.sp,
-                                    maxLines = 1,
-                                    textAlign = TextAlign.End,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
+                        } else {
+                            Spacer(modifier = Modifier.width(1.dp))
                         }
 
-                        // "READ NOW" pill button matching design reference
+                        // READ NOW pill button
                         Surface(
                             onClick = { onClick(manga) },
                             shape = CircleShape,
                             color = Color(0xFF0D62D9),
-                            shadowElevation = 0.dp,
+                            shadowElevation = 2.dp,
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.PlayArrow,
                                     contentDescription = null,
                                     tint = Color.White,
-                                    modifier = Modifier.size(16.dp),
+                                    modifier = Modifier.size(14.dp),
                                 )
                                 Text(
-                                    text = "READ NOW",
+                                    text = "READ",
                                     color = Color.White,
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.SansSerif,
                                     letterSpacing = 0.4.sp,
@@ -229,12 +208,12 @@ fun HeroFeaturedCard(
             }
         }
 
-        // Page Indicator Dots
+        // Page Indicator Dots at bottom center
         if (items.size > 1) {
             Row(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 28.dp, bottom = 10.dp),
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -242,10 +221,13 @@ fun HeroFeaturedCard(
                     val isSelected = pagerState.currentPage == index
                     Box(
                         modifier = Modifier
-                            .size(if (isSelected) 6.dp else 4.dp)
-                            .clip(CircleShape)
+                            .size(
+                                width = if (isSelected) 14.dp else 5.dp,
+                                height = 4.dp,
+                            )
+                            .clip(RoundedCornerShape(2.dp))
                             .background(
-                                if (isSelected) Color.White else Color.White.copy(alpha = 0.45f),
+                                if (isSelected) Color.White else Color.White.copy(alpha = 0.40f),
                             ),
                     )
                 }

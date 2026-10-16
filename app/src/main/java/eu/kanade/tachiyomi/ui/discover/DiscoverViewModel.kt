@@ -27,6 +27,7 @@ import tachiyomi.domain.manga.interactor.GetMangaByUrlAndSourceId
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import eu.kanade.domain.source.model.isAdultSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -34,6 +35,9 @@ data class DiscoverState(
     val isLoading: Boolean = true,
     val isNovel: Boolean = false,
     val sources: List<CatalogueSource> = emptyList(),
+    val regularSources: List<CatalogueSource> = emptyList(),
+    val adultSources: List<CatalogueSource> = emptyList(),
+    val hasAdultSources: Boolean = false,
 )
 
 class DiscoverViewModel(
@@ -45,6 +49,9 @@ class DiscoverViewModel(
     private val getMangaByUrlAndSourceId: GetMangaByUrlAndSourceId = Injekt.get(),
     private val updateManga: eu.kanade.domain.manga.interactor.UpdateManga = Injekt.get(),
     private val getHistory: tachiyomi.domain.history.interactor.GetHistory = Injekt.get(),
+    private val getChaptersByMangaId: tachiyomi.domain.chapter.interactor.GetChaptersByMangaId = Injekt.get(),
+    private val getNextChapters: tachiyomi.domain.history.interactor.GetNextChapters = Injekt.get(),
+    private val extensionManager: eu.kanade.tachiyomi.extension.ExtensionManager = Injekt.get(),
     private val context: android.app.Application = Injekt.get(),
     private val sourcePreferences: eu.kanade.domain.source.service.SourcePreferences = Injekt.get()
 ) : StateViewModel<DiscoverState>(DiscoverState()) {
@@ -64,19 +71,54 @@ class DiscoverViewModel(
                 getHistory.subscribeGrouped(""),
                 preferences.homeTabIsNovel.changes()
             ) { historyList, isNovel ->
-                historyList.filter { it.isNovel == isNovel }.take(10)
-            }.collectLatest { filtered ->
-                recentlyRead.value = filtered
+                Pair(historyList, isNovel)
+            }.collectLatest { (historyList, isNovel) ->
+                val incompleteHistory = withContext(Dispatchers.IO) {
+                    val result = mutableListOf<tachiyomi.domain.history.model.HistoryWithRelations>()
+                    for (history in historyList) {
+                        if (history.isNovel != isNovel) continue
+
+                        val chapters = getChaptersByMangaId.await(history.mangaId)
+                        val hasUnread = chapters.any { !it.read }
+                        if (!hasUnread) continue
+
+                        val resumeItem = if (history.chapterRead) {
+                            val nextChapter = getNextChapters.await(history.mangaId, history.chapterId, onlyUnread = false).firstOrNull { !it.read }
+                                ?: getNextChapters.await(history.mangaId, onlyUnread = true).firstOrNull()
+                            if (nextChapter != null) {
+                                history.copy(
+                                    chapterId = nextChapter.id,
+                                    chapterNumber = nextChapter.chapterNumber,
+                                    chapterRead = nextChapter.read,
+                                    lastPageRead = nextChapter.lastPageRead,
+                                )
+                            } else {
+                                history
+                            }
+                        } else {
+                            history
+                        }
+
+                        result.add(resumeItem)
+                        if (result.size >= 5) break
+                    }
+                    result
+                }
+                recentlyRead.value = incompleteHistory
             }
         }
 
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(
-                kotlinx.coroutines.flow.combine(sourceManager.sources, jsPluginManager.jsSources) { apk, js -> apk + js },
+                kotlinx.coroutines.flow.combine(
+                    sourceManager.sources,
+                    jsPluginManager.jsSources,
+                    extensionManager.installedExtensionsFlow
+                ) { apk, js, _ -> apk + js },
                 preferences.homeTabIsNovel.changes(),
                 jsPluginManager.isInitialized,
                 sourcePreferences.pinnedSources.changes(),
-                sourcePreferences.enabledLanguages.changes()
+                sourcePreferences.enabledLanguages.changes(),
             ) { allApkJs, isNovel: Boolean, jsInitialized: Boolean, pinnedSourceIds: Set<String>, enabledLanguages: Set<String> ->
                 if (!jsInitialized) {
                     return@combine null
@@ -97,8 +139,17 @@ class DiscoverViewModel(
                 
                 Pair(sorted, isNovel)
             }.filterNotNull().collectLatest { (sources, isNovel) ->
+                val regularSources = sources.filter { !it.isAdultSource() }
+                val adultSources = sources.filter { it.isAdultSource() }
                 mutableState.update { 
-                    it.copy(isLoading = false, sources = sources, isNovel = isNovel)
+                    it.copy(
+                        isLoading = false,
+                        sources = sources,
+                        regularSources = regularSources,
+                        adultSources = adultSources,
+                        hasAdultSources = adultSources.isNotEmpty(),
+                        isNovel = isNovel
+                    )
                 }
                 // Pre-fetch active sources to populate Trending, Latest, and Hero
                 viewModelScope.launch {
@@ -190,6 +241,10 @@ class DiscoverViewModel(
 
     suspend fun loadSourceLatest(source: CatalogueSource): List<Manga> {
         return withContext(Dispatchers.IO) {
+            if (!source.supportsLatest) {
+                latestCache[source.id] = emptyList()
+                return@withContext emptyList()
+            }
             val cacheFile = java.io.File(context.cacheDir, "latest_manga_${source.id}.json")
             var returnList = emptyList<Manga>()
             
@@ -302,6 +357,13 @@ class DiscoverViewModel(
             withContext(Dispatchers.Main) {
                 onResult(newFavorite)
             }
+        }
+    }
+
+    suspend fun getResumeChapter(mangaId: Long, chapterId: Long): tachiyomi.domain.chapter.model.Chapter? {
+        return withContext(Dispatchers.IO) {
+            getNextChapters.await(mangaId, chapterId, onlyUnread = false).firstOrNull { !it.read }
+                ?: getNextChapters.await(mangaId, onlyUnread = true).firstOrNull()
         }
     }
 }

@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import eu.kanade.domain.source.model.installedExtension
+import eu.kanade.domain.source.model.isAdultSource
 
 class NovelSourcesViewModel(
     private val getEnabledNovelSources: GetEnabledNovelSources = Injekt.get(),
@@ -50,7 +51,7 @@ class NovelSourcesViewModel(
                 state.map { it.nsfwOnly }.distinctUntilChanged(),
             ) { sources, nsfwOnly ->
                 if (nsfwOnly) {
-                    sources.filter { it.installedExtension?.isNsfw == true }
+                    sources.filter { it.isAdultSource() || it.installedExtension?.isNsfw == true }
                 } else {
                     sources
                 }

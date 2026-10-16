@@ -217,15 +217,21 @@ class ExtensionManager(
                 changed = true
             } else if (availableExt != null) {
                 val hasUpdate = extension.updateExists(availableExt)
-                if (extension.hasUpdate != hasUpdate || extension.isObsolete) {
+                val isAdult = extension.isAdult || availableExt.isAdult
+                val isNsfw = extension.isNsfw || availableExt.isNsfw
+                if (extension.hasUpdate != hasUpdate || extension.isObsolete || extension.isAdult != isAdult || extension.isNsfw != isNsfw) {
                     installedExtensionsMap[pkgName] = extension.copy(
                         hasUpdate = hasUpdate,
                         store = availableExt.store,
+                        isAdult = isAdult,
+                        isNsfw = isNsfw,
                         isObsolete = false,
                     )
                 } else {
                     installedExtensionsMap[pkgName] = extension.copy(
                         store = availableExt.store,
+                        isAdult = isAdult,
+                        isNsfw = isNsfw,
                     )
                 }
                 changed = true

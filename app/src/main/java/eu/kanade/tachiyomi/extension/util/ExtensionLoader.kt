@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.pm.PackageInfoCompat
 import eu.kanade.domain.extension.interactor.TrustExtension
+import eu.kanade.domain.source.model.adultRegex
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.model.LoadResult
@@ -289,8 +290,25 @@ internal object ExtensionLoader {
             return LoadResult.Untrusted(extension)
         }
 
-        val isNsfw = appInfo.metaData.getInt(METADATA_CONTENT_WARNING) > 0 ||
-            appInfo.metaData.getInt("$metaNs.nsfw") == 1
+        val rawCw = if (appInfo.metaData.containsKey(METADATA_CONTENT_WARNING)) {
+            appInfo.metaData.getInt(METADATA_CONTENT_WARNING)
+        } else {
+            -1
+        }
+        val legacyNsfw = if (appInfo.metaData.containsKey("$metaNs.nsfw")) {
+            appInfo.metaData.getInt("$metaNs.nsfw")
+        } else {
+            -1
+        }
+
+        // Keiyoushi / Tachiyomi ContentWarning schema:
+        // 0 = UNSPECIFIED
+        // 1 = SAFE (All-ages content: Flame Comics, Asura Scans, Genz Toons, Webtoons, etc.)
+        // 2 = MIXED (Mainstream mature themes/violence/gore: MangaDex, Comic Asura, etc.)
+        // 3 = NSFW (Explicit sexual adult / hentai / erotica: 3Hentai, 4KHD, AHottie, Akuma, AllPornComics, AsmHentai, etc.)
+        val hasAdultPattern = adultRegex.containsMatchIn("$extName $pkgName")
+        val isNsfw = rawCw >= 1 || legacyNsfw == 1 || hasAdultPattern
+        val isAdult = rawCw >= 3 || (rawCw >= 2 && hasAdultPattern) || hasAdultPattern
         if (!loadNsfwSource && isNsfw) {
             logcat(LogPriority.WARN) { "NSFW extension $pkgName not allowed" }
             return LoadResult.Error
@@ -370,6 +388,7 @@ internal object ExtensionLoader {
             lang = lang,
             isNsfw = isNsfw,
             isNovel = appInfo.metaData.getInt("$metaNs.novel") == 1,
+            isAdult = isAdult,
             sources = sources,
             pkgFactory = appInfo.metaData.getString("$metaNs.factory"),
             icon = appInfo.loadIcon(pkgManager),

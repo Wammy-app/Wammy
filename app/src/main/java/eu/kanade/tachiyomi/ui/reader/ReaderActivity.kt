@@ -261,6 +261,7 @@ class ReaderActivity : BaseActivity() {
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
 
         super.onCreate(savedInstanceState)
+        eu.kanade.tachiyomi.data.sync.DriveSyncWorker.isReaderActive = true
 
         binding = ReaderActivityBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -670,11 +671,13 @@ class ReaderActivity : BaseActivity() {
      * Called when the activity is destroyed. Cleans up the viewer, configuration and any view.
      */
     override fun onDestroy() {
+        eu.kanade.tachiyomi.data.sync.DriveSyncWorker.isReaderActive = false
         stopBackgroundTtsIfRunning()
         ttsNotificationSyncJob?.cancel()
         unregisterReceiver(ttsNotificationControlReceiver)
-        // Only backup if reading progress actually changed during this session
+        // Only backup when user completely leaves the reader session and progress changed
         if (viewModel.hasProgressChanged) {
+            viewModel.hasProgressChanged = false
             eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(this)
         }
         super.onDestroy()
@@ -695,10 +698,6 @@ class ReaderActivity : BaseActivity() {
             viewModel.updateHistory()
         }
 
-        if (viewModel.hasProgressChanged) {
-            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(this)
-        }
-
         if (!isChangingConfigurations && !readerPreferences.novelTtsBackgroundPlayback.get()) {
             stopAnyActiveNovelTts()
             stopBackgroundTtsIfRunning()
@@ -713,6 +712,7 @@ class ReaderActivity : BaseActivity() {
      */
     override fun onResume() {
         super.onResume()
+        eu.kanade.tachiyomi.data.sync.DriveSyncWorker.isReaderActive = true
         lifecycleScope.launch { viewModel.restartReadTimerSynced() }
         setMenuVisibility(viewModel.state.value.menuVisible)
         if (readerPreferences.novelTtsBackgroundPlayback.get() &&

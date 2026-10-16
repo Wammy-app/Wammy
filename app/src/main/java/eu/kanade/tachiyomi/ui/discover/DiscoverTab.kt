@@ -130,6 +130,11 @@ object DiscoverTab : Tab {
         val state by viewModel.state.collectAsState()
         val scope = rememberCoroutineScope()
         val tabNavigator = LocalTabNavigator.current
+        val context = androidx.compose.ui.platform.LocalContext.current
+
+        LaunchedEffect(Unit) {
+            (context as? eu.kanade.tachiyomi.ui.main.MainActivity)?.ready = true
+        }
 
         val authManager: AuthManager = Injekt.get()
         val user by authManager.currentUser.collectAsState()
@@ -163,10 +168,10 @@ object DiscoverTab : Tab {
                 } else {
                     val recentlyRead by viewModel.recentlyRead.collectAsState()
 
-                    val trendingAggregated = remember(viewModel.popularCache.toMap(), animatedState.sources) {
+                    val trendingAggregated = remember(viewModel.popularCache.toMap(), animatedState.regularSources) {
                         val result = mutableListOf<Manga>()
                         val seenTitles = mutableSetOf<String>()
-                        val lists = animatedState.sources.mapNotNull { viewModel.popularCache[it.id] }
+                        val lists = animatedState.regularSources.mapNotNull { viewModel.popularCache[it.id] }
                         val maxLen = lists.maxOfOrNull { it.size } ?: 0
                         for (i in 0 until maxLen) {
                             for (list in lists) {
@@ -182,10 +187,48 @@ object DiscoverTab : Tab {
                         result
                     }
 
-                    val latestAggregated = remember(viewModel.latestCache.toMap(), animatedState.sources) {
+                    val latestAggregated = remember(viewModel.latestCache.toMap(), animatedState.regularSources) {
                         val result = mutableListOf<Manga>()
                         val seenTitles = mutableSetOf<String>()
-                        val lists = animatedState.sources.mapNotNull { viewModel.latestCache[it.id] }
+                        val lists = animatedState.regularSources.mapNotNull { viewModel.latestCache[it.id] }
+                        val maxLen = lists.maxOfOrNull { it.size } ?: 0
+                        for (i in 0 until maxLen) {
+                            for (list in lists) {
+                                if (i < list.size) {
+                                    val manga = list[i]
+                                    val normalized = manga.title.trim().lowercase()
+                                    if (seenTitles.add(normalized)) {
+                                        result.add(manga)
+                                    }
+                                }
+                            }
+                        }
+                        result
+                    }
+
+                    val adultTrendingAggregated = remember(viewModel.popularCache.toMap(), animatedState.adultSources) {
+                        val result = mutableListOf<Manga>()
+                        val seenTitles = mutableSetOf<String>()
+                        val lists = animatedState.adultSources.mapNotNull { viewModel.popularCache[it.id] }
+                        val maxLen = lists.maxOfOrNull { it.size } ?: 0
+                        for (i in 0 until maxLen) {
+                            for (list in lists) {
+                                if (i < list.size) {
+                                    val manga = list[i]
+                                    val normalized = manga.title.trim().lowercase()
+                                    if (seenTitles.add(normalized)) {
+                                        result.add(manga)
+                                    }
+                                }
+                            }
+                        }
+                        result
+                    }
+
+                    val adultLatestAggregated = remember(viewModel.latestCache.toMap(), animatedState.adultSources) {
+                        val result = mutableListOf<Manga>()
+                        val seenTitles = mutableSetOf<String>()
+                        val lists = animatedState.adultSources.mapNotNull { viewModel.latestCache[it.id] }
                         val maxLen = lists.maxOfOrNull { it.size } ?: 0
                         for (i in 0 until maxLen) {
                             for (list in lists) {
@@ -213,13 +256,15 @@ object DiscoverTab : Tab {
 
                     val allCachesLoaded = animatedState.sources.all { viewModel.popularCache.containsKey(it.id) }
                     val hasNoMangaAtAll = allCachesLoaded && viewModel.popularCache.values.all { it.isEmpty() }
+                    val hasAnyContent = trendingAggregated.isNotEmpty() || latestAggregated.isNotEmpty() ||
+                        (animatedState.hasAdultSources && (adultTrendingAggregated.isNotEmpty() || adultLatestAggregated.isNotEmpty()))
 
                     if (animatedState.sources.isEmpty() || hasNoMangaAtAll) {
                         EmptyDiscoverScreen(
                             isNovel = animatedState.isNovel,
                             onBrowseExtensions = { tabNavigator.current = BrowseTab }
                         )
-                    } else if (trendingAggregated.isEmpty() && latestAggregated.isEmpty()) {
+                    } else if (!hasAnyContent) {
                         DiscoverSkeletonScreen()
                     } else {
                         val shimmerBrush = rememberShimmerBrush()
@@ -228,9 +273,9 @@ object DiscoverTab : Tab {
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             // 1. Hero Featured Card
-                            item {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                if (featuredManga.isNotEmpty()) {
+                            if (featuredManga.isNotEmpty()) {
+                                item {
+                                    Spacer(modifier = Modifier.height(8.dp))
                                     HeroFeaturedCard(
                                         items = featuredManga,
                                         onClick = { manga ->
@@ -240,10 +285,14 @@ object DiscoverTab : Tab {
                                             }
                                         }
                                     )
-                                } else {
-                                    HeroFeaturedCardSkeleton(shimmerBrush = shimmerBrush)
+                                    Spacer(modifier = Modifier.height(10.dp))
                                 }
-                                Spacer(modifier = Modifier.height(10.dp))
+                            } else if (animatedState.regularSources.isNotEmpty() && !animatedState.regularSources.all { viewModel.popularCache.containsKey(it.id) }) {
+                                item {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    HeroFeaturedCardSkeleton(shimmerBrush = shimmerBrush)
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                }
                             }
 
                             // 2. Continue Reading (Vinyl Disc Carousel)
@@ -254,11 +303,16 @@ object DiscoverTab : Tab {
                                     ContinueReadingCarouselWidget(
                                         items = continueReadingItems,
                                         onClick = { history ->
-                                            if (history.chapterId > 0) {
-                                                val intent = ReaderActivity.newIntent(context, history.mangaId, history.chapterId)
-                                                context.startActivity(intent)
-                                            } else {
-                                                scope.launch {
+                                            scope.launch {
+                                                val chapterId = if (history.chapterRead) {
+                                                    viewModel.getResumeChapter(history.mangaId, history.chapterId)?.id ?: history.chapterId
+                                                } else {
+                                                    history.chapterId
+                                                }
+                                                if (chapterId > 0) {
+                                                    val intent = ReaderActivity.newIntent(context, history.mangaId, chapterId)
+                                                    context.startActivity(intent)
+                                                } else {
                                                     navigator.push(MangaScreen(history.mangaId))
                                                 }
                                             }
@@ -280,62 +334,134 @@ object DiscoverTab : Tab {
                                             }
                                         },
                                         onFilterClick = {
-                                            navigator.push(DiscoverFeedScreen(isLatest = true))
+                                            navigator.push(DiscoverFeedScreen(isLatest = true, isAdult = false))
                                         }
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
                                 }
                             }
 
-                            // 4. Trending Section (2 stacked LazyRows, merged across all sources)
-                            if (trendingAggregated.isNotEmpty()) {
-                                item {
-                                    HomeMediaSection(
-                                        title = "Trending",
-                                        items = trendingAggregated,
-                                        onSeeAll = {
-                                            navigator.push(DiscoverFeedScreen(isLatest = false))
-                                        },
-                                        onClick = { manga ->
-                                            scope.launch {
-                                                val localManga = viewModel.getNetworkToLocalManga(manga)
-                                                navigator.push(MangaScreen(localManga.id))
+                            // 4. Trending Section (2 stacked LazyRows, merged across regular sources)
+                            if (animatedState.regularSources.isNotEmpty()) {
+                                val isRegularTrendingLoading = !animatedState.regularSources.all { viewModel.popularCache.containsKey(it.id) }
+                                val regularSourcesWithLatest = animatedState.regularSources.filter { it.supportsLatest }
+                                val isRegularLatestLoading = regularSourcesWithLatest.isNotEmpty() &&
+                                    !regularSourcesWithLatest.all { viewModel.latestCache.containsKey(it.id) }
+
+                                if (trendingAggregated.isNotEmpty()) {
+                                    item {
+                                        HomeMediaSection(
+                                            title = "Trending",
+                                            items = trendingAggregated,
+                                            onSeeAll = {
+                                                navigator.push(DiscoverFeedScreen(isLatest = false, isAdult = false))
+                                            },
+                                            onClick = { manga ->
+                                                scope.launch {
+                                                    val localManga = viewModel.getNetworkToLocalManga(manga)
+                                                    navigator.push(MangaScreen(localManga.id))
+                                                }
                                             }
-                                        }
-                                    )
+                                        )
+                                    }
+                                } else if (isRegularTrendingLoading) {
+                                    item {
+                                        HomeMediaSectionSkeleton(
+                                            title = "Trending",
+                                            shimmerBrush = shimmerBrush,
+                                        )
+                                    }
                                 }
-                            } else {
-                                item {
-                                    HomeMediaSectionSkeleton(
-                                        title = "Trending",
-                                        shimmerBrush = shimmerBrush,
-                                    )
+
+                                // 5. Latest Section (2 stacked LazyRows, merged across regular sources)
+                                if (latestAggregated.isNotEmpty()) {
+                                    item {
+                                        HomeMediaSection(
+                                            title = "Latest",
+                                            items = latestAggregated,
+                                            onSeeAll = {
+                                                navigator.push(DiscoverFeedScreen(isLatest = true, isAdult = false))
+                                            },
+                                            onClick = { manga ->
+                                                scope.launch {
+                                                    val localManga = viewModel.getNetworkToLocalManga(manga)
+                                                    navigator.push(MangaScreen(localManga.id))
+                                                }
+                                            }
+                                        )
+                                    }
+                                } else if (isRegularLatestLoading) {
+                                    item {
+                                        HomeMediaSectionSkeleton(
+                                            title = "Latest",
+                                            shimmerBrush = shimmerBrush,
+                                        )
+                                    }
                                 }
                             }
 
-                            // 5. Latest Section (2 stacked LazyRows, merged across all sources)
-                            if (latestAggregated.isNotEmpty()) {
-                                item {
-                                    HomeMediaSection(
-                                        title = "Latest",
-                                        items = latestAggregated,
-                                        onSeeAll = {
-                                            navigator.push(DiscoverFeedScreen(isLatest = true))
-                                        },
-                                        onClick = { manga ->
-                                            scope.launch {
-                                                val localManga = viewModel.getNetworkToLocalManga(manga)
-                                                navigator.push(MangaScreen(localManga.id))
+                            // 6. Adult Content Sections (Exclusively shown when sexual/adult extensions are installed)
+                            if (animatedState.hasAdultSources) {
+                                val isAdultTrendingLoading = animatedState.adultSources.isNotEmpty() &&
+                                    !animatedState.adultSources.all { viewModel.popularCache.containsKey(it.id) }
+                                val adultSourcesWithLatest = animatedState.adultSources.filter { it.supportsLatest }
+                                val isAdultLatestLoading = adultSourcesWithLatest.isNotEmpty() &&
+                                    !adultSourcesWithLatest.all { viewModel.latestCache.containsKey(it.id) }
+
+                                // Adult Trending Section
+                                if (adultTrendingAggregated.isNotEmpty()) {
+                                    item {
+                                        HomeMediaSection(
+                                            title = "Trending",
+                                            subtitle = "Adult Only",
+                                            items = adultTrendingAggregated,
+                                            onSeeAll = {
+                                                navigator.push(DiscoverFeedScreen(isLatest = false, isAdult = true))
+                                            },
+                                            onClick = { manga ->
+                                                scope.launch {
+                                                    val localManga = viewModel.getNetworkToLocalManga(manga)
+                                                    navigator.push(MangaScreen(localManga.id))
+                                                }
                                             }
-                                        }
-                                    )
+                                        )
+                                    }
+                                } else if (isAdultTrendingLoading) {
+                                    item {
+                                        HomeMediaSectionSkeleton(
+                                            title = "Trending",
+                                            subtitle = "Adult Only",
+                                            shimmerBrush = shimmerBrush,
+                                        )
+                                    }
                                 }
-                            } else {
-                                item {
-                                    HomeMediaSectionSkeleton(
-                                        title = "Latest",
-                                        shimmerBrush = shimmerBrush,
-                                    )
+
+                                // Adult Latest Section
+                                if (adultLatestAggregated.isNotEmpty()) {
+                                    item {
+                                        HomeMediaSection(
+                                            title = "Latest",
+                                            subtitle = "Adult Only",
+                                            items = adultLatestAggregated,
+                                            onSeeAll = {
+                                                navigator.push(DiscoverFeedScreen(isLatest = true, isAdult = true))
+                                            },
+                                            onClick = { manga ->
+                                                scope.launch {
+                                                    val localManga = viewModel.getNetworkToLocalManga(manga)
+                                                    navigator.push(MangaScreen(localManga.id))
+                                                }
+                                            }
+                                        )
+                                    }
+                                } else if (isAdultLatestLoading) {
+                                    item {
+                                        HomeMediaSectionSkeleton(
+                                            title = "Latest",
+                                            subtitle = "Adult Only",
+                                            shimmerBrush = shimmerBrush,
+                                        )
+                                    }
                                 }
                             }
 

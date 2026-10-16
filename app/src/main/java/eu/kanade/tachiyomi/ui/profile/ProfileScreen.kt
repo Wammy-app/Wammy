@@ -196,35 +196,35 @@ class ProfileScreen : Screen {
                     Toast.makeText(context, "Signed in successfully!", Toast.LENGTH_SHORT).show()
 
                     val currentUid = authResult.user?.uid
-                    if (currentUid != null) {
+                    val hasProfile = if (currentUid != null) repo.hasProfile(currentUid) else true
+                    if (hasProfile == false) {
+                        navigator.push(UsernamePickerScreen())
+                    } else {
                         scope.launch {
-                            val hasProfile = repo.hasProfile(currentUid)
-                            if (hasProfile == false) {
-                                navigator.push(UsernamePickerScreen())
+                            try {
+                                when (val driveResult = withTimeoutOrNull(10_000L) { driveApiHelper.requestDriveAuthorization() }) {
+                                    is AuthorizationResult.NeedsConsent -> {
+                                        val intentSenderRequest = IntentSenderRequest.Builder(driveResult.pendingIntent).build()
+                                        try {
+                                            driveConsentLauncher.launch(intentSenderRequest)
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("ProfileScreen", "Drive Consent Launcher error", e)
+                                        }
+                                    }
+                                    is AuthorizationResult.Success -> {
+                                        eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context, immediate = true)
+                                        eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(context)
+                                    }
+                                    is AuthorizationResult.Error -> {
+                                        android.util.Log.e("ProfileScreen", "Drive Auth Error: ${driveResult.message}")
+                                    }
+                                    null -> {
+                                        android.util.Log.w("ProfileScreen", "Drive authorization timed out after 10s")
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.e("ProfileScreen", "Drive Auth Exception", e)
                             }
-                        }
-                    }
-
-                    scope.launch {
-                        try {
-                            when (val driveResult = withTimeoutOrNull(10_000L) { driveApiHelper.requestDriveAuthorization() }) {
-                                is AuthorizationResult.NeedsConsent -> {
-                                    val intentSenderRequest = IntentSenderRequest.Builder(driveResult.pendingIntent).build()
-                                    driveConsentLauncher.launch(intentSenderRequest)
-                                }
-                                is AuthorizationResult.Success -> {
-                                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleRestoreCheck(context, immediate = true)
-                                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(context)
-                                }
-                                is AuthorizationResult.Error -> {
-                                    android.util.Log.e("ProfileScreen", "Drive Auth Error: ${driveResult.message}")
-                                }
-                                null -> {
-                                    android.util.Log.w("ProfileScreen", "Drive authorization timed out after 10s")
-                                }
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("ProfileScreen", "Drive Auth Exception", e)
                         }
                     }
                 } catch (ex: Exception) {

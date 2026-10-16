@@ -77,6 +77,7 @@ import uy.kohesive.injekt.api.get
 
 class DiscoverFeedScreen(
     private val isLatest: Boolean,
+    private val isAdult: Boolean = false,
 ) : Screen() {
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -93,16 +94,21 @@ class DiscoverFeedScreen(
             label = "sources_expand_chevron",
         )
 
+        val targetSources = remember(state.sources, state.regularSources, state.adultSources, isAdult, isLatest) {
+            val s = if (isAdult) state.adultSources else state.regularSources
+            if (isLatest) s.filter { it.supportsLatest } else s
+        }
+
         val aggregatedManga = remember(
             viewModel.popularCache.toMap(),
             viewModel.latestCache.toMap(),
-            state.sources,
+            targetSources,
             isLatest,
         ) {
             val result = mutableListOf<Manga>()
             val seenTitles = mutableSetOf<String>()
             val cache = if (isLatest) viewModel.latestCache else viewModel.popularCache
-            val lists = state.sources.mapNotNull { cache[it.id] }
+            val lists = targetSources.mapNotNull { cache[it.id] }
             val maxLen = lists.maxOfOrNull { it.size } ?: 0
             for (i in 0 until maxLen) {
                 for (list in lists) {
@@ -119,7 +125,8 @@ class DiscoverFeedScreen(
         }
 
         val pageTitle = if (isLatest) "Latest" else "Trending"
-        val visibleSources = if (isSourcesExpanded) state.sources else state.sources.take(4)
+        val pageSubtitle = if (isAdult) "Adult Only" else null
+        val visibleSources = if (isSourcesExpanded) targetSources else targetSources.take(4)
         val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
         Scaffold(
@@ -153,12 +160,22 @@ class DiscoverFeedScreen(
                         }
                     },
                     title = {
-                        Text(
-                            text = pageTitle,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                        Column {
+                            Text(
+                                text = pageTitle,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            if (pageSubtitle != null) {
+                                Text(
+                                    text = pageSubtitle,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                                )
+                            }
+                        }
                     },
                 )
             },
@@ -177,7 +194,7 @@ class DiscoverFeedScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 // 1. Installed Sources Section (Rounded Square Logos ONLY + Expand Arrow)
-                if (state.sources.isNotEmpty()) {
+                if (targetSources.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Column(
                             modifier = Modifier
@@ -228,7 +245,7 @@ class DiscoverFeedScreen(
                                 }
                             }
 
-                            if (state.sources.size > 4) {
+                            if (targetSources.size > 4) {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Box(
                                     modifier = Modifier.fillMaxWidth(),
@@ -268,13 +285,26 @@ class DiscoverFeedScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            Text(
-                                text = if (isLatest) "Latest Releases" else "Popular",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.padding(bottom = 2.dp),
-                            )
+                            ) {
+                                Text(
+                                    text = if (isLatest) "Latest" else "Trending",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                if (isAdult) {
+                                    Text(
+                                        text = "• Adult Only",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                                    )
+                                }
+                            }
                         }
                     }
                 }

@@ -124,6 +124,10 @@ object HomeScreen : Screen() {
         val context = androidx.compose.ui.platform.LocalContext.current
         val repo: FirestoreUserRepository = remember { Injekt.get() }
         
+        LaunchedEffect(Unit) {
+            (context as? eu.kanade.tachiyomi.ui.main.MainActivity)?.ready = true
+        }
+
         // Re-check whenever auth state changes OR user navigates back to HomeScreen
         val currentScreen = navigator.lastItem
         LaunchedEffect(user, currentScreen) {

@@ -11,6 +11,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -44,6 +45,12 @@ class DriveSyncWorker(
         if (FirebaseAuth.getInstance().currentUser == null) {
             logcat(LogPriority.INFO) { "DriveSyncWorker: No Firebase user, skipping" }
             return@withContext Result.success()
+        }
+
+        // Postpone backup if user is actively reading
+        if (isReaderActive) {
+            logcat(LogPriority.INFO) { "DriveSyncWorker: User is currently reading, postponing backup until reader is closed" }
+            return@withContext Result.retry()
         }
 
         val driveSyncManager: DriveSyncManager = Injekt.get()
@@ -263,6 +270,9 @@ class DriveSyncWorker(
         private const val NOTIF_ID_BACKUP = -510
         private const val NOTIF_ID_RESTORE = -511
 
+        @Volatile
+        var isReaderActive: Boolean = false
+
         /**
          * Schedule an auto-backup with 2-minute debounce using WorkManager.
          *
@@ -279,6 +289,16 @@ class DriveSyncWorker(
          */
         fun scheduleBackup(context: Context) {
             val appContext = context.applicationContext
+
+            // Guard: skip if user is reading (backup will run when they finish reading)
+            if (isReaderActive) {
+                logcat(LogPriority.INFO) { "DriveSyncWorker: User is reading, postponing backup until reader is closed" }
+                appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean(KEY_DATA_DIRTY, true)
+                    .apply()
+                return
+            }
 
             // Guard: skip if user is not logged in
             if (FirebaseAuth.getInstance().currentUser == null) return
@@ -311,13 +331,18 @@ class DriveSyncWorker(
                 .setInitialDelay(1, TimeUnit.MINUTES)
                 .build()
 
-            WorkManager.getInstance(appContext).enqueueUniqueWork(
-                WORK_NAME_BACKUP,
-                ExistingWorkPolicy.REPLACE,
-                request
-            )
-
-            logcat(LogPriority.INFO) { "DriveSyncWorker: Backup scheduled (1-minute debounce, wifiOnly=$wifiOnly)" }
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    WorkManager.getInstance(appContext).enqueueUniqueWork(
+                        WORK_NAME_BACKUP,
+                        ExistingWorkPolicy.REPLACE,
+                        request
+                    )
+                    logcat(LogPriority.INFO) { "DriveSyncWorker: Backup scheduled (1-minute debounce, wifiOnly=$wifiOnly)" }
+                } catch (e: Exception) {
+                    logcat(LogPriority.WARN, e) { "DriveSyncWorker: Failed to enqueue backup work" }
+                }
+            }
         }
 
         /**

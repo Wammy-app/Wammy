@@ -27,6 +27,7 @@ fun HomeMediaSection(
     onSeeAll: () -> Unit,
     onClick: (Manga) -> Unit,
     modifier: Modifier = Modifier,
+    subtitle: String? = null,
 ) {
     if (items.isEmpty()) return
 
@@ -37,7 +38,7 @@ fun HomeMediaSection(
             .fillMaxWidth()
             .padding(vertical = 12.dp),
     ) {
-        // Section Header: Title + Arrow Button
+        // Section Header: Title (+ Subtitle) + Arrow Button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -46,12 +47,22 @@ fun HomeMediaSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                    )
+                }
+            }
 
             IconButton(onClick = onSeeAll) {
                 Icon(

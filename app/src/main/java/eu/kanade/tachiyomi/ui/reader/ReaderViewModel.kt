@@ -164,7 +164,6 @@ class ReaderViewModel @JvmOverloads constructor(
 
     /** Tracks whether reading progress actually changed during this session (for smart auto-sync) */
     var hasProgressChanged = false
-        private set
 
     private val eventChannel = Channel<Event>()
     val eventFlow = eventChannel.receiveAsFlow()

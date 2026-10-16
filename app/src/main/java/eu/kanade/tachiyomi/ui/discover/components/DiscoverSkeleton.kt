@@ -279,13 +279,14 @@ fun HomeMediaSectionSkeleton(
     shimmerBrush: Brush,
     title: String? = null,
     modifier: Modifier = Modifier,
+    subtitle: String? = null,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 12.dp),
     ) {
-        // Section Header: Title + Arrow button placeholder
+        // Section Header: Title (+ Subtitle) + Arrow button placeholder
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -293,21 +294,32 @@ fun HomeMediaSectionSkeleton(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (title != null) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .width(110.dp)
-                        .height(20.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(shimmerBrush),
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                if (title != null) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .width(110.dp)
+                            .height(20.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shimmerBrush),
+                    )
+                }
+
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                    )
+                }
             }
 
             Box(

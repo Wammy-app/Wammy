@@ -36,6 +36,7 @@ data class NetworkLegacyExtension(
             versionName = version,
             lang = lang,
             isNsfw = nsfw == 1,
+            isAdult = nsfw == 1,
             // Legacy index carries no novel flag; novel extensions use the novelextension package prefix.
             isNovel = pkg.startsWith("eu.kanade.tachiyomi.novelextension"),
             sources = if (sources.isNullOrEmpty()) {

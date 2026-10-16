@@ -16,6 +16,7 @@ import tachiyomi.domain.source.model.Source
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.util.secondaryItemAlpha
 import eu.kanade.domain.source.model.installedExtension
+import eu.kanade.domain.source.model.isAdultSource
 
 @Composable
 fun BaseSourceItem(
@@ -67,7 +68,7 @@ private val defaultContent: @Composable RowScope.(Source, String?) -> Unit = { s
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(MaterialTheme.padding.small),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (source.installedExtension?.isNsfw == true) {
+            if (source.installedExtension?.isNsfw == true || source.isAdultSource()) {
                 Text(
                     text = tachiyomi.presentation.core.i18n.stringResource(tachiyomi.i18n.MR.strings.ext_nsfw_short).uppercase(),
                     color = MaterialTheme.colorScheme.error,

@@ -107,6 +107,7 @@ fun ExtensionList.toAvailableExtensions(store: ExtensionStore): List<TachiyomiEx
             versionName = extension.versionName,
             lang = if (lang.size == 1) lang.first() else "all",
             isNsfw = extension.contentWarning >= ContentWarning.MIXED,
+            isAdult = extension.contentWarning == ContentWarning.NSFW,
             // The real isNovel field is authoritative; the package-prefix check is only a
             // fallback for stores whose index predates it (or don't bother setting it at all).
             isNovel = extension.isNovel || extension.packageName.startsWith("eu.kanade.tachiyomi.novelextension"),

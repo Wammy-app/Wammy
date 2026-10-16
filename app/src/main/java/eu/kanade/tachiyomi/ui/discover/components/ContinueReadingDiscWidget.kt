@@ -163,11 +163,11 @@ private fun ContinueReadingCard(
     }
 
     val progress = if (history.lastPageRead > 0) {
-        (history.lastPageRead.toFloat() / 20f).coerceIn(0.1f, 1f)
+        (history.lastPageRead.toFloat() / 20f).coerceIn(0.05f, 1f)
     } else if (history.chapterRead) {
         1f
     } else {
-        0.5f
+        0f
     }
     val percentRead = (progress * 100).toInt()
     val cardColor = MaterialTheme.colorScheme.surfaceContainer

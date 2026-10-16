@@ -153,13 +153,14 @@ class MainActivity : BaseActivity() {
             }
         }
 
-        // Ensure periodic cloud backup happens in the background
-        eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(this)
+        // Ensure periodic cloud backup and dirty sync happen in the background without blocking cold start
+        lifecycleScope.launchIO {
+            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(this@MainActivity)
 
-        // If local data was marked dirty before process killed, ensure backup is queued
-        val syncPrefs = getSharedPreferences(eu.kanade.tachiyomi.data.sync.DriveSyncWorker.PREFS_NAME, MODE_PRIVATE)
-        if (syncPrefs.getBoolean(eu.kanade.tachiyomi.data.sync.DriveSyncWorker.KEY_DATA_DIRTY, false)) {
-            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(this)
+            val syncPrefs = getSharedPreferences(eu.kanade.tachiyomi.data.sync.DriveSyncWorker.PREFS_NAME, MODE_PRIVATE)
+            if (syncPrefs.getBoolean(eu.kanade.tachiyomi.data.sync.DriveSyncWorker.KEY_DATA_DIRTY, false)) {
+                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(this@MainActivity)
+            }
         }
 
         Migrator.awaitAndRelease()
@@ -173,6 +174,10 @@ class MainActivity : BaseActivity() {
 
         setComposeContent {
             val context = LocalContext.current
+
+            LaunchedEffect(Unit) {
+                ready = true
+            }
 
             var incognito by remember { mutableStateOf(getIncognitoState.await(null)) }
             val downloadOnly by preferences.downloadedOnly.collectAsState()
@@ -771,5 +776,5 @@ class MainActivity : BaseActivity() {
 
 // Splash screen
 private const val SPLASH_MIN_DURATION = 0 // ms
-private const val SPLASH_MAX_DURATION = 5000 // ms
+private const val SPLASH_MAX_DURATION = 1500 // ms
 private const val SPLASH_EXIT_ANIM_DURATION = 400L // ms

@@ -133,7 +133,11 @@ fun LoginBottomSheet(
                     when (val driveResult = withTimeoutOrNull(10_000L) { driveApiHelper.requestDriveAuthorization() }) {
                         is AuthorizationResult.NeedsConsent -> {
                             val intentSenderRequest = IntentSenderRequest.Builder(driveResult.pendingIntent).build()
-                            driveConsentLauncher.launch(intentSenderRequest)
+                            try {
+                                driveConsentLauncher.launch(intentSenderRequest)
+                            } catch (e: Exception) {
+                                android.util.Log.e("LoginSheet", "Drive Consent Launcher error", e)
+                            }
                         }
                         is AuthorizationResult.Success -> {
                             isSigningIn = false
