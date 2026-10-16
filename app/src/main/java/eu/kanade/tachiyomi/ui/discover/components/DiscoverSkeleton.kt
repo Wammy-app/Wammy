@@ -485,7 +485,7 @@ fun DiscoverSkeletonScreen(
 }
 
 /**
- * Grid skeleton placeholder for feed screens (e.g. DiscoverFeedScreen).
+ * Grid skeleton placeholder for feed screens.
  */
 @Composable
 fun FeedGridSkeleton(
