@@ -98,12 +98,12 @@ fun WavyDockNavigationBar(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
-            modifier = Modifier.wrapContentWidth(),
+            modifier = if (onReadingClick != null) Modifier.weight(1f) else Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(50),
             color = barContainer,
             contentColor = barContent,
@@ -111,15 +111,16 @@ fun WavyDockNavigationBar(
         ) {
             Row(
                 modifier = Modifier
-                    .heightIn(min = 50.dp)
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
                     .animateContentSize(
                         animationSpec = spring(
                             dampingRatio = Spring.DampingRatioNoBouncy,
                             stiffness = Spring.StiffnessMedium,
                         ),
                     ),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 tabs.forEachIndexed { index, tab ->
@@ -150,17 +151,17 @@ fun WavyDockNavigationBar(
         }
 
         if (onReadingClick != null) {
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Surface(
                 modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = androidx.compose.material3.ripple(),
                         onClick = onReadingClick,
                     ),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = selectedContainer,
                 contentColor = selectedContent,
                 shadowElevation = 4.dp,
@@ -172,7 +173,7 @@ fun WavyDockNavigationBar(
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.MenuBook,
                         contentDescription = "Resume Reading",
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(24.dp),
                         tint = selectedContent,
                     )
                 }
@@ -196,7 +197,7 @@ private fun FloatingNavItem(
 
     Box(
         modifier = Modifier
-            .height(38.dp)
+            .height(42.dp)
             .background(color = itemBackgroundColor, shape = CircleShape)
             .clickable(
                 interactionSource = interactionSource,
@@ -212,11 +213,7 @@ private fun FloatingNavItem(
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = if (moreThanFourTabs) {
-                    if (isSelected) 8.dp else 4.dp
-                } else {
-                    10.dp
-                },
+                horizontal = if (isSelected) 12.dp else 8.dp,
             ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
@@ -287,7 +284,7 @@ private fun TabIcon(
                 imageVector = vector,
                 contentDescription = title,
                 tint = contentColor,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(22.dp),
             )
         } else {
             val painter = tab.options.icon ?: rememberVectorPainter(Icons.Outlined.CollectionsBookmark)
@@ -295,7 +292,7 @@ private fun TabIcon(
                 painter = painter,
                 contentDescription = title,
                 tint = contentColor,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(22.dp),
             )
         }
     }
