@@ -212,6 +212,9 @@ object HomeScreen : Screen() {
                                         scope.launch { tab.onReselect(navigator) }
                                     }
                                 },
+                                onNewsClick = {
+                                    navigator.push(eu.kanade.presentation.news.NewsScreen())
+                                },
                                 badgeContent = { tab ->
                                     when {
                                         tab is UpdatesTab -> {

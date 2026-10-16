@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -65,6 +66,11 @@ import eu.kanade.tachiyomi.ui.discover.DiscoverTab
 import eu.kanade.tachiyomi.ui.history.HistoryTab
 import eu.kanade.tachiyomi.ui.more.MoreTab
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.outlined.Newspaper
+import androidx.compose.ui.draw.clip
+
 @Composable
 fun WavyDockNavigationBar(
     tabs: List<Tab>,
@@ -72,6 +78,7 @@ fun WavyDockNavigationBar(
     onTabSelected: (Tab) -> Unit,
     modifier: Modifier = Modifier,
     badgeContent: @Composable ((Tab) -> Unit)? = null,
+    onNewsClick: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     // DropSauce design tokens dynamically mapped to MaterialTheme
@@ -85,12 +92,13 @@ fun WavyDockNavigationBar(
         tabs.indexOfFirst { it::class == currentTab::class }.coerceAtLeast(0)
     }
 
-    Box(
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
             modifier = Modifier.wrapContentWidth(),
@@ -101,15 +109,15 @@ fun WavyDockNavigationBar(
         ) {
             Row(
                 modifier = Modifier
-                    .heightIn(min = 64.dp)
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .heightIn(min = 58.dp)
+                    .padding(horizontal = 6.dp, vertical = 6.dp)
                     .animateContentSize(
                         animationSpec = spring(
                             dampingRatio = Spring.DampingRatioNoBouncy,
                             stiffness = Spring.StiffnessMedium,
                         ),
                     ),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 tabs.forEachIndexed { index, tab ->
@@ -138,6 +146,36 @@ fun WavyDockNavigationBar(
                 }
             }
         }
+
+        if (onNewsClick != null) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Surface(
+                modifier = Modifier
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = androidx.compose.material3.ripple(),
+                        onClick = onNewsClick,
+                    ),
+                shape = RoundedCornerShape(16.dp),
+                color = selectedContainer,
+                contentColor = selectedContent,
+                shadowElevation = 4.dp,
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Newspaper,
+                        contentDescription = "Anime & Manga News",
+                        modifier = Modifier.size(24.dp),
+                        tint = selectedContent,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -156,7 +194,7 @@ private fun FloatingNavItem(
 
     Box(
         modifier = Modifier
-            .height(48.dp)
+            .height(46.dp)
             .background(color = itemBackgroundColor, shape = CircleShape)
             .clickable(
                 interactionSource = interactionSource,
@@ -173,9 +211,9 @@ private fun FloatingNavItem(
         Row(
             modifier = Modifier.padding(
                 horizontal = if (moreThanFourTabs) {
-                    if (isSelected) 12.dp else 10.dp
+                    if (isSelected) 10.dp else 6.dp
                 } else {
-                    14.dp
+                    12.dp
                 },
             ),
             verticalAlignment = Alignment.CenterVertically,
