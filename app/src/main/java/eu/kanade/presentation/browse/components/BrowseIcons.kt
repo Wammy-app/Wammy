@@ -33,6 +33,7 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import eu.kanade.tachiyomi.jsplugin.source.JsSource
+import eu.kanade.tachiyomi.source.builtin.BuiltinSourceManager
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.source.model.Source
 import tachiyomi.domain.source.service.SourceManager
@@ -49,6 +50,16 @@ fun SourceIcon(
     source: Source,
     modifier: Modifier = Modifier,
 ) {
+    val builtinIconRes = BuiltinSourceManager.getIconRes(source.id, source.name)
+    if (builtinIconRes != null) {
+        Image(
+            painter = painterResource(builtinIconRes),
+            contentDescription = null,
+            modifier = modifier.then(defaultModifier),
+        )
+        return
+    }
+
     val icon = source.icon
 
     // Check if actual source is a JsSource

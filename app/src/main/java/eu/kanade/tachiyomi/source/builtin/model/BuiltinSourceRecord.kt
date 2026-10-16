@@ -5,12 +5,12 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class BuiltinEngineType {
     MADARA,
-    MANGA_READER,
     MANGADEX,
-    COMICK,
-    MANGAPILL,
-    WEBTOON,
-    REIMANGA,
+    MANGAKAKALOT,
+    WEEBCENTRAL,
+    MANGATHEMESIA,
+    ATSUMARU,
+    BBATO,
     COMIX,
 }
 

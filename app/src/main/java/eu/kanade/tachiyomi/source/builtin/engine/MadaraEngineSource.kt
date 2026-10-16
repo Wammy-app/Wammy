@@ -34,14 +34,18 @@ open class MadaraEngineSource(
     val mangaSubpath: String = when {
         baseUrl.contains("toonily", ignoreCase = true) -> "webtoons"
         baseUrl.contains("flame", ignoreCase = true) || baseUrl.contains("asura", ignoreCase = true) -> "series"
+        baseUrl.contains("novelmic", ignoreCase = true) -> "novel"
         else -> "manga"
     },
 ) : ParsedHttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override val client: OkHttpClient
-        get() = network.client
+    override val client: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .build()
+    }
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", "$baseUrl/")

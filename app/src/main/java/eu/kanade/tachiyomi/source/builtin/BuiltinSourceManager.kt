@@ -1,15 +1,16 @@
 package eu.kanade.tachiyomi.source.builtin
 
 import android.content.Context
+import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.source.CatalogueSource
-import eu.kanade.tachiyomi.source.builtin.comick.ComickSource
+import eu.kanade.tachiyomi.source.builtin.atsumaru.AtsumaruSource
+import eu.kanade.tachiyomi.source.builtin.bbato.BbatoSource
 import eu.kanade.tachiyomi.source.builtin.comix.ComixSource
 import eu.kanade.tachiyomi.source.builtin.engine.MadaraEngineSource
-import eu.kanade.tachiyomi.source.builtin.engine.MangaReaderEngineSource
+import eu.kanade.tachiyomi.source.builtin.engine.MangaThemesiaEngineSource
 import eu.kanade.tachiyomi.source.builtin.mangadex.MangaDexSource
-import eu.kanade.tachiyomi.source.builtin.mangapill.MangaPillSource
-import eu.kanade.tachiyomi.source.builtin.reimanga.ReiMangaSource
-import eu.kanade.tachiyomi.source.builtin.webtoon.WebtoonsSource
+import eu.kanade.tachiyomi.source.builtin.mangakakalot.MangakakalotSource
+import eu.kanade.tachiyomi.source.builtin.weebcentral.WeebCentralSource
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinEngineType
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinSourceRecord
 import kotlinx.coroutines.CoroutineScope
@@ -18,7 +19,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -28,8 +28,8 @@ import java.io.File
 import kotlin.math.abs
 
 /**
- * Manages native built-in sources and generic engines (Madara, MangaReader, MangaDex, ComicK, MangaPill).
- * Allows Wammy to work completely autonomously on first launch without requiring external APK extensions.
+ * Manages native built-in sources for Wammy.
+ * Powers the 12 core manga sources out of the box with zero APK installation required.
  */
 class BuiltinSourceManager(
     private val context: Context,
@@ -64,46 +64,14 @@ class BuiltinSourceManager(
         ),
         BuiltinSourceRecord(
             id = 80010002L,
-            name = "ComicK",
-            baseUrl = "https://comick.dev",
+            name = "Mangakakalot",
+            baseUrl = "https://www.mangakakalot.gg",
             lang = "en",
-            engineType = BuiltinEngineType.COMICK,
+            engineType = BuiltinEngineType.MANGAKAKALOT,
             isDefaultEnabled = true,
         ),
         BuiltinSourceRecord(
             id = 80010003L,
-            name = "MangaPill",
-            baseUrl = "https://mangapill.com",
-            lang = "en",
-            engineType = BuiltinEngineType.MANGAPILL,
-            isDefaultEnabled = true,
-        ),
-        BuiltinSourceRecord(
-            id = 80010004L,
-            name = "Asura Comic",
-            baseUrl = "https://asurascans.com",
-            lang = "en",
-            engineType = BuiltinEngineType.MADARA,
-            isDefaultEnabled = true,
-        ),
-        BuiltinSourceRecord(
-            id = 80010005L,
-            name = "Toonily",
-            baseUrl = "https://toonily.com",
-            lang = "en",
-            engineType = BuiltinEngineType.MADARA,
-            isDefaultEnabled = true,
-        ),
-        BuiltinSourceRecord(
-            id = 80010006L,
-            name = "Flame Comics",
-            baseUrl = "https://flamecomics.xyz",
-            lang = "en",
-            engineType = BuiltinEngineType.MADARA,
-            isDefaultEnabled = true,
-        ),
-        BuiltinSourceRecord(
-            id = 80010007L,
             name = "ManhuaFast",
             baseUrl = "https://manhuafast.com",
             lang = "en",
@@ -111,27 +79,67 @@ class BuiltinSourceManager(
             isDefaultEnabled = true,
         ),
         BuiltinSourceRecord(
-            id = 80010008L,
-            name = "RavenScans",
-            baseUrl = "https://ravenscans.org",
+            id = 80010004L,
+            name = "Novelmic",
+            baseUrl = "https://novelmic.com",
             lang = "en",
-            engineType = BuiltinEngineType.MANGA_READER,
+            engineType = BuiltinEngineType.MADARA,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80010005L,
+            name = "WeebCentral",
+            baseUrl = "https://weebcentral.com",
+            lang = "en",
+            engineType = BuiltinEngineType.WEEBCENTRAL,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80010006L,
+            name = "Yaksha Scans",
+            baseUrl = "https://yakshacomics.com",
+            lang = "en",
+            engineType = BuiltinEngineType.MADARA,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80010007L,
+            name = "Arena Scans",
+            baseUrl = "https://arenascan.com",
+            lang = "en",
+            engineType = BuiltinEngineType.MANGATHEMESIA,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80010008L,
+            name = "Aster Scans",
+            baseUrl = "https://asterscans.com",
+            lang = "en",
+            engineType = BuiltinEngineType.MANGATHEMESIA,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80010009L,
+            name = "Atsumaru",
+            baseUrl = "https://atsu.moe",
+            lang = "en",
+            engineType = BuiltinEngineType.ATSUMARU,
             isDefaultEnabled = true,
         ),
         BuiltinSourceRecord(
             id = 80010010L,
-            name = "Webtoons",
-            baseUrl = "https://www.webtoons.com",
+            name = "Bbato",
+            baseUrl = "https://bato1.com",
             lang = "en",
-            engineType = BuiltinEngineType.WEBTOON,
+            engineType = BuiltinEngineType.BBATO,
             isDefaultEnabled = true,
         ),
         BuiltinSourceRecord(
             id = 80010011L,
-            name = "ReiManga",
-            baseUrl = "https://reimanga.net",
+            name = "Comic Asura",
+            baseUrl = "https://comicasura.net",
             lang = "en",
-            engineType = BuiltinEngineType.REIMANGA,
+            engineType = BuiltinEngineType.MANGATHEMESIA,
             isDefaultEnabled = true,
         ),
         BuiltinSourceRecord(
@@ -167,22 +175,22 @@ class BuiltinSourceManager(
         return try {
             when (record.engineType) {
                 BuiltinEngineType.MANGADEX -> MangaDexSource(id = record.id, lang = record.lang)
-                BuiltinEngineType.COMICK -> ComickSource(id = record.id, lang = record.lang)
-                BuiltinEngineType.MANGAPILL -> MangaPillSource(id = record.id, lang = record.lang)
+                BuiltinEngineType.MANGAKAKALOT -> MangakakalotSource(id = record.id, lang = record.lang)
+                BuiltinEngineType.WEEBCENTRAL -> WeebCentralSource(id = record.id, lang = record.lang)
+                BuiltinEngineType.ATSUMARU -> AtsumaruSource(id = record.id, lang = record.lang)
+                BuiltinEngineType.BBATO -> BbatoSource(id = record.id, lang = record.lang)
                 BuiltinEngineType.MADARA -> MadaraEngineSource(
                     id = record.id,
                     name = record.name,
                     baseUrl = record.baseUrl,
                     lang = record.lang,
                 )
-                BuiltinEngineType.MANGA_READER -> MangaReaderEngineSource(
+                BuiltinEngineType.MANGATHEMESIA -> MangaThemesiaEngineSource(
                     id = record.id,
                     name = record.name,
                     baseUrl = record.baseUrl,
                     lang = record.lang,
                 )
-                BuiltinEngineType.WEBTOON -> WebtoonsSource(id = record.id, lang = record.lang)
-                BuiltinEngineType.REIMANGA -> ReiMangaSource(id = record.id, lang = record.lang)
                 BuiltinEngineType.COMIX -> ComixSource(id = record.id, lang = record.lang)
             }
         } catch (e: Exception) {
@@ -256,6 +264,40 @@ class BuiltinSourceManager(
             customSourcesFile.writeText(json.encodeToString(records))
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Failed to save custom builtin sources" }
+        }
+    }
+
+    companion object {
+        fun getIconRes(sourceId: Long, sourceName: String? = null): Int? {
+            return when (sourceId) {
+                80010001L -> R.drawable.source_mangadex
+                80010002L -> R.drawable.source_mangakakalot
+                80010003L -> R.drawable.source_manhuafast
+                80010004L -> R.drawable.source_novelmic
+                80010005L -> R.drawable.source_weebcentral
+                80010006L -> R.drawable.source_yakshascans
+                80010007L -> R.drawable.source_arenascans
+                80010008L -> R.drawable.source_asterscans
+                80010009L -> R.drawable.source_atsumaru
+                80010010L -> R.drawable.source_bbato
+                80010011L -> R.drawable.source_comicasura
+                80010012L -> R.drawable.source_comix
+                else -> when (sourceName?.lowercase()?.trim()) {
+                    "mangadex" -> R.drawable.source_mangadex
+                    "mangakakalot" -> R.drawable.source_mangakakalot
+                    "manhuafast" -> R.drawable.source_manhuafast
+                    "novelmic" -> R.drawable.source_novelmic
+                    "weebcentral" -> R.drawable.source_weebcentral
+                    "yaksha scans", "yaksha comics", "yakshascans" -> R.drawable.source_yakshascans
+                    "arena scans", "arenascans" -> R.drawable.source_arenascans
+                    "aster scans", "asterscans" -> R.drawable.source_asterscans
+                    "atsumaru" -> R.drawable.source_atsumaru
+                    "bbato", "bato" -> R.drawable.source_bbato
+                    "comic asura", "asura comic", "asura scans", "comicasura" -> R.drawable.source_comicasura
+                    "comix" -> R.drawable.source_comix
+                    else -> null
+                }
+            }
         }
     }
 }

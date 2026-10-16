@@ -30,8 +30,11 @@ class ComixSource(
     override val baseUrl: String = "https://comix.to"
     override val supportsLatest: Boolean = true
 
-    override val client: OkHttpClient
-        get() = network.client
+    override val client: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .build()
+    }
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", "$baseUrl/")
