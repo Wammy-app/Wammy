@@ -96,10 +96,14 @@ import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import tachiyomi.domain.source.interactor.GetRemoteManga
 import eu.kanade.tachiyomi.ui.discover.components.ContinueReadingCarouselWidget
 import eu.kanade.tachiyomi.ui.discover.components.ContinueReadingDiscWidget
+import eu.kanade.tachiyomi.ui.discover.components.DiscoverSkeletonScreen
 import eu.kanade.tachiyomi.ui.discover.components.HeroFeaturedCard
+import eu.kanade.tachiyomi.ui.discover.components.HeroFeaturedCardSkeleton
 import eu.kanade.tachiyomi.ui.discover.components.HomeMediaSection
+import eu.kanade.tachiyomi.ui.discover.components.HomeMediaSectionSkeleton
 import eu.kanade.tachiyomi.ui.discover.components.HomeTopBar
 import eu.kanade.tachiyomi.ui.discover.components.RecentlyUploadedCard
+import eu.kanade.tachiyomi.ui.discover.components.rememberShimmerBrush
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 
 object DiscoverTab : Tab {
@@ -145,6 +149,7 @@ object DiscoverTab : Tab {
                     onUpdatesClick = { navigator.push(eu.kanade.tachiyomi.ui.updates.UpdatesTab) },
                     onSearchClick = { navigator.push(eu.kanade.tachiyomi.ui.search.UserSearchScreen()) },
                     onProfileClick = { navigator.push(eu.kanade.tachiyomi.ui.profile.ProfileScreen()) },
+                    onToggleMode = { viewModel.toggleNovel(!state.isNovel) },
                     scrollBehavior = scrollBehavior,
                 )
             },
@@ -154,9 +159,7 @@ object DiscoverTab : Tab {
         ) { contentPadding ->
             androidx.compose.animation.Crossfade(targetState = state, animationSpec = tween(400), modifier = Modifier.padding(contentPadding).fillMaxSize(), label = "discover") { animatedState ->
                 if (animatedState.isLoading) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
+                    DiscoverSkeletonScreen()
                 } else {
                     val recentlyRead by viewModel.recentlyRead.collectAsState()
 
@@ -216,7 +219,10 @@ object DiscoverTab : Tab {
                             isNovel = animatedState.isNovel,
                             onBrowseExtensions = { tabNavigator.current = BrowseTab }
                         )
+                    } else if (trendingAggregated.isEmpty() && latestAggregated.isEmpty()) {
+                        DiscoverSkeletonScreen()
                     } else {
+                        val shimmerBrush = rememberShimmerBrush()
                         LazyColumn(
                             contentPadding = PaddingValues(0.dp),
                             modifier = Modifier.fillMaxSize(),
@@ -224,15 +230,19 @@ object DiscoverTab : Tab {
                             // 1. Hero Featured Card
                             item {
                                 Spacer(modifier = Modifier.height(8.dp))
-                                HeroFeaturedCard(
-                                    items = featuredManga,
-                                    onClick = { manga ->
-                                        scope.launch {
-                                            val localManga = viewModel.getNetworkToLocalManga(manga)
-                                            navigator.push(MangaScreen(localManga.id))
+                                if (featuredManga.isNotEmpty()) {
+                                    HeroFeaturedCard(
+                                        items = featuredManga,
+                                        onClick = { manga ->
+                                            scope.launch {
+                                                val localManga = viewModel.getNetworkToLocalManga(manga)
+                                                navigator.push(MangaScreen(localManga.id))
+                                            }
                                         }
-                                    }
-                                )
+                                    )
+                                } else {
+                                    HeroFeaturedCardSkeleton(shimmerBrush = shimmerBrush)
+                                }
                                 Spacer(modifier = Modifier.height(10.dp))
                             }
 
@@ -277,19 +287,6 @@ object DiscoverTab : Tab {
                                 }
                             }
 
-                            // Loading shimmer if caches are still loading
-                            if (trendingAggregated.isEmpty() && latestAggregated.isEmpty()) {
-                                item {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                                    ) {
-                                        SkeletonCarousel()
-                                    }
-                                }
-                            }
-
                             // 4. Trending Section (2 stacked LazyRows, merged across all sources)
                             if (trendingAggregated.isNotEmpty()) {
                                 item {
@@ -305,6 +302,13 @@ object DiscoverTab : Tab {
                                                 navigator.push(MangaScreen(localManga.id))
                                             }
                                         }
+                                    )
+                                }
+                            } else {
+                                item {
+                                    HomeMediaSectionSkeleton(
+                                        title = "Trending",
+                                        shimmerBrush = shimmerBrush,
                                     )
                                 }
                             }
@@ -324,6 +328,13 @@ object DiscoverTab : Tab {
                                                 navigator.push(MangaScreen(localManga.id))
                                             }
                                         }
+                                    )
+                                }
+                            } else {
+                                item {
+                                    HomeMediaSectionSkeleton(
+                                        title = "Latest",
+                                        shimmerBrush = shimmerBrush,
                                     )
                                 }
                             }
@@ -622,32 +633,7 @@ fun HeroCarousel(
     }
 }
 
-@Composable
-fun SkeletonCarousel() {
-    val infiniteTransition = rememberInfiniteTransition()
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.1f,
-        targetValue = 0.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(5) {
-            Box(
-                modifier = Modifier
-                    .width(90.dp)
-                    .height(145.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
-            )
-        }
-    }
-}
+
 
 @Composable
 fun EmptyDiscoverScreen(isNovel: Boolean, onBrowseExtensions: () -> Unit) {

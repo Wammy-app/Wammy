@@ -282,14 +282,7 @@ class DiscoverFeedScreen(
                 // 2. Aggregated Manga Grid from all installed sources
                 if (aggregatedManga.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 48.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator()
-                        }
+                        eu.kanade.tachiyomi.ui.discover.components.FeedGridSkeleton()
                     }
                 } else {
                     items(

@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.discover.components
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +32,7 @@ fun HomeTopBar(
     onUpdatesClick: () -> Unit,
     onSearchClick: () -> Unit,
     onProfileClick: () -> Unit,
+    onToggleMode: () -> Unit = {},
     modifier: Modifier = Modifier,
     scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
@@ -65,10 +67,13 @@ fun HomeTopBar(
                     color = MaterialTheme.colorScheme.onBackground,
                 )
 
-                // Subtitle tag: MANGA / NOVELS
+                // Subtitle tag: MANGA / NOVELS (clickable to toggle mode)
                 Surface(
                     shape = RoundedCornerShape(4.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onToggleMode),
                 ) {
                     Text(
                         text = if (isNovel) "NOVELS" else "MANGA",
