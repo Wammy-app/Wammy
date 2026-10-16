@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.discover.components
 
+import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -40,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -53,17 +55,62 @@ import coil3.asDrawable
 import coil3.compose.AsyncImage
 import coil3.imageLoader
 import coil3.request.ImageRequest
+import coil3.request.allowHardware
 import eu.kanade.tachiyomi.data.coil.getBestColor
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.system.getBitmapOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+
+/**
+ * Ensures the bitmap is in software memory (ARGB_8888) so Palette can read pixels without throwing
+ * IllegalStateException on Hardware bitmaps.
+ */
+private fun Bitmap.toSoftwareBitmap(): Bitmap {
+    return if (config == Bitmap.Config.HARDWARE) {
+        copy(Bitmap.Config.ARGB_8888, false) ?: this
+    } else {
+        this
+    }
+}
+
+/**
+ * Extracts the true dominant, vibrant color that represents the manga cover.
+ * Filters out pure greys, blacks, and whites, and weights candidates by population * saturation^2
+ * so prominent vivid colors (e.g. orange sunsets, bright yellow backgrounds) are chosen.
+ */
+private fun extractMangaCoverColor(palette: Palette?): Color? {
+    if (palette == null) return null
+
+    val candidates = palette.swatches.filter { swatch ->
+        val hsl = swatch.hsl
+        val sat = hsl[1]
+        val lum = hsl[2]
+        sat >= 0.20f && lum in 0.15f..0.85f
+    }
+
+    val bestSwatch = candidates.maxByOrNull { swatch ->
+        val sat = swatch.hsl[1]
+        swatch.population.toFloat() * (sat * sat)
+    }
+
+    val colorInt = bestSwatch?.rgb
+        ?: palette.getBestColor()
+        ?: palette.vibrantSwatch?.rgb
+        ?: palette.lightVibrantSwatch?.rgb
+        ?: palette.dominantSwatch?.rgb
+
+    return colorInt?.let { Color(it) }
+}
 
 /**
  * Compact Hero Featured Card matching the reference design:
@@ -89,7 +136,10 @@ fun HeroFeaturedCard(
     // Dominant color cache extracted dynamically from each manga's cover art
     val dominantColorMap = remember { mutableStateMapOf<String, Color>() }
     val currentManga = items.getOrNull(pagerState.currentPage)
-    val targetDominantColor = currentManga?.let { dominantColorMap[it.url] } ?: MaterialTheme.colorScheme.primary
+    val targetDominantColor = currentManga?.let {
+        dominantColorMap[it.url]
+            ?: MangaCover.vibrantCoverColorMap[it.id]?.let { c -> Color(c) }
+    } ?: MaterialTheme.colorScheme.primary
 
     val activeColor by animateColorAsState(
         targetValue = targetDominantColor,
@@ -101,27 +151,35 @@ fun HeroFeaturedCard(
     LaunchedEffect(items) {
         items.forEach { manga ->
             if (!dominantColorMap.containsKey(manga.url)) {
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        val req = ImageRequest.Builder(context)
-                            .data(manga.asMangaCover())
-                            .build()
-                        val drawable = context.imageLoader.execute(req).image?.asDrawable(context.resources)
-                        val bitmap = drawable?.getBitmapOrNull()
-                        if (bitmap != null) {
-                            Palette.from(bitmap).generate { palette ->
-                                val colorInt = palette?.vibrantSwatch?.rgb
-                                    ?: palette?.dominantSwatch?.rgb
-                                    ?: palette?.lightVibrantSwatch?.rgb
-                                    ?: palette?.darkVibrantSwatch?.rgb
-                                    ?: palette?.getBestColor()
-                                if (colorInt != null) {
-                                    dominantColorMap[manga.url] = Color(colorInt)
+                val precomputed = MangaCover.vibrantCoverColorMap[manga.id]
+                if (precomputed != null) {
+                    dominantColorMap[manga.url] = Color(precomputed)
+                } else {
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            val req = ImageRequest.Builder(context)
+                                .data(manga.asMangaCover())
+                                .allowHardware(false)
+                                .build()
+                            val result = context.imageLoader.execute(req)
+                            val drawable = result.image?.asDrawable(context.resources)
+                            val rawBitmap = drawable?.getBitmapOrNull()
+                                ?: (drawable as? BitmapDrawable)?.bitmap
+                                ?: drawable?.toBitmap()
+                            val softwareBitmap = rawBitmap?.toSoftwareBitmap()
+                            if (softwareBitmap != null) {
+                                val palette = Palette.from(softwareBitmap)
+                                    .maximumColorCount(24)
+                                    .generate()
+                                val color = extractMangaCoverColor(palette)
+                                if (color != null) {
+                                    dominantColorMap[manga.url] = color
+                                    MangaCover.vibrantCoverColorMap[manga.id] = color.toArgb()
                                 }
                             }
+                        } catch (e: Throwable) {
+                            logcat(LogPriority.WARN, e) { "Failed to extract cover color for ${manga.title}" }
                         }
-                    } catch (_: Throwable) {
-                        // Ignore extraction errors
                     }
                 }
             }
@@ -147,7 +205,7 @@ fun HeroFeaturedCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp)),
         shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
         Box(
             modifier = Modifier
@@ -322,16 +380,16 @@ fun HeroFeaturedCard(
                                 model = coverData,
                                 contentDescription = manga.title,
                                 onSuccess = { successState ->
-                                    val bitmap = (successState.result.image.asDrawable(context.resources) as? BitmapDrawable)?.bitmap
-                                        ?: successState.result.image.asDrawable(context.resources).toBitmap()
-                                    Palette.from(bitmap).generate { palette ->
-                                        val colorInt = palette?.vibrantSwatch?.rgb
-                                            ?: palette?.dominantSwatch?.rgb
-                                            ?: palette?.lightVibrantSwatch?.rgb
-                                            ?: palette?.darkVibrantSwatch?.rgb
-                                            ?: palette?.getBestColor()
-                                        if (colorInt != null) {
-                                            dominantColorMap[manga.url] = Color(colorInt)
+                                    val drawable = successState.result.image.asDrawable(context.resources)
+                                    val rawBitmap = (drawable as? BitmapDrawable)?.bitmap
+                                        ?: drawable.getBitmapOrNull()
+                                        ?: drawable.toBitmap()
+                                    val softwareBitmap = rawBitmap.toSoftwareBitmap()
+                                    Palette.from(softwareBitmap).maximumColorCount(24).generate { palette ->
+                                        val color = extractMangaCoverColor(palette)
+                                        if (color != null) {
+                                            dominantColorMap[manga.url] = color
+                                            MangaCover.vibrantCoverColorMap[manga.id] = color.toArgb()
                                         }
                                     }
                                 },
