@@ -58,6 +58,7 @@ class DiscoverViewModel(
 
     val popularCache = mutableStateMapOf<Long, List<Manga>>()
     val latestCache = mutableStateMapOf<Long, List<Manga>>()
+    val pageCache = mutableStateMapOf<String, List<Manga>>()
     
     val recentlyRead = MutableStateFlow<List<tachiyomi.domain.history.model.HistoryWithRelations>>(emptyList())
     
@@ -301,6 +302,48 @@ class DiscoverViewModel(
                     latestCache[source.id] = emptyList()
                 }
                 return@withContext returnList
+            }
+        }
+    }
+
+    fun loadSourcesForPage(sources: List<CatalogueSource>, page: Int, isLatest: Boolean) {
+        if (page <= 1) return
+        viewModelScope.launch {
+            sources.forEach { source ->
+                val key = "${source.id}_${if (isLatest) "latest" else "popular"}_$page"
+                if (!pageCache.containsKey(key)) {
+                    launch {
+                        val list = withContext(Dispatchers.IO) {
+                            try {
+                                val mangasPage = if (isLatest) {
+                                    if (!source.supportsLatest) return@withContext emptyList()
+                                    source.getLatestUpdates(page)
+                                } else {
+                                    source.getPopularManga(page)
+                                }
+                                mangasPage.mangas.map { sManga ->
+                                    val local = getMangaByUrlAndSourceId.await(sManga.url, source.id)
+                                    Manga.create().copy(
+                                        source = source.id,
+                                        url = sManga.url,
+                                        title = sManga.title,
+                                        author = sManga.author ?: local?.author,
+                                        artist = sManga.artist ?: local?.artist,
+                                        description = sManga.description ?: local?.description,
+                                        genre = sManga.getGenres() ?: local?.genre,
+                                        thumbnailUrl = sManga.thumbnail_url ?: local?.thumbnailUrl,
+                                        initialized = sManga.initialized,
+                                        isNovel = source.isNovelSource()
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                logcat(LogPriority.WARN, e) { "Failed to load page $page for ${source.name}" }
+                                emptyList()
+                            }
+                        }
+                        pageCache[key] = list
+                    }
+                }
             }
         }
     }

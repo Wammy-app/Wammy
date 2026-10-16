@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.ui.discover
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,94 +13,77 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import eu.kanade.tachiyomi.data.auth.AuthManager
-import uy.kohesive.injekt.Injekt
-import androidx.compose.material.icons.outlined.Update
-import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.i18n.stringResource
-import uy.kohesive.injekt.api.get
-import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.presentation.core.util.collectAsState
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import kotlin.math.absoluteValue
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
-import coil3.compose.AsyncImage
-import androidx.lifecycle.viewmodel.compose.viewModel
-import eu.kanade.presentation.library.components.MangaCompactGridItem
 import eu.kanade.presentation.util.Tab
-import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.data.auth.AuthManager
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
-import eu.kanade.tachiyomi.ui.manga.MangaScreen
-import kotlinx.coroutines.launch
-import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.model.MangaCover
-import tachiyomi.domain.manga.model.asMangaCover
-import tachiyomi.presentation.core.i18n.stringResource
-import eu.kanade.tachiyomi.ui.webview.TrackerWebViewLoginActivity
-import eu.kanade.tachiyomi.ui.history.HistoryTab
-import eu.kanade.tachiyomi.ui.history.HistoryFilter
-import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
-import tachiyomi.domain.source.interactor.GetRemoteManga
-import eu.kanade.tachiyomi.ui.discover.components.ContinueReadingCarouselWidget
-import eu.kanade.tachiyomi.ui.discover.components.ContinueReadingDiscWidget
+import eu.kanade.tachiyomi.ui.discover.components.DiscoverMangaCard
 import eu.kanade.tachiyomi.ui.discover.components.DiscoverSkeletonScreen
+import eu.kanade.tachiyomi.ui.discover.components.FeedGridSkeleton
 import eu.kanade.tachiyomi.ui.discover.components.HeroFeaturedCard
 import eu.kanade.tachiyomi.ui.discover.components.HeroFeaturedCardSkeleton
-import eu.kanade.tachiyomi.ui.discover.components.HomeMediaSection
-import eu.kanade.tachiyomi.ui.discover.components.HomeMediaSectionSkeleton
 import eu.kanade.tachiyomi.ui.discover.components.HomeTopBar
-import eu.kanade.tachiyomi.ui.discover.components.RecentlyUploadedCard
 import eu.kanade.tachiyomi.ui.discover.components.rememberShimmerBrush
-import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.tachiyomi.ui.manga.MangaScreen
+import kotlinx.coroutines.launch
+import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.manga.model.Manga
+import tachiyomi.presentation.core.util.collectAsState
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+
+enum class DiscoverSection {
+    LATEST,
+    POPULAR,
+}
 
 object DiscoverTab : Tab {
 
@@ -144,6 +123,11 @@ object DiscoverTab : Tab {
 
         val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
+        var selectedSection by rememberSaveable { mutableStateOf(DiscoverSection.LATEST) }
+        var isAdultSelected by rememberSaveable { mutableStateOf(false) }
+        var currentPage by rememberSaveable { mutableIntStateOf(1) }
+        val gridState = rememberLazyGridState()
+
         Scaffold(
             modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
             topBar = {
@@ -162,12 +146,17 @@ object DiscoverTab : Tab {
                 SwipeUpFab(onSlideUpTriggered = { viewModel.toggleNovel(!state.isNovel) })
             }
         ) { contentPadding ->
-            androidx.compose.animation.Crossfade(targetState = state, animationSpec = tween(400), modifier = Modifier.padding(contentPadding).fillMaxSize(), label = "discover") { animatedState ->
+            androidx.compose.animation.Crossfade(
+                targetState = state,
+                animationSpec = tween(400),
+                modifier = Modifier
+                    .padding(contentPadding)
+                    .fillMaxSize(),
+                label = "discover",
+            ) { animatedState ->
                 if (animatedState.isLoading) {
                     DiscoverSkeletonScreen()
                 } else {
-                    val recentlyRead by viewModel.recentlyRead.collectAsState()
-
                     val trendingAggregated = remember(viewModel.popularCache.toMap(), animatedState.regularSources) {
                         val result = mutableListOf<Manga>()
                         val seenTitles = mutableSetOf<String>()
@@ -244,8 +233,61 @@ object DiscoverTab : Tab {
                         result
                     }
 
-                    val featuredManga = remember(trendingAggregated) {
-                        trendingAggregated.take(5)
+                    val targetSources = remember(animatedState.regularSources, animatedState.adultSources, isAdultSelected, selectedSection) {
+                        val s = if (isAdultSelected) animatedState.adultSources else animatedState.regularSources
+                        if (selectedSection == DiscoverSection.LATEST) s.filter { it.supportsLatest } else s
+                    }
+
+                    LaunchedEffect(currentPage, selectedSection, isAdultSelected, targetSources) {
+                        if (currentPage > 1) {
+                            viewModel.loadSourcesForPage(
+                                sources = targetSources,
+                                page = currentPage,
+                                isLatest = (selectedSection == DiscoverSection.LATEST),
+                            )
+                        }
+                    }
+
+                    val displayedManga = remember(
+                        selectedSection,
+                        isAdultSelected,
+                        currentPage,
+                        viewModel.popularCache.toMap(),
+                        viewModel.latestCache.toMap(),
+                        viewModel.pageCache.toMap(),
+                        targetSources,
+                    ) {
+                        val result = mutableListOf<Manga>()
+                        val seenTitles = mutableSetOf<String>()
+                        val lists = if (currentPage == 1) {
+                            val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
+                            targetSources.mapNotNull { cache[it.id] }
+                        } else {
+                            val cache = viewModel.pageCache
+                            val keySuffix = if (selectedSection == DiscoverSection.LATEST) "latest" else "popular"
+                            targetSources.mapNotNull { cache["${it.id}_${keySuffix}_$currentPage"] }
+                        }
+                        val maxLen = lists.maxOfOrNull { it.size } ?: 0
+                        for (i in 0 until maxLen) {
+                            for (list in lists) {
+                                if (i < list.size) {
+                                    val manga = list[i]
+                                    val normalized = manga.title.trim().lowercase()
+                                    if (seenTitles.add(normalized)) {
+                                        result.add(manga)
+                                    }
+                                }
+                            }
+                        }
+                        result
+                    }
+
+                    val featuredManga = remember(trendingAggregated, adultTrendingAggregated, isAdultSelected) {
+                        if (isAdultSelected && adultTrendingAggregated.isNotEmpty()) {
+                            adultTrendingAggregated.take(5)
+                        } else {
+                            trendingAggregated.take(5)
+                        }
                     }
 
                     LaunchedEffect(featuredManga) {
@@ -268,14 +310,17 @@ object DiscoverTab : Tab {
                         DiscoverSkeletonScreen()
                     } else {
                         val shimmerBrush = rememberShimmerBrush()
-                        LazyColumn(
-                            contentPadding = PaddingValues(0.dp),
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            state = gridState,
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 0.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
                             modifier = Modifier.fillMaxSize(),
                         ) {
-                            // 1. Hero Featured Card
+                            // 1. Hero Featured Card at Top
                             if (featuredManga.isNotEmpty()) {
-                                item {
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                item(span = { GridItemSpan(maxLineSpan) }) {
                                     HeroFeaturedCard(
                                         items = featuredManga,
                                         onClick = { manga ->
@@ -285,188 +330,117 @@ object DiscoverTab : Tab {
                                             }
                                         }
                                     )
-                                    Spacer(modifier = Modifier.height(10.dp))
                                 }
-                            } else if (animatedState.regularSources.isNotEmpty() && !animatedState.regularSources.all { viewModel.popularCache.containsKey(it.id) }) {
-                                item {
-                                    Spacer(modifier = Modifier.height(8.dp))
+                            } else if (targetSources.isNotEmpty() && !targetSources.all { viewModel.popularCache.containsKey(it.id) }) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
                                     HeroFeaturedCardSkeleton(shimmerBrush = shimmerBrush)
-                                    Spacer(modifier = Modifier.height(10.dp))
                                 }
                             }
 
-                            // 2. Continue Reading (Vinyl Disc Carousel)
-                            if (recentlyRead.isNotEmpty()) {
-                                item {
-                                    val continueReadingItems = remember(recentlyRead) { recentlyRead.take(5) }
-                                    val context = androidx.compose.ui.platform.LocalContext.current
-                                    ContinueReadingCarouselWidget(
-                                        items = continueReadingItems,
-                                        onClick = { history ->
-                                            scope.launch {
-                                                val chapterId = if (history.chapterRead) {
-                                                    viewModel.getResumeChapter(history.mangaId, history.chapterId)?.id ?: history.chapterId
-                                                } else {
-                                                    history.chapterId
-                                                }
-                                                if (chapterId > 0) {
-                                                    val intent = ReaderActivity.newIntent(context, history.mangaId, chapterId)
-                                                    context.startActivity(intent)
-                                                } else {
-                                                    navigator.push(MangaScreen(history.mangaId))
-                                                }
-                                            }
-                                        },
+                            // 2. Filter Buttons Row (Latest Updates, Popular, 18+)
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                DiscoverFilterButtonRow(
+                                    selectedSection = selectedSection,
+                                    isAdultSelected = isAdultSelected,
+                                    onSelectSection = { section ->
+                                        if (selectedSection != section) {
+                                            selectedSection = section
+                                            currentPage = 1
+                                            scope.launch { gridState.animateScrollToItem(0) }
+                                        }
+                                    },
+                                    onToggleAdult = {
+                                        isAdultSelected = !isAdultSelected
+                                        currentPage = 1
+                                        scope.launch { gridState.animateScrollToItem(0) }
+                                    },
+                                )
+                            }
+
+                            // 3. Section Title Header (e.g. "Latest Updates")
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                DiscoverSectionHeader(
+                                    selectedSection = selectedSection,
+                                    isAdultSelected = isAdultSelected,
+                                )
+                            }
+
+                            // 4. Manga Cards or Empty State or Skeleton
+                            if (isAdultSelected && animatedState.adultSources.isEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    AdultEmptyStateCard(
+                                        onBrowseExtensions = { tabNavigator.current = BrowseTab }
                                     )
-                                    Spacer(modifier = Modifier.height(14.dp))
                                 }
-                            }
-
-                            // 3. Recently Uploaded Card (with expand chevron & timestamps)
-                            if (latestAggregated.isNotEmpty()) {
-                                item {
-                                    RecentlyUploadedCard(
-                                        items = latestAggregated,
-                                        onClick = { manga ->
+                            } else if (displayedManga.isEmpty()) {
+                                val isLoadingTarget = targetSources.any { source ->
+                                    if (currentPage == 1) {
+                                        val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
+                                        !cache.containsKey(source.id)
+                                    } else {
+                                        val keySuffix = if (selectedSection == DiscoverSection.LATEST) "latest" else "popular"
+                                        !viewModel.pageCache.containsKey("${source.id}_${keySuffix}_$currentPage")
+                                    }
+                                }
+                                if (isLoadingTarget) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        FeedGridSkeleton(shimmerBrush = shimmerBrush)
+                                    }
+                                } else {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 40.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text(
+                                                text = "No titles found.",
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                items(
+                                    items = displayedManga,
+                                    key = { "${it.source}_${it.url}" },
+                                ) { manga ->
+                                    DiscoverMangaCard(
+                                        manga = manga,
+                                        onClick = {
                                             scope.launch {
                                                 val localManga = viewModel.getNetworkToLocalManga(manga)
                                                 navigator.push(MangaScreen(localManga.id))
                                             }
                                         },
-                                        onFilterClick = {
-                                            navigator.push(DiscoverFeedScreen(isLatest = true, isAdult = false))
-                                        }
                                     )
-                                    Spacer(modifier = Modifier.height(10.dp))
                                 }
                             }
 
-                            // 4. Trending Section (2 stacked LazyRows, merged across regular sources)
-                            if (animatedState.regularSources.isNotEmpty()) {
-                                val isRegularTrendingLoading = !animatedState.regularSources.all { viewModel.popularCache.containsKey(it.id) }
-                                val regularSourcesWithLatest = animatedState.regularSources.filter { it.supportsLatest }
-                                val isRegularLatestLoading = regularSourcesWithLatest.isNotEmpty() &&
-                                    !regularSourcesWithLatest.all { viewModel.latestCache.containsKey(it.id) }
-
-                                if (trendingAggregated.isNotEmpty()) {
-                                    item {
-                                        HomeMediaSection(
-                                            title = "Trending",
-                                            items = trendingAggregated,
-                                            onSeeAll = {
-                                                navigator.push(DiscoverFeedScreen(isLatest = false, isAdult = false))
-                                            },
-                                            onClick = { manga ->
-                                                scope.launch {
-                                                    val localManga = viewModel.getNetworkToLocalManga(manga)
-                                                    navigator.push(MangaScreen(localManga.id))
-                                                }
+                            // 5. Pagination Controls (< Prev  Page X  Next >)
+                            if (displayedManga.isNotEmpty() || currentPage > 1) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    DiscoverPaginationControls(
+                                        currentPage = currentPage,
+                                        hasNext = displayedManga.isNotEmpty(),
+                                        onPrev = {
+                                            if (currentPage > 1) {
+                                                currentPage--
+                                                scope.launch { gridState.animateScrollToItem(0) }
                                             }
-                                        )
-                                    }
-                                } else if (isRegularTrendingLoading) {
-                                    item {
-                                        HomeMediaSectionSkeleton(
-                                            title = "Trending",
-                                            shimmerBrush = shimmerBrush,
-                                        )
-                                    }
-                                }
-
-                                // 5. Latest Section (2 stacked LazyRows, merged across regular sources)
-                                if (latestAggregated.isNotEmpty()) {
-                                    item {
-                                        HomeMediaSection(
-                                            title = "Latest",
-                                            items = latestAggregated,
-                                            onSeeAll = {
-                                                navigator.push(DiscoverFeedScreen(isLatest = true, isAdult = false))
-                                            },
-                                            onClick = { manga ->
-                                                scope.launch {
-                                                    val localManga = viewModel.getNetworkToLocalManga(manga)
-                                                    navigator.push(MangaScreen(localManga.id))
-                                                }
-                                            }
-                                        )
-                                    }
-                                } else if (isRegularLatestLoading) {
-                                    item {
-                                        HomeMediaSectionSkeleton(
-                                            title = "Latest",
-                                            shimmerBrush = shimmerBrush,
-                                        )
-                                    }
+                                        },
+                                        onNext = {
+                                            currentPage++
+                                            scope.launch { gridState.animateScrollToItem(0) }
+                                        },
+                                    )
                                 }
                             }
 
-                            // 6. Adult Content Sections (Exclusively shown when sexual/adult extensions are installed)
-                            if (animatedState.hasAdultSources) {
-                                val isAdultTrendingLoading = animatedState.adultSources.isNotEmpty() &&
-                                    !animatedState.adultSources.all { viewModel.popularCache.containsKey(it.id) }
-                                val adultSourcesWithLatest = animatedState.adultSources.filter { it.supportsLatest }
-                                val isAdultLatestLoading = adultSourcesWithLatest.isNotEmpty() &&
-                                    !adultSourcesWithLatest.all { viewModel.latestCache.containsKey(it.id) }
-
-                                // Adult Trending Section
-                                if (adultTrendingAggregated.isNotEmpty()) {
-                                    item {
-                                        HomeMediaSection(
-                                            title = "Trending",
-                                            subtitle = "Adult Only",
-                                            items = adultTrendingAggregated,
-                                            onSeeAll = {
-                                                navigator.push(DiscoverFeedScreen(isLatest = false, isAdult = true))
-                                            },
-                                            onClick = { manga ->
-                                                scope.launch {
-                                                    val localManga = viewModel.getNetworkToLocalManga(manga)
-                                                    navigator.push(MangaScreen(localManga.id))
-                                                }
-                                            }
-                                        )
-                                    }
-                                } else if (isAdultTrendingLoading) {
-                                    item {
-                                        HomeMediaSectionSkeleton(
-                                            title = "Trending",
-                                            subtitle = "Adult Only",
-                                            shimmerBrush = shimmerBrush,
-                                        )
-                                    }
-                                }
-
-                                // Adult Latest Section
-                                if (adultLatestAggregated.isNotEmpty()) {
-                                    item {
-                                        HomeMediaSection(
-                                            title = "Latest",
-                                            subtitle = "Adult Only",
-                                            items = adultLatestAggregated,
-                                            onSeeAll = {
-                                                navigator.push(DiscoverFeedScreen(isLatest = true, isAdult = true))
-                                            },
-                                            onClick = { manga ->
-                                                scope.launch {
-                                                    val localManga = viewModel.getNetworkToLocalManga(manga)
-                                                    navigator.push(MangaScreen(localManga.id))
-                                                }
-                                            }
-                                        )
-                                    }
-                                } else if (isAdultLatestLoading) {
-                                    item {
-                                        HomeMediaSectionSkeleton(
-                                            title = "Latest",
-                                            subtitle = "Adult Only",
-                                            shimmerBrush = shimmerBrush,
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Bottom Spacer for clean clearance above dock
-                            item {
+                            // 6. Bottom clearance spacer
+                            item(span = { GridItemSpan(maxLineSpan) }) {
                                 Spacer(modifier = Modifier.height(96.dp))
                             }
                         }
@@ -478,295 +452,304 @@ object DiscoverTab : Tab {
 }
 
 @Composable
-fun CustomTab(text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier.clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally
+private fun DiscoverFilterButtonRow(
+    selectedSection: DiscoverSection,
+    isAdultSelected: Boolean,
+    onSelectSection: (DiscoverSection) -> Unit,
+    onToggleAdult: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = text,
-            fontSize = 18.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+        // 1. Latest Updates Button
+        FilterPillButton(
+            selected = selectedSection == DiscoverSection.LATEST,
+            text = "Latest Updates",
+            icon = Icons.Outlined.Schedule,
+            onClick = { onSelectSection(DiscoverSection.LATEST) },
         )
-        if (isSelected) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Box(
-                modifier = Modifier
-                    .height(3.dp)
-                    .width(40.dp)
-                    .background(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(1.5.dp))
-            )
+
+        // 2. Popular Button
+        FilterPillButton(
+            selected = selectedSection == DiscoverSection.POPULAR,
+            text = "Popular",
+            icon = Icons.Outlined.Star,
+            onClick = { onSelectSection(DiscoverSection.POPULAR) },
+        )
+
+        // 3. 18+ Button (Turns GREEN when active)
+        AdultPillButton(
+            isActive = isAdultSelected,
+            onClick = onToggleAdult,
+        )
+    }
+}
+
+@Composable
+private fun FilterPillButton(
+    selected: Boolean,
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primary
         } else {
-            Spacer(modifier = Modifier.height(7.dp))
-        }
-    }
-}
-
-@Composable
-fun SectionHeader(title: String, subtitle: String? = null, onSeeAll: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSeeAll)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium
+            MaterialTheme.colorScheme.surfaceContainer
+        },
+        contentColor = if (selected) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        border = if (selected) {
+            null
+        } else {
+            BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
             )
-            if (!subtitle.isNullOrEmpty()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
-            contentDescription = "See All",
-            tint = MaterialTheme.colorScheme.onBackground
-        )
-    }
-}
-
-@Composable
-fun RecentlyUpdatedItem(manga: Manga, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .background(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), shape = RoundedCornerShape(12.dp))
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        },
     ) {
-        AsyncImage(
-            model = manga.asMangaCover(),
-            contentDescription = null,
-            modifier = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(8.dp)),
-            contentScale = ContentScale.Crop
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = manga.title,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onBackground
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Updated recently",
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
             )
         }
-        Box(
-            modifier = Modifier
-                .background(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .padding(horizontal = 10.dp, vertical = 4.dp)
+    }
+}
+
+@Composable
+private fun AdultPillButton(
+    isActive: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val activeGreen = Color(0xFF388E3C) // Material Green 700
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        color = if (isActive) {
+            activeGreen
+        } else {
+            MaterialTheme.colorScheme.surfaceContainer
+        },
+        contentColor = if (isActive) {
+            Color.White
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        border = if (isActive) {
+            null
+        } else {
+            BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+        },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = "New",
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
+                text = "18+",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = if (isActive) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
 
 @Composable
-fun HeroCarousel(
-    featuredManga: List<Manga>,
-    onClick: (Manga) -> Unit
+private fun DiscoverSectionHeader(
+    selectedSection: DiscoverSection,
+    isAdultSelected: Boolean,
+    modifier: Modifier = Modifier,
 ) {
-    if (featuredManga.isEmpty()) {
-        val infiniteTransition = rememberInfiniteTransition()
-        val alpha by infiniteTransition.animateFloat(
-            initialValue = 0.1f,
-            targetValue = 0.3f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1000),
-                repeatMode = RepeatMode.Reverse
-            )
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        val title = when {
+            selectedSection == DiscoverSection.LATEST && isAdultSelected -> "18+ Latest Updates"
+            selectedSection == DiscoverSection.LATEST -> "Latest Updates"
+            isAdultSelected -> "18+ Popular Titles"
+            else -> "Popular Titles"
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
         )
-        Box(
+    }
+}
+
+@Composable
+private fun DiscoverPaginationControls(
+    currentPage: Int,
+    hasNext: Boolean,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 18.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(
+            onClick = onPrev,
+            enabled = currentPage > 1,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+            ),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+                contentDescription = "Previous Page",
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Prev", fontWeight = FontWeight.Medium)
+        }
+
+        Spacer(modifier = Modifier.width(20.dp))
+
+        Text(
+            text = "Page $currentPage",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        Spacer(modifier = Modifier.width(20.dp))
+
+        OutlinedButton(
+            onClick = onNext,
+            enabled = hasNext,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+            ),
+        ) {
+            Text("Next", fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = "Next Page",
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AdultEmptyStateCard(
+    onBrowseExtensions: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(240.dp)
-                
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
-        )
-        return
-    }
-
-    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { featuredManga.size })
-
-    // Auto-scroll logic
-    LaunchedEffect(pagerState) {
-        while (true) {
-            kotlinx.coroutines.delay(5000)
-            if (featuredManga.size > 1) {
-                val nextPage = (pagerState.currentPage + 1) % featuredManga.size
-                pagerState.animateScrollToPage(
-                    page = nextPage,
-                    animationSpec = tween(1000)
-                )
-            }
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(240.dp)
-            
-    ) {
-        androidx.compose.foundation.pager.HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            val pageOffset = (
-                (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-            ).absoluteValue
-
-            val manga = featuredManga[page]
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = 1f - pageOffset.coerceIn(0f, 1f)
-                    }
-                    .clickable { onClick(manga) }
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Surface(
+                modifier = Modifier.size(54.dp),
+                shape = CircleShape,
+                color = Color(0xFF388E3C).copy(alpha = 0.15f),
             ) {
-                AsyncImage(
-                    model = manga.asMangaCover(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-
-                // Gradients
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(80.dp)
-                        .align(Alignment.TopCenter)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(MaterialTheme.colorScheme.background, Color.Transparent)
-                            )
-                        )
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
-                                startY = 100f
-                            )
-                        )
-                )
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(Color.Black.copy(alpha = 0.9f), Color.Transparent),
-                                endX = 600f
-                            )
-                        )
-                )
-
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(16.dp)
-                ) {
+                Box(contentAlignment = Alignment.Center) {
                     Text(
-                        text = manga.title,
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        lineHeight = 28.sp,
+                        text = "18+",
                         fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        color = Color(0xFF388E3C),
+                        fontSize = 18.sp,
                     )
-
-                    val subtitle = manga.author ?: "Trending Now"
-                    Text(
-                        text = subtitle,
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
-                    )
-
-                    Button(
-                        onClick = { onClick(manga) },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.PlayArrow,
-                            contentDescription = "Start Reading",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Start Reading",
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
                 }
             }
-        }
-
-        // Pager Indicators
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            repeat(featuredManga.size) { iteration ->
-                val color = if (pagerState.currentPage == iteration) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.5f)
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(color)
-                )
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = "No 18+ Extensions Installed",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Install adult extensions in the Browse tab to view 18+ titles here.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Button(
+                onClick = onBrowseExtensions,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF388E3C),
+                    contentColor = Color.White,
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text("Browse Extensions", fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
-
-
 
 @Composable
 fun EmptyDiscoverScreen(isNovel: Boolean, onBrowseExtensions: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("No sources found. Please install an extension.")
         Spacer(modifier = Modifier.height(16.dp))
@@ -775,29 +758,3 @@ fun EmptyDiscoverScreen(isNovel: Boolean, onBrowseExtensions: () -> Unit) {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

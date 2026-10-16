@@ -135,11 +135,11 @@ fun HeroFeaturedCardSkeleton(
                     .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.Top,
             ) {
-                // Cover poster placeholder
+                // Cover poster placeholder (compact 88dp, 3:4)
                 Box(
                     modifier = Modifier
-                        .width(100.dp)
-                        .aspectRatio(2f / 3f)
+                        .width(88.dp)
+                        .aspectRatio(3f / 4f)
                         .clip(RoundedCornerShape(10.dp))
                         .background(shimmerBrush),
                 )
@@ -415,11 +415,71 @@ fun DiscoverSkeletonScreen(
         Spacer(modifier = Modifier.height(8.dp))
         HeroFeaturedCardSkeleton(shimmerBrush = shimmerBrush)
         Spacer(modifier = Modifier.height(14.dp))
-        RecentlyUploadedSkeleton(shimmerBrush = shimmerBrush)
-        Spacer(modifier = Modifier.height(10.dp))
-        HomeMediaSectionSkeleton(title = "Trending", shimmerBrush = shimmerBrush)
-        Spacer(modifier = Modifier.height(6.dp))
-        HomeMediaSectionSkeleton(title = "Latest", shimmerBrush = shimmerBrush)
+        
+        // Filter Buttons Row Placeholder
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(120.dp)
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(shimmerBrush),
+            )
+            Box(
+                modifier = Modifier
+                    .width(90.dp)
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(shimmerBrush),
+            )
+            Box(
+                modifier = Modifier
+                    .width(55.dp)
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(shimmerBrush),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Section Title Placeholder
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(130.dp)
+                    .height(22.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerBrush),
+            )
+            Box(
+                modifier = Modifier
+                    .width(70.dp)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerBrush),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 3-Column Grid Placeholder
+        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            FeedGridSkeleton(shimmerBrush = shimmerBrush)
+        }
+
         Spacer(modifier = Modifier.height(96.dp))
     }
 }
