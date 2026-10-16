@@ -46,6 +46,7 @@ class AndroidSourceManager(
     private val downloadManager: DownloadManager by injectLazy()
     private val customSourceManager: CustomSourceManager by injectLazy()
     private val jsPluginManager: JsPluginManager by injectLazy()
+    private val builtinSourceManager: eu.kanade.tachiyomi.source.builtin.BuiltinSourceManager by injectLazy()
     private val networkHelper: NetworkHelper by injectLazy()
 
     private val scope = CoroutineScope(Job() + Dispatchers.IO)
@@ -62,7 +63,8 @@ class AndroidSourceManager(
                 extensionManager.installedExtensionsFlow,
                 customSourceManager.customSources,
                 jsPluginManager.jsSources,
-            ) { extensions, customSources, jsSources ->
+                builtinSourceManager.builtinSources,
+            ) { extensions, customSources, jsSources, builtinSources ->
                 val mutableMap = ConcurrentHashMap<Long, Source>(
                     mapOf(
                         LocalSource.ID to LocalSource(
@@ -73,6 +75,11 @@ class AndroidSourceManager(
                         LocalNovelSource.ID to LocalNovelSource(),
                     ),
                 )
+
+                builtinSources.forEach { builtinSource ->
+                    mutableMap[builtinSource.id] = builtinSource
+                    registerStubSource(StubSource.from(builtinSource))
+                }
 
                 extensions.forEach { extension ->
                     extension.sources.forEach {

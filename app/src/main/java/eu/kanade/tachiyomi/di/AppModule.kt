@@ -183,6 +183,9 @@ class AppModule(val app: Application) : InjektModule {
         // JS Plugin management (LNReader-style plugins)
         addSingletonFactory { JsPluginManager(app) }
 
+        // Built-in generic engines & sources management
+        addSingletonFactory { eu.kanade.tachiyomi.source.builtin.BuiltinSourceManager(app) }
+
         addSingletonFactory { AndroidStorageFolderProvider(app) }
         addSingletonFactory { LocalSourceFileSystem(get()) }
         addSingletonFactory { LocalNovelSourceFileSystem(get()) }
