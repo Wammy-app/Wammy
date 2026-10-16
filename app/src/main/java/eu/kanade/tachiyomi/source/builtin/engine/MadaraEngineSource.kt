@@ -31,6 +31,11 @@ open class MadaraEngineSource(
     override val name: String,
     override val baseUrl: String,
     override val lang: String = "en",
+    val mangaSubpath: String = when {
+        baseUrl.contains("toonily", ignoreCase = true) -> "webtoons"
+        baseUrl.contains("flame", ignoreCase = true) -> "series"
+        else -> "manga"
+    },
 ) : ParsedHttpSource() {
 
     override val supportsLatest: Boolean = true
@@ -45,7 +50,7 @@ open class MadaraEngineSource(
     // =========================== Popular ===========================
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga/page/$page/?m_orderby=views", headers)
+        return GET("$baseUrl/$mangaSubpath/page/$page/?m_orderby=views", headers)
     }
 
     override fun popularMangaSelector(): String =
@@ -70,7 +75,7 @@ open class MadaraEngineSource(
     // =========================== Latest ===========================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/manga/page/$page/?m_orderby=latest", headers)
+        return GET("$baseUrl/$mangaSubpath/page/$page/?m_orderby=latest", headers)
     }
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()

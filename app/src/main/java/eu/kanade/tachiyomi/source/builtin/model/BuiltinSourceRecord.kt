@@ -9,6 +9,9 @@ enum class BuiltinEngineType {
     MANGADEX,
     COMICK,
     MANGAPILL,
+    WEBTOON,
+    REIMANGA,
+    COMIX,
 }
 
 @Serializable

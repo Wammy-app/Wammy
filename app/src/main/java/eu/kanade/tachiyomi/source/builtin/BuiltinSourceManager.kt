@@ -3,10 +3,13 @@ package eu.kanade.tachiyomi.source.builtin
 import android.content.Context
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.builtin.comick.ComickSource
+import eu.kanade.tachiyomi.source.builtin.comix.ComixSource
 import eu.kanade.tachiyomi.source.builtin.engine.MadaraEngineSource
 import eu.kanade.tachiyomi.source.builtin.engine.MangaReaderEngineSource
 import eu.kanade.tachiyomi.source.builtin.mangadex.MangaDexSource
 import eu.kanade.tachiyomi.source.builtin.mangapill.MangaPillSource
+import eu.kanade.tachiyomi.source.builtin.reimanga.ReiMangaSource
+import eu.kanade.tachiyomi.source.builtin.webtoon.WebtoonsSource
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinEngineType
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinSourceRecord
 import kotlinx.coroutines.CoroutineScope
@@ -115,6 +118,30 @@ class BuiltinSourceManager(
             engineType = BuiltinEngineType.MANGA_READER,
             isDefaultEnabled = true,
         ),
+        BuiltinSourceRecord(
+            id = 80010010L,
+            name = "Webtoons",
+            baseUrl = "https://www.webtoons.com",
+            lang = "en",
+            engineType = BuiltinEngineType.WEBTOON,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80010011L,
+            name = "ReiManga",
+            baseUrl = "https://reimanga.net",
+            lang = "en",
+            engineType = BuiltinEngineType.REIMANGA,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80010012L,
+            name = "Comix",
+            baseUrl = "https://comix.to",
+            lang = "en",
+            engineType = BuiltinEngineType.COMIX,
+            isDefaultEnabled = true,
+        ),
     )
 
     init {
@@ -154,6 +181,9 @@ class BuiltinSourceManager(
                     baseUrl = record.baseUrl,
                     lang = record.lang,
                 )
+                BuiltinEngineType.WEBTOON -> WebtoonsSource(id = record.id, lang = record.lang)
+                BuiltinEngineType.REIMANGA -> ReiMangaSource(id = record.id, lang = record.lang)
+                BuiltinEngineType.COMIX -> ComixSource(id = record.id, lang = record.lang)
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Failed to instantiate built-in source: ${record.name}" }
