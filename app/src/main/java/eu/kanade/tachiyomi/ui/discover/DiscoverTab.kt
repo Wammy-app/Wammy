@@ -337,11 +337,12 @@ object DiscoverTab : Tab {
                                 }
                             }
 
-                            // 2. Filter Buttons Row (Latest Updates, Popular, 18+)
+                            // 2. Filter Buttons Row (Latest Updates, Popular, Adult)
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 DiscoverFilterButtonRow(
                                     selectedSection = selectedSection,
                                     isAdultSelected = isAdultSelected,
+                                    showAdultOption = animatedState.hasAdultSources,
                                     onSelectSection = { section ->
                                         if (selectedSection != section) {
                                             selectedSection = section
@@ -455,6 +456,7 @@ object DiscoverTab : Tab {
 private fun DiscoverFilterButtonRow(
     selectedSection: DiscoverSection,
     isAdultSelected: Boolean,
+    showAdultOption: Boolean,
     onSelectSection: (DiscoverSection) -> Unit,
     onToggleAdult: () -> Unit,
     modifier: Modifier = Modifier,
@@ -482,11 +484,13 @@ private fun DiscoverFilterButtonRow(
             onClick = { onSelectSection(DiscoverSection.POPULAR) },
         )
 
-        // 3. 18+ Button (Turns GREEN when active)
-        AdultPillButton(
-            isActive = isAdultSelected,
-            onClick = onToggleAdult,
-        )
+        // 3. Adult Button (only visible if user has an extension that shows adult manga)
+        if (showAdultOption) {
+            AdultFilterButton(
+                isActive = isAdultSelected,
+                onClick = onToggleAdult,
+            )
+        }
     }
 }
 
@@ -498,11 +502,12 @@ private fun FilterPillButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val buttonShape = RoundedCornerShape(8.dp)
     Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(buttonShape)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
+        shape = buttonShape,
         color = if (selected) {
             MaterialTheme.colorScheme.primary
         } else {
@@ -544,17 +549,18 @@ private fun FilterPillButton(
 }
 
 @Composable
-private fun AdultPillButton(
+private fun AdultFilterButton(
     isActive: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val buttonShape = RoundedCornerShape(8.dp)
     val activeGreen = Color(0xFF388E3C) // Material Green 700
     Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(buttonShape)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
+        shape = buttonShape,
         color = if (isActive) {
             activeGreen
         } else {
@@ -580,7 +586,7 @@ private fun AdultPillButton(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = "18+",
+                text = "Adult",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,

@@ -428,21 +428,21 @@ fun DiscoverSkeletonScreen(
                 modifier = Modifier
                     .width(120.dp)
                     .height(36.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(shimmerBrush),
             )
             Box(
                 modifier = Modifier
                     .width(90.dp)
                     .height(36.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(shimmerBrush),
             )
             Box(
                 modifier = Modifier
-                    .width(55.dp)
+                    .width(60.dp)
                     .height(36.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(shimmerBrush),
             )
         }
