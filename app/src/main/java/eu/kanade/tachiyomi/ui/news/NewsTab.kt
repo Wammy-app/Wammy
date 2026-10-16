@@ -13,6 +13,14 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -50,6 +58,17 @@ data object NewsTab : Tab {
         val viewModel = viewModel<NewsViewModel>()
         val state by viewModel.state.collectAsState()
 
+        val infiniteTransition = rememberInfiniteTransition(label = "newsRefreshSpin")
+        val rotation by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 800, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "newsRefreshRotation",
+        )
+
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -60,10 +79,14 @@ data object NewsTab : Tab {
                         )
                     },
                     actions = {
-                        IconButton(onClick = { viewModel.loadNews(forceRefresh = true) }) {
+                        IconButton(
+                            onClick = { viewModel.loadNews(forceRefresh = true) },
+                            enabled = !state.isRefreshing && !state.isLoading,
+                        ) {
                             Icon(
                                 imageVector = Icons.Outlined.Refresh,
                                 contentDescription = "Refresh",
+                                modifier = if (state.isRefreshing) Modifier.graphicsLayer { rotationZ = rotation } else Modifier,
                             )
                         }
                     },

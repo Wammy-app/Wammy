@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.data.news.model.NewsItem
 import eu.kanade.tachiyomi.data.news.model.extractYouTubeVideoId
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -26,6 +28,12 @@ class NewsRepository(
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    // Fast client for aggregator to avoid blocking UI when free-tier Render is cold-starting
+    private val fastClient: OkHttpClient = client.newBuilder()
+        .connectTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(4, TimeUnit.SECONDS)
+        .build()
+
     // In-memory cache for feed (15 min freshness)
     private var cachedNewsFeed: List<NewsItem>? = null
     private var feedLastFetched: Long = 0L
@@ -44,18 +52,20 @@ class NewsRepository(
 
     suspend fun getNews(forceRefresh: Boolean = false): Result<List<NewsItem>> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        if (!forceRefresh && cachedNewsFeed != null && (now - feedLastFetched) < feedTtlMillis) {
+        if (forceRefresh) {
+            cachedNewsFeed = null
+        } else if (cachedNewsFeed != null && (now - feedLastFetched) < feedTtlMillis) {
             return@withContext Result.success(cachedNewsFeed!!)
         }
 
-        // 1. Try remote aggregator API
+        // 1. Try remote aggregator API with fastClient (fail fast within 3s if sleeping)
         try {
             val request = Request.Builder()
                 .url("$AGGREGATOR_BASE/api/news")
                 .header("User-Agent", "Wammy/1.0")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            fastClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
                     val bodyString = response.body.string()
                     val parsed = json.decodeFromString<NewsFeedResponse>(bodyString)
@@ -67,10 +77,10 @@ class NewsRepository(
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Aggregator news API unreachable, falling back to direct RSS: ${e.message}")
+            Log.w(TAG, "Aggregator news API unreachable/timed out, falling back to direct RSS: ${e.message}")
         }
 
-        // 2. Direct RSS Fallback (Anime Corner & Anime News Network)
+        // 2. Direct RSS Fallback (Anime Corner & Anime News Network) in parallel
         try {
             val directItems = fetchDirectRssFeeds()
             if (directItems.isNotEmpty()) {
@@ -154,10 +164,16 @@ class NewsRepository(
         Result.failure(Exception("Unable to load full article content."))
     }
 
-    private fun fetchDirectRssFeeds(): List<NewsItem> {
-        val results = mutableListOf<NewsItem>()
+    private suspend fun fetchDirectRssFeeds(): List<NewsItem> = coroutineScope {
+        val acDeferred = async(Dispatchers.IO) { fetchAnimeCornerRss() }
+        val annDeferred = async(Dispatchers.IO) { fetchAnnRss() }
+        val acItems = acDeferred.await()
+        val annItems = annDeferred.await()
+        (acItems + annItems).sortedByDescending { it.publishedAt }
+    }
 
-        // Fetch Anime Corner RSS
+    private fun fetchAnimeCornerRss(): List<NewsItem> {
+        val results = mutableListOf<NewsItem>()
         try {
             val acRequest = Request.Builder().url(ANIME_CORNER_FEED).header("User-Agent", "Wammy/1.0").build()
             client.newCall(acRequest).execute().use { response ->
@@ -192,8 +208,11 @@ class NewsRepository(
         } catch (e: Exception) {
             Log.w(TAG, "Error fetching Anime Corner RSS: ${e.message}")
         }
+        return results
+    }
 
-        // Fetch ANN RSS
+    private fun fetchAnnRss(): List<NewsItem> {
+        val results = mutableListOf<NewsItem>()
         try {
             val annRequest = Request.Builder().url(ANN_FEED).header("User-Agent", "Wammy/1.0").build()
             client.newCall(annRequest).execute().use { response ->
@@ -227,8 +246,7 @@ class NewsRepository(
         } catch (e: Exception) {
             Log.w(TAG, "Error fetching ANN RSS: ${e.message}")
         }
-
-        return results.sortedByDescending { it.publishedAt }
+        return results
     }
 
     private fun scrapeArticleDirect(url: String): NewsArticle? {

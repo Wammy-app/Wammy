@@ -1,5 +1,11 @@
 package eu.kanade.presentation.news
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -49,6 +56,17 @@ class NewsScreen : Screen {
         val viewModel = viewModel<NewsViewModel>()
         val state by viewModel.state.collectAsState()
 
+        val infiniteTransition = rememberInfiniteTransition(label = "newsScreenRefreshSpin")
+        val rotation by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 800, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "newsScreenRefreshRotation",
+        )
+
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -67,10 +85,14 @@ class NewsScreen : Screen {
                         }
                     },
                     actions = {
-                        IconButton(onClick = { viewModel.loadNews(forceRefresh = true) }) {
+                        IconButton(
+                            onClick = { viewModel.loadNews(forceRefresh = true) },
+                            enabled = !state.isRefreshing && !state.isLoading,
+                        ) {
                             Icon(
                                 imageVector = Icons.Outlined.Refresh,
                                 contentDescription = "Refresh",
+                                modifier = if (state.isRefreshing) Modifier.graphicsLayer { rotationZ = rotation } else Modifier,
                             )
                         }
                     },
@@ -106,6 +128,7 @@ fun NewsContent(
         refreshing = state.isRefreshing,
         onRefresh = onRefresh,
         enabled = !state.isLoading,
+        indicatorPadding = contentPadding,
         modifier = modifier,
     ) {
         when {

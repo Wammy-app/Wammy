@@ -1,11 +1,16 @@
 package eu.kanade.tachiyomi.ui.news
 
+import android.app.Application
 import androidx.lifecycle.viewModelScope
 import eu.kanade.tachiyomi.data.news.NewsRepository
 import eu.kanade.tachiyomi.data.news.model.NewsItem
+import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import mihon.core.viewmodel.StateViewModel
+import tachiyomi.core.common.util.lang.withUIContext
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -20,6 +25,7 @@ data class NewsState(
 
 class NewsViewModel(
     private val repository: NewsRepository = NewsRepository(),
+    private val context: Application = Injekt.get(),
 ) : StateViewModel<NewsState>(NewsState()) {
 
     init {
@@ -27,6 +33,8 @@ class NewsViewModel(
     }
 
     fun loadNews(forceRefresh: Boolean = false) {
+        if (forceRefresh && state.value.isRefreshing) return
+
         viewModelScope.launch {
             if (forceRefresh) {
                 mutableState.update { it.copy(isRefreshing = true, error = null) }
@@ -45,6 +53,11 @@ class NewsViewModel(
                             error = null,
                         )
                     }
+                    if (forceRefresh) {
+                        withUIContext {
+                            context.toast("News updated")
+                        }
+                    }
                 },
                 onFailure = { throwable ->
                     mutableState.update {
@@ -53,6 +66,11 @@ class NewsViewModel(
                             isRefreshing = false,
                             error = if (it.items.isEmpty()) throwable.message ?: "Failed to load news" else null,
                         )
+                    }
+                    if (forceRefresh) {
+                        withUIContext {
+                            context.toast(throwable.message ?: "Failed to refresh news")
+                        }
                     }
                 },
             )
