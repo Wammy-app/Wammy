@@ -24,6 +24,8 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+import eu.kanade.tachiyomi.network.challenge.ChallengeCoordinator
+
 class CloudflareInterceptor(
     private val context: Context,
     private val cookieManager: AndroidCookieJar,
@@ -58,7 +60,9 @@ class CloudflareInterceptor(
 
         if (bodySample.contains("_cf_chl_opt") ||
             bodySample.contains("/challenge-platform/") ||
-            bodySample.contains("challenges.cloudflare.com")
+            bodySample.contains("challenges.cloudflare.com") ||
+            bodySample.contains("Verify you are human") ||
+            bodySample.contains("needs to review the security of your connection")
         ) {
             return true
         }
@@ -86,10 +90,21 @@ class CloudflareInterceptor(
     ): Response {
         try {
             response.close()
-            val oldCookie = cookieManager.get(request.url)
-                .firstOrNull { it.name == "cf_clearance" }
-            cookieManager.remove(request.url, COOKIE_NAMES, 0)
-            resolveWithWebView(request, oldCookie)
+            val resolver = ChallengeCoordinator.instance
+            val bypassed = if (resolver != null) {
+                val headers = parseHeaders(request.headers)
+                resolver.resolve(request.url.toString(), headers)
+            } else {
+                val oldCookie = cookieManager.get(request.url)
+                    .firstOrNull { it.name == "cf_clearance" }
+                cookieManager.remove(request.url, COOKIE_NAMES, 0)
+                resolveWithWebView(request, oldCookie)
+                true
+            }
+
+            if (!bypassed) {
+                throw CloudflareBypassException()
+            }
 
             return chain.proceed(request)
         }

@@ -2,18 +2,48 @@ package eu.kanade.tachiyomi.source.builtin.comix
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.serializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Calendar
+
+object LenientDoubleSerializer : KSerializer<Double> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LenientDouble", PrimitiveKind.DOUBLE)
+    override fun serialize(encoder: Encoder, value: Double) = encoder.encodeDouble(value)
+    override fun deserialize(decoder: Decoder): Double {
+        val jsonDecoder = decoder as? JsonDecoder ?: return runCatching { decoder.decodeDouble() }.getOrDefault(0.0)
+        val element = jsonDecoder.decodeJsonElement()
+        return element.jsonPrimitive.doubleOrNull ?: element.jsonPrimitive.content.toDoubleOrNull() ?: 0.0
+    }
+}
+
+object LenientIntSerializer : KSerializer<Int> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LenientInt", PrimitiveKind.INT)
+    override fun serialize(encoder: Encoder, value: Int) = encoder.encodeInt(value)
+    override fun deserialize(decoder: Decoder): Int {
+        val jsonDecoder = decoder as? JsonDecoder ?: return runCatching { decoder.decodeInt() }.getOrDefault(0)
+        val element = jsonDecoder.decodeJsonElement()
+        return element.jsonPrimitive.intOrNull ?: element.jsonPrimitive.content.toIntOrNull() ?: 0
+    }
+}
 
 val comixJson = Json {
     ignoreUnknownKeys = true
@@ -227,19 +257,23 @@ class ChapterDetailsResponse(
 
 @Serializable
 class Chapter(
-    val id: Int,
+    @Serializable(with = LenientIntSerializer::class) val id: Int = 0,
     val url: String = "",
-    val number: Double,
+    @Serializable(with = LenientDoubleSerializer::class) val number: Double = 0.0,
     val name: String = "",
-    val votes: Int = 0,
+    @Serializable(with = LenientIntSerializer::class) val votes: Int = 0,
     val createdAtFormatted: String = "",
+    @SerialName("created_at") val createdAtOld: String = "",
     val group: ScanlationGroup? = null,
     val isOfficial: Boolean = false,
+    @SerialName("is_official") val isOfficialOld: Boolean = false,
+    val hid: String = "",
+    @SerialName("chap") val chap: String = "",
 ) {
     @Serializable
     class ScanlationGroup(
-        val id: Int? = null,
-        val name: String,
+        @Serializable(with = LenientIntSerializer::class) val id: Int? = null,
+        val name: String = "",
     )
 
     companion object {
@@ -247,29 +281,31 @@ class Chapter(
     }
 
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
+        val numStr = if (number != 0.0) number.toString().removeSuffix(".0") else chap.ifEmpty { "0" }
         url = this@Chapter.url.indexOf("/title/").let { index ->
             if (index != -1) {
                 this@Chapter.url.substring(index + 1)
             } else {
-                "title/$mangaSlug/$id-chapter-${number.toString().removeSuffix(".0")}"
+                "title/$mangaSlug/$id-chapter-$numStr"
             }
         }
         memo = buildJsonObject {
             put(CHAPTER_ID_MEMO, id)
             put(CHAPTER_VOTES_MEMO, votes)
-            put(CHAPTER_OFFICIAL_MEMO, isOfficial)
+            put(CHAPTER_OFFICIAL_MEMO, isOfficial || isOfficialOld)
             group?.id?.let { put(CHAPTER_GROUP_ID_MEMO, it) }
         }
         name = buildString {
             append("Chapter ")
-            append(this@Chapter.number.toString().removeSuffix(".0"))
+            append(numStr)
             this@Chapter.name.takeUnless { it.isEmpty() }?.let { append(": $it") }
         }
-        date_upload = parseRelativeDate(this@Chapter.createdAtFormatted)
-        chapter_number = this@Chapter.number.toFloat()
-        scanlator = if (this@Chapter.group != null) {
+        val dateStr = createdAtFormatted.ifEmpty { createdAtOld }
+        date_upload = parseRelativeDate(dateStr)
+        chapter_number = (if (number != 0.0) number.toFloat() else chap.toFloatOrNull()) ?: 0f
+        scanlator = if (this@Chapter.group != null && this@Chapter.group.name.isNotBlank()) {
             this@Chapter.group.name
-        } else if (this@Chapter.isOfficial) {
+        } else if (this@Chapter.isOfficial || this@Chapter.isOfficialOld) {
             "Official"
         } else {
             "Unknown"

@@ -23,6 +23,11 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import eu.kanade.tachiyomi.network.challenge.BossChallengeCoordinator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import java.net.URLEncoder
 
 /**
@@ -41,10 +46,44 @@ class ComixSource(
     override val supportsLatest: Boolean = true
 
     private val context: Context get() = Injekt.get<Application>()
-    private val webViewHelper by lazy { ComixWebViewHelper(context) }
+    private val webViewHelper by lazy {
+        ComixWebViewHelper(context) { material ->
+            logcat(LogPriority.INFO) { "ComixSource: Received cipher material via bridge" }
+            cipher = ComixCipher(material)
+        }
+    }
 
-    @Volatile
-    private var cipher: ComixCipher? = null
+    private var cipher: ComixCipher?
+        get() = cachedCipher
+        set(value) {
+            cachedCipher = value
+        }
+
+    private suspend fun ensureClearance(force: Boolean = false) {
+        val coordinator = BossChallengeCoordinator.instance ?: return
+        val headersMap = headers.toMultimap().mapValues { it.value.firstOrNull().orEmpty() }
+
+        if (force || !coordinator.hasClearance(baseUrl)) {
+            coordinator.resolveAsync(baseUrl, headersMap, force = true)
+            return
+        }
+
+        val isBlocked = withContext(Dispatchers.IO) {
+            try {
+                val req = GET(baseUrl, headers)
+                val resp = client.newCall(req).execute()
+                val code = resp.code
+                resp.close()
+                code == 403 || code == 503
+            } catch (_: Exception) {
+                !coordinator.hasClearance(baseUrl)
+            }
+        }
+
+        if (isBlocked) {
+            coordinator.resolveAsync(baseUrl, headersMap, force = true)
+        }
+    }
 
     override val client: OkHttpClient by lazy {
         network.client.newBuilder()
@@ -113,6 +152,7 @@ class ComixSource(
             }
         }
 
+        ensureClearance()
         val url = "$baseUrl/browse?order[score]=desc&page=$page"
         val capture = webViewHelper.runWebViewCapture(
             url = url,
@@ -149,6 +189,7 @@ class ComixSource(
             }
         }
 
+        ensureClearance()
         val url = "$baseUrl/browse?order[chapter_updated_at]=desc&page=$page"
         val capture = webViewHelper.runWebViewCapture(
             url = url,
@@ -185,6 +226,7 @@ class ComixSource(
             }
         }
 
+        ensureClearance()
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$baseUrl/browse?keyword=$encoded&page=$page"
         val capture = webViewHelper.runWebViewCapture(
@@ -219,41 +261,14 @@ class ComixSource(
             }
         }
 
-        val url = "$baseUrl/title${manga.url.removePrefix("/title")}"
+        ensureClearance()
+        val slug = manga.url.removePrefix("/title/").removePrefix("/title").removePrefix("/")
+        val url = "$baseUrl/title/$slug"
         val capture = webViewHelper.runWebViewCapture(
             url = url,
             userAgent = headers["User-Agent"] ?: network.defaultUserAgentProvider(),
         ) { passPayloadName, _ ->
-            """
-            (function () {
-                const payloadKey = '__comixDetailPayload';
-                const capture = parsed => {
-                    try {
-                        if (parsed && (parsed.result || parsed.hid)) {
-                            window[payloadKey] = JSON.stringify(parsed);
-                            window.$passPayloadName(window[payloadKey]);
-                            return true;
-                        }
-                    } catch (e) {}
-                    return false;
-                };
-
-                if (window[payloadKey]) return window[payloadKey];
-
-                try {
-                    const raw = document.querySelector('script#initial-data')?.textContent;
-                    const queries = raw && JSON.parse(raw).queries;
-                    if (queries) {
-                        for (const key of Object.keys(queries)) {
-                            if (key.includes('"detail"') || key.includes('"manga"')) {
-                                if (capture(queries[key])) return window[payloadKey];
-                            }
-                        }
-                    }
-                } catch (e) {}
-                return window[payloadKey] || null;
-            })();
-            """.trimIndent()
+            createDetailScript(passPayloadName)
         }
 
         capture.material?.takeIf { it.isValid() }?.let {
@@ -296,89 +311,76 @@ class ComixSource(
                 page++
             }
             if (chapters.isNotEmpty()) {
+                logcat(LogPriority.INFO) { "ComixSource: Loaded ${chapters.size} chapters via signed API for $mangaId" }
                 return chapters.map { it.toSChapter(mangaSlug) }
                     .distinctBy { it.url }
                     .sortedByDescending { it.chapter_number }
             }
         }
 
-        val url = "$baseUrl/title${manga.url.removePrefix("/title")}"
+        ensureClearance()
+        val url = "$baseUrl/title/$mangaSlug"
+        logcat(LogPriority.INFO) { "ComixSource: Running WebView capture for chapters at $url" }
         val capture = webViewHelper.runWebViewCapture(
             url = url,
             userAgent = headers["User-Agent"] ?: network.defaultUserAgentProvider(),
         ) { passPayloadName, _ ->
-            """
-            (function () {
-                const payloadKey = '__comixChapterPayload';
-                const capture = parsed => {
-                    try {
-                        if (parsed && parsed.result && Array.isArray(parsed.result.items)) {
-                            window[payloadKey] = JSON.stringify(parsed);
-                            window.$passPayloadName(window[payloadKey]);
-                            return true;
-                        }
-                    } catch (e) {}
-                    return false;
-                };
-
-                if (window[payloadKey]) return window[payloadKey];
-
-                try {
-                    const raw = document.querySelector('script#initial-data')?.textContent;
-                    const queries = raw && JSON.parse(raw).queries;
-                    if (queries) {
-                        for (const key of Object.keys(queries)) {
-                            if (key.includes('chapters')) {
-                                if (capture(queries[key])) return window[payloadKey];
-                            }
-                        }
-                    }
-                } catch (e) {}
-
-                if (window[payloadKey]) return window[payloadKey];
-                if (window.__comixChapterCaptureInstalled) return null;
-                window.__comixChapterCaptureInstalled = true;
-
-                const captureText = text => {
-                    try {
-                        if (text) capture(JSON.parse(text));
-                    } catch (e) {}
-                };
-
-                const originalFetch = window.fetch;
-                if (typeof originalFetch === 'function') {
-                    window.fetch = function () {
-                        return originalFetch.apply(this, arguments).then(response => {
-                            try {
-                                const u = response && response.url || '';
-                                if (u.includes('/chapters')) {
-                                    response.clone().text().then(captureText).catch(() => {});
-                                }
-                            } catch (e) {}
-                            return response;
-                        });
-                    };
-                }
-                return window[payloadKey] || null;
-            })();
-            """.trimIndent()
+            createChapterScript(passPayloadName)
         }
+
+        logcat(LogPriority.INFO) { "ComixSource: Chapter capture payload length=${capture.payload.length}, preview=${capture.payload.take(200)}" }
 
         capture.material?.takeIf { it.isValid() }?.let {
             cipher = ComixCipher(it)
         }
 
-        return try {
+        val chaptersFromCapture = try {
             val detailsResponse = capture.payload.parseAs<ChapterDetailsResponse>()
             detailsResponse.result.items.map { it.toSChapter(mangaSlug) }
-                .distinctBy { it.url }
-                .sortedByDescending { it.chapter_number }
         } catch (_: Exception) {
-            val list = capture.payload.parseAs<List<Chapter>>()
-            list.map { it.toSChapter(mangaSlug) }
-                .distinctBy { it.url }
+            try {
+                val list = capture.payload.parseAs<List<Chapter>>()
+                list.map { it.toSChapter(mangaSlug) }
+            } catch (_: Exception) {
+                try {
+                    val items = capture.payload.parseAs<ChapterDetailsResponse.Items>()
+                    items.items.map { it.toSChapter(mangaSlug) }
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            }
+        }
+
+        if (chaptersFromCapture.isNotEmpty()) {
+            return chaptersFromCapture.distinctBy { it.url }
                 .sortedByDescending { it.chapter_number }
         }
+
+        if (cipher != null && mangaId != null) {
+            val chapters = mutableListOf<Chapter>()
+            var page = 1
+            while (page <= 10) {
+                val response = getSigned<ChapterDetailsResponse>(
+                    "/api/v1/manga/$mangaId/chapters",
+                    mapOf(
+                        "limit" to listOf("100"),
+                        "order[number]" to listOf("desc"),
+                        "page" to listOf(page.toString()),
+                    ),
+                ) ?: break
+                chapters += response.result.items
+                if (!response.result.hasNextPage() || response.result.items.isEmpty()) break
+                page++
+            }
+            if (chapters.isNotEmpty()) {
+                logcat(LogPriority.INFO) { "ComixSource: Loaded ${chapters.size} chapters via signed API after capture for $mangaId" }
+                return chapters.map { it.toSChapter(mangaSlug) }
+                    .distinctBy { it.url }
+                    .sortedByDescending { it.chapter_number }
+            }
+        }
+
+        return emptyList()
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
@@ -395,59 +397,13 @@ class ComixSource(
             }
         }
 
+        ensureClearance()
         val chapterUrl = if (chapter.url.startsWith("http")) chapter.url else "$baseUrl/${chapter.url.trimStart('/')}"
         val capture = webViewHelper.runWebViewCapture(
             url = chapterUrl,
             userAgent = headers["User-Agent"] ?: network.defaultUserAgentProvider(),
         ) { passPayloadName, _ ->
-            """
-            (function () {
-                const payloadKey = '__comixPagePayload';
-                const capture = parsed => {
-                    try {
-                        if (parsed && parsed.result && parsed.result.pages) {
-                            window[payloadKey] = JSON.stringify(parsed);
-                            window.$passPayloadName(window[payloadKey]);
-                            return true;
-                        }
-                    } catch (e) {}
-                    return false;
-                };
-
-                if (window[payloadKey]) return window[payloadKey];
-
-                try {
-                    const raw = document.querySelector('script#initial-data')?.textContent;
-                    const queries = raw && JSON.parse(raw).queries;
-                    if (queries) {
-                        for (const key of Object.keys(queries)) {
-                            if (key.includes('chapter') || key.includes('pages')) {
-                                if (capture(queries[key])) return window[payloadKey];
-                            }
-                        }
-                    }
-                } catch (e) {}
-
-                if (window[payloadKey]) return window[payloadKey];
-                if (window.__comixPageCaptureInstalled) return null;
-                window.__comixPageCaptureInstalled = true;
-
-                const originalFetch = window.fetch;
-                if (typeof originalFetch === 'function') {
-                    window.fetch = function () {
-                        return originalFetch.apply(this, arguments).then(response => {
-                            try {
-                                response.clone().text().then(text => {
-                                    try { capture(JSON.parse(text)); } catch (e) {}
-                                }).catch(() => {});
-                            } catch (e) {}
-                            return response;
-                        });
-                    };
-                }
-                return window[payloadKey] || null;
-            })();
-            """.trimIndent()
+            createPageScript(passPayloadName)
         }
 
         capture.material?.takeIf { it.isValid() }?.let {
@@ -529,9 +485,10 @@ class ComixSource(
             } else {
                 root
             }
+            logcat(LogPriority.INFO) { "ComixSource: Decrypted $path payload: $decoded" }
             comixJson.decodeFromJsonElement<T>(decoded)
-        }.getOrElse {
-            if (cipher === currentCipher) cipher = null
+        }.getOrElse { e ->
+            logcat(LogPriority.ERROR, e) { "ComixSource: getSigned failed for path $path: ${e.message}" }
             null
         }
     }
@@ -631,7 +588,334 @@ class ComixSource(
         })();
     """.trimIndent()
 
+    private fun createDetailScript(passPayloadName: String): String = """
+        (function () {
+            const payloadKey = '__comixDetailPayload';
+            const capture = parsed => {
+                try {
+                    if (!parsed) return false;
+                    if (parsed.state && parsed.state.data) parsed = parsed.state.data;
+                    if (parsed.data && (parsed.data.result || parsed.data.hid || parsed.data.title)) parsed = parsed.data;
+                    if (parsed && (parsed.result || parsed.hid)) {
+                        window[payloadKey] = JSON.stringify(parsed);
+                        window.$passPayloadName(window[payloadKey]);
+                        return true;
+                    }
+                } catch (e) {}
+                return false;
+            };
+
+            if (window[payloadKey]) return window[payloadKey];
+
+            try {
+                const raw = document.querySelector('script#initial-data')?.textContent;
+                const queries = raw && JSON.parse(raw).queries;
+                if (queries) {
+                    for (const key of Object.keys(queries)) {
+                        if (key.includes('detail')) {
+                            if (capture(queries[key])) return window[payloadKey];
+                        }
+                    }
+                    for (const key of Object.keys(queries)) {
+                        if (key.includes('/api/v1/manga/')) {
+                            if (capture(queries[key])) return window[payloadKey];
+                        }
+                    }
+                }
+            } catch (e) {}
+
+            if (window[payloadKey]) return window[payloadKey];
+            if (window.__comixDetailCaptureInstalled) return null;
+            window.__comixDetailCaptureInstalled = true;
+
+            const captureText = text => {
+                try {
+                    if (text) capture(JSON.parse(text));
+                } catch (e) {}
+            };
+
+            const originalFetch = window.fetch;
+            if (typeof originalFetch === 'function') {
+                window.fetch = function () {
+                    return originalFetch.apply(this, arguments).then(response => {
+                        try {
+                            const u = response && response.url || '';
+                            if (u.includes('/api/v1/manga/')) {
+                                response.clone().text().then(captureText).catch(() => {});
+                            }
+                        } catch (e) {}
+                        return response;
+                    });
+                };
+            }
+
+            const originalOpen = XMLHttpRequest.prototype.open;
+            const originalSend = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.open = function (method, url) {
+                this.__comixUrl = String(url || '');
+                return originalOpen.apply(this, arguments);
+            };
+            XMLHttpRequest.prototype.send = function () {
+                this.addEventListener('load', function () {
+                    try {
+                        if (this.__comixUrl && this.__comixUrl.includes('/api/v1/manga/')) {
+                            captureText(this.responseText);
+                        }
+                    } catch (e) {}
+                });
+                return originalSend.apply(this, arguments);
+            };
+
+            const originalParse = JSON.parse;
+            JSON.parse = new Proxy(originalParse, {
+                apply(target, thisArg, args) {
+                    const parsed = Reflect.apply(target, thisArg, args);
+                    capture(parsed);
+                    return parsed;
+                }
+            });
+
+            return window[payloadKey] || null;
+        })();
+    """.trimIndent()
+
+    private fun createChapterScript(passPayloadName: String): String = """
+        (function () {
+            const payloadKey = '__comixChapterPayload';
+            const capture = (parsed, allowEmpty = false) => {
+                try {
+                    if (!parsed) return false;
+                    if (parsed.state && parsed.state.data) parsed = parsed.state.data;
+                    if (parsed.data && (parsed.data.result || parsed.data.items)) parsed = parsed.data;
+                    if (parsed && Array.isArray(parsed.result)) {
+                        parsed = { result: { items: parsed.result } };
+                    }
+                    if (parsed && Array.isArray(parsed.items)) {
+                        parsed = { result: parsed };
+                    }
+                    if (parsed && Array.isArray(parsed)) {
+                        parsed = { result: { items: parsed } };
+                    }
+                    if (
+                        parsed &&
+                        parsed.result &&
+                        Array.isArray(parsed.result.items)
+                    ) {
+                        const items = parsed.result.items;
+                        if (items.length > 0) {
+                            const first = items[0];
+                            const isChapter = first && (
+                                first.chap !== undefined ||
+                                first.number !== undefined ||
+                                first.chapter !== undefined ||
+                                first.name !== undefined ||
+                                first.id !== undefined ||
+                                (first.title !== undefined && first.hid !== undefined && (first.manga_id !== undefined || first.mangaId !== undefined))
+                            );
+                            if (!isChapter) return false;
+                        } else if (!allowEmpty) {
+                            return false;
+                        }
+                        window[payloadKey] = JSON.stringify(parsed);
+                        window.$passPayloadName(window[payloadKey]);
+                        return true;
+                    }
+                } catch (e) {}
+                return false;
+            };
+
+            if (window[payloadKey]) return window[payloadKey];
+
+            window.__wammyLog && window.__wammyLog('createChapterScript running, href=' + window.location.href);
+
+            try {
+                const raw = document.querySelector('script#initial-data')?.textContent;
+                const queries = raw && JSON.parse(raw).queries;
+                if (queries) {
+                    const keys = Object.keys(queries);
+                    window.__wammyLog && window.__wammyLog('initial-data queries keys: ' + keys.join(' | '));
+                    for (const key of keys) {
+                        if (key.includes('chapters') || key.includes('chapter')) {
+                            window.__wammyLog && window.__wammyLog('matched chapter query key: ' + key);
+                            if (capture(queries[key])) {
+                                window.__wammyLog && window.__wammyLog('successfully captured query: ' + key);
+                                return window[payloadKey];
+                            }
+                        }
+                    }
+                } else {
+                    window.__wammyLog && window.__wammyLog('no initial-data or queries found in DOM');
+                }
+            } catch (e) {
+                window.__wammyLog && window.__wammyLog('error in initial-data parsing: ' + e);
+            }
+
+            try {
+                window.scrollTo(0, 1500);
+                setTimeout(() => window.scrollTo(0, 3000), 400);
+            } catch (e) {}
+
+            if (window[payloadKey]) return window[payloadKey];
+            if (window.__comixChapterCaptureInstalled) return null;
+            window.__comixChapterCaptureInstalled = true;
+
+            const captureText = text => {
+                try {
+                    window.__wammyLog && window.__wammyLog('captureText called, len=' + (text ? text.length : 0));
+                    if (text) capture(JSON.parse(text), true);
+                } catch (e) {}
+            };
+
+            const originalFetch = window.fetch;
+            if (typeof originalFetch === 'function') {
+                window.fetch = function () {
+                    try {
+                        const u = arguments[0] && (typeof arguments[0] === 'string' ? arguments[0] : arguments[0].url) || '';
+                        window.__wammyLog && window.__wammyLog('fetch called: ' + u);
+                    } catch (e) {}
+                    return originalFetch.apply(this, arguments).then(response => {
+                        try {
+                            const u = response && response.url || '';
+                            if (u.includes('/chapters')) {
+                                window.__wammyLog && window.__wammyLog('fetch intercepted /chapters: ' + u);
+                                response.clone().text().then(captureText).catch(() => {});
+                            }
+                        } catch (e) {}
+                        return response;
+                    });
+                };
+            }
+
+            const originalOpen = XMLHttpRequest.prototype.open;
+            const originalSend = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.open = function (method, url) {
+                this.__comixUrl = String(url || '');
+                window.__wammyLog && window.__wammyLog('XHR open: ' + this.__comixUrl);
+                return originalOpen.apply(this, arguments);
+            };
+            XMLHttpRequest.prototype.send = function () {
+                this.addEventListener('load', function () {
+                    try {
+                        if (this.__comixUrl && this.__comixUrl.includes('/chapters')) {
+                            window.__wammyLog && window.__wammyLog('XHR loaded /chapters');
+                            captureText(this.responseText);
+                        }
+                    } catch (e) {}
+                });
+                return originalSend.apply(this, arguments);
+            };
+
+            const originalParse = JSON.parse;
+            JSON.parse = new Proxy(originalParse, {
+                apply(target, thisArg, args) {
+                    const parsed = Reflect.apply(target, thisArg, args);
+                    try {
+                        if (parsed && typeof parsed === 'object') {
+                            const keys = Object.keys(parsed);
+                            if (keys.includes('items') || keys.includes('result') || keys.includes('state')) {
+                                window.__wammyLog && window.__wammyLog('JSON.parse parsed object keys: ' + keys.join(','));
+                            }
+                        }
+                    } catch (e) {}
+                    capture(parsed);
+                    return parsed;
+                }
+            });
+
+            return window[payloadKey] || null;
+        })();
+    """.trimIndent()
+
+    private fun createPageScript(passPayloadName: String): String = """
+        (function () {
+            const payloadKey = '__comixPagePayload';
+            const capture = parsed => {
+                try {
+                    if (!parsed) return false;
+                    if (parsed.state && parsed.state.data) parsed = parsed.state.data;
+                    if (parsed.data && (parsed.data.result || parsed.data.pages)) parsed = parsed.data;
+                    if (parsed && parsed.result && parsed.result.pages) {
+                        window[payloadKey] = JSON.stringify(parsed);
+                        window.$passPayloadName(window[payloadKey]);
+                        return true;
+                    }
+                } catch (e) {}
+                return false;
+            };
+
+            if (window[payloadKey]) return window[payloadKey];
+
+            try {
+                const raw = document.querySelector('script#initial-data')?.textContent;
+                const queries = raw && JSON.parse(raw).queries;
+                if (queries) {
+                    for (const key of Object.keys(queries)) {
+                        if (key.includes('chapter') || key.includes('pages')) {
+                            if (capture(queries[key])) return window[payloadKey];
+                        }
+                    }
+                    Object.values(queries).some(capture);
+                }
+            } catch (e) {}
+
+            if (window[payloadKey]) return window[payloadKey];
+            if (window.__comixPageCaptureInstalled) return null;
+            window.__comixPageCaptureInstalled = true;
+
+            const captureText = text => {
+                try {
+                    if (text) capture(JSON.parse(text));
+                } catch (e) {}
+            };
+
+            const originalFetch = window.fetch;
+            if (typeof originalFetch === 'function') {
+                window.fetch = function () {
+                    return originalFetch.apply(this, arguments).then(response => {
+                        try {
+                            const u = response && response.url || '';
+                            if (u.includes('/chapters/') || u.includes('/pages')) {
+                                response.clone().text().then(captureText).catch(() => {});
+                            }
+                        } catch (e) {}
+                        return response;
+                    });
+                };
+            }
+
+            const originalOpen = XMLHttpRequest.prototype.open;
+            const originalSend = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.open = function (method, url) {
+                this.__comixUrl = String(url || '');
+                return originalOpen.apply(this, arguments);
+            };
+            XMLHttpRequest.prototype.send = function () {
+                this.addEventListener('load', function () {
+                    try {
+                        if (this.__comixUrl && (this.__comixUrl.includes('/chapters/') || this.__comixUrl.includes('/pages'))) {
+                            captureText(this.responseText);
+                        }
+                    } catch (e) {}
+                });
+                return originalSend.apply(this, arguments);
+            };
+
+            const originalParse = JSON.parse;
+            JSON.parse = new Proxy(originalParse, {
+                apply(target, thisArg, args) {
+                    const parsed = Reflect.apply(target, thisArg, args);
+                    capture(parsed);
+                    return parsed;
+                }
+            });
+
+            return window[payloadKey] || null;
+        })();
+    """.trimIndent()
+
     companion object {
+        @Volatile
+        var cachedCipher: ComixCipher? = null
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("""/(?:i5|si|i|sii|ii)/""")
     }
 }

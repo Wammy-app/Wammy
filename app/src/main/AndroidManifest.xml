@@ -258,6 +258,13 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.challenge.ChallengeSolverActivity"
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize"
+            android:exported="false"
+            android:theme="@style/Theme.Tachiyomi.ChallengeSolver"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".extension.util.ExtensionInstallActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
