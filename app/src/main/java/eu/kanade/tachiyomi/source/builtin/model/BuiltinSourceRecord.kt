@@ -12,6 +12,9 @@ enum class BuiltinEngineType {
     ATSUMARU,
     BBATO,
     COMIX,
+    MANHUAPLUS,
+    COMICK,
+    WEBTOONS,
 }
 
 @Serializable

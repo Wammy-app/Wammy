@@ -5,11 +5,14 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.builtin.atsumaru.AtsumaruSource
 import eu.kanade.tachiyomi.source.builtin.bbato.BbatoSource
+import eu.kanade.tachiyomi.source.builtin.comick.ComickSource
 import eu.kanade.tachiyomi.source.builtin.comix.ComixSource
 import eu.kanade.tachiyomi.source.builtin.engine.MadaraEngineSource
 import eu.kanade.tachiyomi.source.builtin.engine.MangaThemesiaEngineSource
 import eu.kanade.tachiyomi.source.builtin.mangadex.MangaDexSource
 import eu.kanade.tachiyomi.source.builtin.mangakakalot.MangakakalotSource
+import eu.kanade.tachiyomi.source.builtin.manhuaplus.ManhuaPlusSource
+import eu.kanade.tachiyomi.source.builtin.webtoon.WebtoonsSource
 import eu.kanade.tachiyomi.source.builtin.weebcentral.WeebCentralSource
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinEngineType
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinSourceRecord
@@ -150,6 +153,30 @@ class BuiltinSourceManager(
             engineType = BuiltinEngineType.COMIX,
             isDefaultEnabled = true,
         ),
+        BuiltinSourceRecord(
+            id = 80010013L,
+            name = "ManhuaPlus",
+            baseUrl = "https://manhuaplus.org",
+            lang = "en",
+            engineType = BuiltinEngineType.MANHUAPLUS,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80010014L,
+            name = "ComicK",
+            baseUrl = "https://comick.art",
+            lang = "en",
+            engineType = BuiltinEngineType.COMICK,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80010015L,
+            name = "Webtoons",
+            baseUrl = "https://www.webtoons.com",
+            lang = "en",
+            engineType = BuiltinEngineType.WEBTOONS,
+            isDefaultEnabled = true,
+        ),
     )
 
     init {
@@ -192,6 +219,9 @@ class BuiltinSourceManager(
                     lang = record.lang,
                 )
                 BuiltinEngineType.COMIX -> ComixSource(id = record.id, lang = record.lang)
+                BuiltinEngineType.MANHUAPLUS -> ManhuaPlusSource(id = record.id, baseUrl = record.baseUrl, lang = record.lang)
+                BuiltinEngineType.COMICK -> ComickSource(id = record.id, baseUrl = record.baseUrl, lang = record.lang)
+                BuiltinEngineType.WEBTOONS -> WebtoonsSource(id = record.id, baseUrl = record.baseUrl, lang = record.lang)
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Failed to instantiate built-in source: ${record.name}" }
@@ -282,6 +312,9 @@ class BuiltinSourceManager(
                 80010010L -> R.drawable.source_bbato
                 80010011L -> R.drawable.source_comicasura
                 80010012L -> R.drawable.source_comix
+                80010013L -> R.drawable.source_manhuaplus
+                80010014L -> R.drawable.source_comick
+                80010015L -> R.drawable.source_webtoons
                 else -> when (sourceName?.lowercase()?.trim()) {
                     "mangadex" -> R.drawable.source_mangadex
                     "mangakakalot" -> R.drawable.source_mangakakalot
@@ -295,6 +328,9 @@ class BuiltinSourceManager(
                     "bbato", "bato" -> R.drawable.source_bbato
                     "comic asura", "asura comic", "asura scans", "comicasura" -> R.drawable.source_comicasura
                     "comix" -> R.drawable.source_comix
+                    "manhuaplus", "manhua plus" -> R.drawable.source_manhuaplus
+                    "comick", "comic k" -> R.drawable.source_comick
+                    "webtoons", "webtoon", "line webtoon" -> R.drawable.source_webtoons
                     else -> null
                 }
             }
