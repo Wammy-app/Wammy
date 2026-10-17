@@ -73,7 +73,7 @@ class BuiltinSourceManager(
         BuiltinSourceRecord(
             id = 80010003L,
             name = "ManhuaFast",
-            baseUrl = "https://manhuafast.com",
+            baseUrl = "https://www.mangaread.org",
             lang = "en",
             engineType = BuiltinEngineType.MADARA,
             isDefaultEnabled = true,
@@ -81,7 +81,7 @@ class BuiltinSourceManager(
         BuiltinSourceRecord(
             id = 80010004L,
             name = "Novelmic",
-            baseUrl = "https://novelmic.com",
+            baseUrl = "https://www.zinmanga.net",
             lang = "en",
             engineType = BuiltinEngineType.MADARA,
             isDefaultEnabled = true,

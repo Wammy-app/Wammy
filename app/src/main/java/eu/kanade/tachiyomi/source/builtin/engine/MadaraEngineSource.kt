@@ -42,9 +42,34 @@ open class MadaraEngineSource(
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient by lazy {
-        network.client.newBuilder()
+        val builder = network.client.newBuilder()
             .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
-            .build()
+
+        if (baseUrl.contains("yaksha", ignoreCase = true)) {
+            builder.addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                if (response.code != 403) return@addInterceptor response
+                response.close()
+
+                try {
+                    Thread.sleep(1500L)
+                    val challengeResponse = chain.proceed(GET("$baseUrl/hcdn-cgi/jschallenge", headers))
+                    val bodyStr = challengeResponse.body.string()
+                    val token = Regex("""name="token"\s+value="([^"]+)"""").find(bodyStr)?.groups?.get(1)?.value
+                    if (!token.isNullOrEmpty() && token != "nil") {
+                        val md = java.security.MessageDigest.getInstance("SHA-256")
+                        val hash = md.digest(token.toByteArray()).fold("") { str, it -> str + "%02x".format(it) }
+                        val form = FormBody.Builder().add("challenge", hash).build()
+                        val validate = chain.proceed(POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers, form))
+                        validate.close()
+                    }
+                } catch (_: Exception) {}
+
+                chain.proceed(chain.request())
+            }
+        }
+
+        builder.build()
     }
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
