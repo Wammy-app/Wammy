@@ -65,7 +65,7 @@ class BuiltinSourceManager(
         BuiltinSourceRecord(
             id = 80010002L,
             name = "Mangakakalot",
-            baseUrl = "https://www.mangakakalot.gg",
+            baseUrl = "https://www.mangakakalove.com",
             lang = "en",
             engineType = BuiltinEngineType.MANGAKAKALOT,
             isDefaultEnabled = true,
@@ -175,7 +175,7 @@ class BuiltinSourceManager(
         return try {
             when (record.engineType) {
                 BuiltinEngineType.MANGADEX -> MangaDexSource(id = record.id, lang = record.lang)
-                BuiltinEngineType.MANGAKAKALOT -> MangakakalotSource(id = record.id, lang = record.lang)
+                BuiltinEngineType.MANGAKAKALOT -> MangakakalotSource(id = record.id, baseUrl = record.baseUrl, lang = record.lang)
                 BuiltinEngineType.WEEBCENTRAL -> WeebCentralSource(id = record.id, lang = record.lang)
                 BuiltinEngineType.ATSUMARU -> AtsumaruSource(id = record.id, lang = record.lang)
                 BuiltinEngineType.BBATO -> BbatoSource(id = record.id, lang = record.lang)

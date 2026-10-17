@@ -86,6 +86,8 @@ fun WebView.setDefaultSettings() {
     with(settings) {
         javaScriptEnabled = true
         domStorageEnabled = true
+        databaseEnabled = true
+        javaScriptCanOpenWindowsAutomatically = true
         useWideViewPort = true
         loadWithOverviewMode = true
         cacheMode = WebSettings.LOAD_DEFAULT
@@ -99,7 +101,16 @@ fun WebView.setDefaultSettings() {
         displayZoomControls = false
     }
 
-    CookieManager.getInstance().acceptThirdPartyCookies(this)
+    try {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+            WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
+        }
+    } catch (_: Exception) {}
+
+    CookieManager.getInstance().apply {
+        setAcceptCookie(true)
+        acceptThirdPartyCookies(this@setDefaultSettings)
+    }
 }
 
 /**

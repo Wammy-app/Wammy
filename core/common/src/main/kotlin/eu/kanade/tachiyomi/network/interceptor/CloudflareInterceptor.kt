@@ -127,6 +127,8 @@ class CloudflareInterceptor(
                 webview = createWebView(originalRequest).apply {
                     onResume()
                     resumeTimers()
+                    val dm = context.resources.displayMetrics
+                    layout(0, 0, dm.widthPixels, dm.heightPixels)
                 }
 
                 webview?.webViewClient = object : WebViewClient() {
@@ -178,6 +180,10 @@ class CloudflareInterceptor(
         val pollIntervalMs = 250L
 
         while (System.currentTimeMillis() - startTime < timeoutMs) {
+            try {
+                android.webkit.CookieManager.getInstance().flush()
+            } catch (_: Exception) {}
+
             if (isClearancePassed()) {
                 cloudflareBypassed = true
                 latch.countDown()

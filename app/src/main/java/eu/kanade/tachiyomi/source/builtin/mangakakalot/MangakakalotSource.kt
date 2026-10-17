@@ -24,11 +24,11 @@ import java.util.Locale
 @Suppress("DEPRECATION")
 class MangakakalotSource(
     override val id: Long = 80010002L,
+    override val baseUrl: String = "https://www.mangakakalove.com",
     override val lang: String = "en",
 ) : ParsedHttpSource() {
 
     override val name: String = "Mangakakalot"
-    override val baseUrl: String = "https://www.mangakakalot.gg"
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient by lazy {
@@ -55,14 +55,17 @@ class MangakakalotSource(
     }
 
     override fun popularMangaSelector(): String =
-        ":is(div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap):has(a[data-id]), .story_item, .list-truyen-item-wrap"
+        ".list-comic-item-wrap, .popular-carousel-wrap .item, :is(div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap):has(a[data-id]), .story_item, .list-truyen-item-wrap"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        val link = element.select("h3 a, a.story_name, .story_item_right h3 a, a").first()
+        val link = element.select("h3 a, a.story_name, .story_item_right h3 a, a.list-story-item, a").first()
         val img = element.select("img").first()
 
-        manga.title = link?.text()?.trim() ?: img?.attr("alt")?.trim() ?: "Unknown"
+        val title = link?.text()?.trim()?.ifBlank { null }
+            ?: img?.attr("alt")?.trim()?.ifBlank { null }
+            ?: "Unknown"
+        manga.title = title
         manga.setUrlWithoutDomain(link?.attr("abs:href") ?: "")
         manga.thumbnail_url = img?.attr("abs:src")?.ifBlank { img.attr("abs:data-src") }
         return manga
@@ -95,7 +98,7 @@ class MangakakalotSource(
     }
 
     override fun searchMangaSelector(): String =
-        ".panel_story_list .story_item, div.list-truyen-item-wrap, div.list-comic-item-wrap, :is(div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap):has(a[data-id])"
+        ".panel_story_list .story_item, .list-comic-item-wrap, div.list-truyen-item-wrap, :is(div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap):has(a[data-id])"
 
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
@@ -137,6 +140,50 @@ class MangakakalotSource(
     }
 
     // =========================== Chapters ===========================
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val url = response.request.url.toString()
+        val slug = url.substringAfter("/manga/").substringBefore("/").substringBefore("?")
+        if (slug.isNotBlank()) {
+            try {
+                val apiUrl = "$baseUrl/api/manga/$slug/chapters?limit=1000"
+                val apiRequest = GET(apiUrl, headers)
+                val apiResponse = client.newCall(apiRequest).execute()
+                if (apiResponse.isSuccessful) {
+                    val jsonStr = apiResponse.body.string()
+                    val json = org.json.JSONObject(jsonStr)
+                    if (json.optBoolean("success", false)) {
+                        val data = json.optJSONObject("data")
+                        val chaptersJson = data?.optJSONArray("chapters")
+                        if (chaptersJson != null && chaptersJson.length() > 0) {
+                            val list = mutableListOf<SChapter>()
+                            val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US)
+                            for (i in 0 until chaptersJson.length()) {
+                                val chObj = chaptersJson.getJSONObject(i)
+                                val ch = SChapter.create().apply {
+                                    name = chObj.optString("chapter_name", "Chapter")
+                                    val chSlug = chObj.optString("chapter_slug", "")
+                                    setUrlWithoutDomain("/manga/$slug/$chSlug")
+                                    chapter_number = chObj.optDouble("chapter_num", -1.0).toFloat()
+                                    val updated = chObj.optString("updated_at", "")
+                                    date_upload = try {
+                                        dateFormat.parse(updated)?.time ?: 0L
+                                    } catch (_: Exception) {
+                                        0L
+                                    }
+                                }
+                                list.add(ch)
+                            }
+                            return list
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // Fallback to HTML parsing below
+            }
+        }
+        return super.chapterListParse(response)
+    }
 
     override fun chapterListSelector(): String =
         ".row-content-chapter li, .chapter-list div.row"

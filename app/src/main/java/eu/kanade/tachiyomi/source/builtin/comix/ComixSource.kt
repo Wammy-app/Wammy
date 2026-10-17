@@ -217,13 +217,10 @@ class ComixSource(
         throw UnsupportedOperationException("Not used with direct Page image URLs")
 
     private fun extractInitialData(rawHtml: String): JSONObject? {
-        val startTag = "id=\"initial-data\">"
-        val idx = rawHtml.indexOf(startTag)
-        if (idx == -1) return null
-        val end = rawHtml.indexOf("</script>", idx)
-        if (end == -1) return null
+        val regex = Regex("""id=["'](?:initial-data|__NEXT_DATA__)["'][^>]*>(.*?)</script>""", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+        val match = regex.find(rawHtml) ?: return null
         return try {
-            JSONObject(rawHtml.substring(idx + startTag.length, end))
+            JSONObject(match.groupValues[1].trim())
         } catch (_: Exception) {
             null
         }
