@@ -4,9 +4,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -20,7 +23,7 @@ val comixJson = Json {
 }
 
 inline fun <reified T> String.parseAs(): T = comixJson.decodeFromString(this)
-inline fun <reified T> JsonElement.parseAs(): T = comixJson.decodeFromJsonElement<T>(this)
+inline fun <reified T> JsonElement.parseAs(): T = comixJson.decodeFromJsonElement(comixJson.serializersModule.serializer<T>(), this)
 
 const val MANGA_ID_MEMO = "mangaId"
 const val CHAPTER_ID_MEMO = "chapterId"
