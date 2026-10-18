@@ -36,13 +36,19 @@ class NovelFireSource(
         val novels = doc.select("li.novel-item").mapNotNull { el ->
             val link = el.selectFirst("a[href*='/book/']") ?: return@mapNotNull null
             val href = link.attr("href")
+            val cleanUrl = if (href.startsWith("http")) {
+                val uri = java.net.URI(href)
+                uri.path + if (uri.query != null) "?${uri.query}" else ""
+            } else {
+                href
+            }
             val title = el.selectFirst(".novel-title")?.text() ?: link.attr("title")
             val cover = el.selectFirst("img")?.let { img ->
                 img.attr("data-src").ifBlank { img.attr("src") }
             }?.let { if (it.startsWith("http")) it else "$baseUrl$it" }
 
             SManga.create().apply {
-                this.url = href
+                this.url = cleanUrl
                 this.title = title
                 this.thumbnail_url = cover
             }
@@ -93,12 +99,20 @@ class NovelFireSource(
     // =========================== Chapter List ===========================
 
     override suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val chaptersUrl = if (manga.url.endsWith("/chapters")) "$baseUrl${manga.url}" else "$baseUrl${manga.url.trimEnd('/')}/chapters"
+        val rawPath = manga.url.removePrefix(baseUrl)
+        val chaptersUrl = resolveUrl(if (rawPath.endsWith("/chapters")) rawPath else "${rawPath.trimEnd('/')}/chapters")
         val resp = client.newCall(GET(chaptersUrl, headers)).awaitSuccess()
         val doc = resp.asJsoup()
         val chapters = doc.select("ul.chapter-list li a").mapIndexed { index, a ->
+            val href = a.attr("href")
+            val cleanUrl = if (href.startsWith("http")) {
+                val uri = java.net.URI(href)
+                uri.path + if (uri.query != null) "?${uri.query}" else ""
+            } else {
+                href
+            }
             SChapter.create().apply {
-                url = a.attr("href")
+                url = cleanUrl
                 name = a.selectFirst(".chapter-title")?.text() ?: a.attr("title").ifBlank { a.text() }
                 chapter_number = (index + 1).toFloat()
             }
@@ -111,7 +125,7 @@ class NovelFireSource(
     // =========================== Chapter Content ===========================
 
     override suspend fun fetchPageText(page: Page): String {
-        val url = if (page.url.startsWith("http")) page.url else "$baseUrl${page.url}"
+        val url = resolveUrl(page.url)
         val resp = client.newCall(GET(url, headers)).awaitSuccess()
         val doc = resp.asJsoup()
         val contentEl = doc.selectFirst("#content") ?: throw IllegalStateException("Chapter content not found on NovelFire")

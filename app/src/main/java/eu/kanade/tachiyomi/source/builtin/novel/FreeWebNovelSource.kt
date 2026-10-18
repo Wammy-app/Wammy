@@ -46,13 +46,19 @@ class FreeWebNovelSource(
         val novels = doc.select(".con").mapNotNull { el ->
             val titleEl = el.selectFirst("h3.tit a") ?: return@mapNotNull null
             val href = titleEl.attr("href")
+            val cleanUrl = if (href.startsWith("http")) {
+                val uri = java.net.URI(href)
+                uri.path + if (uri.query != null) "?${uri.query}" else ""
+            } else {
+                href
+            }
             val title = titleEl.attr("title").ifBlank { titleEl.text() }
             val cover = el.selectFirst(".pic img")?.let { img ->
                 img.attr("data-src").ifBlank { img.attr("src") }
             }?.let { if (it.startsWith("http")) it else "$baseUrl$it" }
 
             SManga.create().apply {
-                this.url = href
+                this.url = cleanUrl
                 this.title = title
                 this.thumbnail_url = cover
             }
@@ -103,7 +109,7 @@ class FreeWebNovelSource(
     // =========================== Chapter List ===========================
 
     override suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val mangaPath = manga.url.removePrefix("/")
+        val mangaPath = manga.url.removePrefix(baseUrl).removePrefix("/")
         val firstPageUrl = "$baseUrl/$mangaPath?ajax=chapters&page=1&pageSize=200"
         val ajaxHeaders = headers.newBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
@@ -137,8 +143,15 @@ class FreeWebNovelSource(
     private fun parseChaptersFromHtml(html: String): List<SChapter> {
         val doc = Jsoup.parseBodyFragment(html)
         return doc.select("li a").mapIndexed { index, a ->
+            val href = a.attr("href")
+            val cleanUrl = if (href.startsWith("http")) {
+                val uri = java.net.URI(href)
+                uri.path + if (uri.query != null) "?${uri.query}" else ""
+            } else {
+                href
+            }
             SChapter.create().apply {
-                url = a.attr("href")
+                url = cleanUrl
                 name = a.attr("title").ifBlank { a.text() }
                 chapter_number = (index + 1).toFloat()
             }
@@ -150,7 +163,7 @@ class FreeWebNovelSource(
     // =========================== Chapter Content ===========================
 
     override suspend fun fetchPageText(page: Page): String {
-        val url = if (page.url.startsWith("http")) page.url else "$baseUrl${page.url}"
+        val url = resolveUrl(page.url)
         val resp = client.newCall(GET(url, headers)).awaitSuccess()
         val doc = resp.asJsoup()
         val articleEl = doc.selectFirst("#article") ?: throw IllegalStateException("Article content not found on FreeWebNovel")

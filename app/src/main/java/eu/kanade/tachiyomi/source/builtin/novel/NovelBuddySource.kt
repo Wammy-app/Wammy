@@ -134,7 +134,7 @@ class NovelBuddySource(
     // =========================== Chapter List ===========================
 
     override suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val url = if (manga.url.startsWith("http")) manga.url else "$baseUrl${manga.url}"
+        val url = resolveUrl(manga.url)
         val resp = client.newCall(GET(url, headers)).awaitSuccess()
         val doc = resp.asJsoup()
         val nextData = doc.selectFirst("script#__NEXT_DATA__")?.data()
@@ -173,7 +173,7 @@ class NovelBuddySource(
     // =========================== Chapter Content ===========================
 
     override suspend fun fetchPageText(page: Page): String {
-        val url = if (page.url.startsWith("http")) page.url else "$baseUrl${page.url}"
+        val url = resolveUrl(page.url)
         val resp = client.newCall(GET(url, headers)).awaitSuccess()
         val doc = resp.asJsoup()
         val contentEl = doc.selectFirst(".novel-tts-content, article.novel-reader-content, #main-content")

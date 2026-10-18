@@ -8,8 +8,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import java.net.URLEncoder
 
 /**
@@ -24,25 +28,50 @@ class BakaTsukiSource(
     override val name: String = "Baka-Tsuki"
     override val supportsLatest: Boolean = false
 
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
+
     // =========================== Popular / Catalog ===========================
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/project/index.php?title=Category:Light_novel_(English)"
+        val url = "$baseUrl/project/api.php?action=query&generator=categorymembers&gcmtitle=Category:Light_novel_(English)&gcmlimit=500&prop=pageimages&pithumbsize=360&format=json"
         return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val doc = response.asJsoup()
-        val novels = doc.select(".mw-category-group li a").mapNotNull { a ->
-            val href = a.attr("href")
-            val title = a.text().trim()
-            if (title.isBlank() || href.contains("Category:") || href.contains("Special:")) return@mapNotNull null
+        val bodyStr = response.body.string()
+        val jsonRoot = runCatching { json.parseToJsonElement(bodyStr).jsonObject }.getOrNull()
+        val pagesObj = jsonRoot?.get("query")?.jsonObject?.get("pages")?.jsonObject
+
+        if (pagesObj == null) {
+            // Fallback to HTML if API failed
+            val doc = Jsoup.parse(bodyStr, baseUrl)
+            val novels = doc.select(".mw-category-group li a").mapNotNull { a ->
+                val href = a.attr("href")
+                val title = a.text().trim()
+                if (title.isBlank() || href.contains("Category:") || href.contains("Special:")) return@mapNotNull null
+                SManga.create().apply {
+                    this.url = href
+                    this.title = title
+                }
+            }.distinctBy { it.url }
+            return MangasPage(novels, false)
+        }
+
+        val novels = pagesObj.values.mapNotNull { pageEl ->
+            val page = pageEl.jsonObject
+            val title = page["title"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            val thumbUrl = page["thumbnail"]?.jsonObject?.get("source")?.jsonPrimitive?.content
+            val encodedTitle = URLEncoder.encode(title.replace(" ", "_"), "UTF-8")
 
             SManga.create().apply {
-                this.url = href
+                this.url = "/project/index.php?title=$encodedTitle"
                 this.title = title
+                this.thumbnail_url = thumbUrl
             }
-        }.distinctBy { it.url }
+        }.sortedBy { it.title }
 
         return MangasPage(novels, false)
     }
@@ -56,25 +85,11 @@ class BakaTsukiSource(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val encoded = URLEncoder.encode(query, "UTF-8")
-        val url = "$baseUrl/project/index.php?title=Special:Search&search=$encoded&fulltext=Search"
+        val url = "$baseUrl/project/api.php?action=query&generator=search&gsrsearch=$encoded&gsrlimit=50&prop=pageimages&pithumbsize=360&format=json"
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val doc = response.asJsoup()
-        val novels = doc.select("ul.mw-search-results li .mw-search-result-heading a, .mw-category-group li a").mapNotNull { a ->
-            val href = a.attr("href")
-            val title = a.text().trim()
-            if (title.isBlank() || href.contains("Category:") || href.contains("Special:")) return@mapNotNull null
-
-            SManga.create().apply {
-                this.url = href
-                this.title = title
-            }
-        }.distinctBy { it.url }
-
-        return MangasPage(novels, false)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =========================== Details ===========================
 
@@ -91,7 +106,7 @@ class BakaTsukiSource(
             val authorText = doc.select("li:contains(Author)").firstOrNull()?.text()
             author = authorText?.substringAfter("Author")?.substringBefore("Illustrator")?.replace(":", "")?.trim()
 
-            thumbnail_url = doc.selectFirst("figure img, .thumbimage, .infobox img")?.let { img ->
+            thumbnail_url = doc.selectFirst("figure img, .thumbimage, .infobox img, a.image img")?.let { img ->
                 val src = img.attr("src")
                 if (src.startsWith("http")) src else "$baseUrl$src"
             }
@@ -107,7 +122,7 @@ class BakaTsukiSource(
     // =========================== Chapter List ===========================
 
     override suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val url = if (manga.url.startsWith("http")) manga.url else "$baseUrl${manga.url}"
+        val url = resolveUrl(manga.url)
         val resp = client.newCall(GET(url, headers)).awaitSuccess()
         val doc = resp.asJsoup()
 
@@ -123,9 +138,26 @@ class BakaTsukiSource(
                 href.contains("File:") ||
                 href.contains("Category:") ||
                 href.contains("Special:") ||
+                href.contains("Template:") ||
+                href.contains("Illustration", ignoreCase = true) ||
+                title.contains("Illustration", ignoreCase = true) ||
+                href.contains("Guideline", ignoreCase = true) ||
+                title.contains("Guideline", ignoreCase = true) ||
                 title.isBlank() ||
                 title.equals("Registration", ignoreCase = true) ||
-                title.equals("Guidelines", ignoreCase = true)
+                title.equals("Guidelines", ignoreCase = true) ||
+                title.equals("Main Page", ignoreCase = true) ||
+                title.startsWith("Swedish", ignoreCase = true) ||
+                title.startsWith("French", ignoreCase = true) ||
+                title.startsWith("Spanish", ignoreCase = true) ||
+                title.startsWith("Indonesian", ignoreCase = true) ||
+                title.startsWith("Russian", ignoreCase = true) ||
+                title.startsWith("German", ignoreCase = true) ||
+                title.startsWith("Italian", ignoreCase = true) ||
+                title.startsWith("Portuguese", ignoreCase = true) ||
+                title.startsWith("Polish", ignoreCase = true) ||
+                title.startsWith("Vietnamese", ignoreCase = true) ||
+                title.startsWith("Tagalog", ignoreCase = true)
             ) {
                 return@mapNotNull null
             }
@@ -147,7 +179,7 @@ class BakaTsukiSource(
     // =========================== Chapter Content ===========================
 
     override suspend fun fetchPageText(page: Page): String {
-        val url = if (page.url.startsWith("http")) page.url else "$baseUrl${page.url}"
+        val url = resolveUrl(page.url)
         val resp = client.newCall(GET(url, headers)).awaitSuccess()
         val doc = resp.asJsoup()
 
@@ -155,7 +187,11 @@ class BakaTsukiSource(
             ?: throw IllegalStateException("Chapter content not found on Baka-Tsuki")
 
         // Clean out wiki-specific elements
-        content.select(".toc, .mw-editsection, .navbox, figure, .thumb, .infobox, table.vertical-navbox").remove()
+        content.select(
+            ".toc, .mw-editsection, .navbox, .vertical-navbox, figure, .thumb, .infobox, " +
+                ".printfooter, #catlinks, .gallery, table:has(a:contains(Return to)), " +
+                "td:contains(Return to), a:contains(Return to), .gallerytext, .mw-file-description",
+        ).remove()
 
         val title = doc.selectFirst("h1#firstHeading")?.text()?.let { "<h3>$it</h3>\n" } ?: ""
         return title + cleanHtmlContent(content)

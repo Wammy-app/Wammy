@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
+import java.net.URI
 import java.net.URLEncoder
 
 /**
@@ -36,6 +37,12 @@ class NovelCoolSource(
         val novels = doc.select(".book-item").mapNotNull { el ->
             val link = el.selectFirst("a[itemprop='url']") ?: return@mapNotNull null
             val href = link.attr("href")
+            val cleanUrl = if (href.startsWith("http")) {
+                val uri = URI(href)
+                uri.path + if (uri.query != null) "?${uri.query}" else ""
+            } else {
+                href
+            }
             val title = el.selectFirst(".book-pic")?.attr("title")?.ifBlank { link.text() } ?: link.text()
             val cover = el.selectFirst("img")?.let { img ->
                 img.attr("cover_url").ifBlank {
@@ -44,7 +51,7 @@ class NovelCoolSource(
             }?.let { if (it.startsWith("http")) it else "$baseUrl$it" }
 
             SManga.create().apply {
-                this.url = href
+                this.url = cleanUrl
                 this.title = title
                 this.thumbnail_url = cover
             }
@@ -96,13 +103,20 @@ class NovelCoolSource(
     // =========================== Chapter List ===========================
 
     override suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val url = if (manga.url.startsWith("http")) manga.url else "$baseUrl${manga.url}"
+        val url = resolveUrl(manga.url)
         val resp = client.newCall(GET(url, headers)).awaitSuccess()
         val doc = resp.asJsoup()
 
         val chapters = doc.select(".chp-item a, .chapter-item a").mapIndexed { index, a ->
+            val href = a.attr("href")
+            val cleanUrl = if (href.startsWith("http")) {
+                val uri = URI(href)
+                uri.path + if (uri.query != null) "?${uri.query}" else ""
+            } else {
+                href
+            }
             SChapter.create().apply {
-                this.url = a.attr("href")
+                this.url = cleanUrl
                 this.name = a.attr("title").ifBlank { a.text().trim() }
                 this.chapter_number = (index + 1).toFloat()
             }
@@ -116,7 +130,7 @@ class NovelCoolSource(
     // =========================== Chapter Content ===========================
 
     override suspend fun fetchPageText(page: Page): String {
-        val url = if (page.url.startsWith("http")) page.url else "$baseUrl${page.url}"
+        val url = resolveUrl(page.url)
         val resp = client.newCall(GET(url, headers)).awaitSuccess()
         val doc = resp.asJsoup()
 

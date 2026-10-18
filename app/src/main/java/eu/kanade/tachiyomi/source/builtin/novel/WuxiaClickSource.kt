@@ -58,7 +58,7 @@ class WuxiaClickSource(
                     val coverKey = obj["coverKey"]?.jsonPrimitive?.content
                     val coverOriginal = obj["coverOriginal"]?.jsonPrimitive?.content
                     val coverUrl = when {
-                        !coverKey.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverKey.webp"
+                        !coverKey.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverKey-360.webp"
                         !coverOriginal.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverOriginal"
                         else -> null
                     }
@@ -124,9 +124,10 @@ class WuxiaClickSource(
                     val coverKey = novelObj["coverKey"]?.jsonPrimitive?.content
                     val coverOriginal = novelObj["coverOriginal"]?.jsonPrimitive?.content
                     thumbnail_url = when {
-                        !coverKey.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverKey.webp"
+                        !coverKey.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverKey-360.webp"
                         !coverOriginal.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverOriginal"
-                        else -> null
+                        else -> doc.selectFirst("img[alt*='cover'], img.aspect-\\[3\\/4\\]")?.attr("src")
+                            ?: doc.selectFirst("meta[property='og:image']")?.attr("content")
                     }
                     val genres = novelObj["genres"]?.jsonArray?.mapNotNull { it.jsonObject["name"]?.jsonPrimitive?.content }
                     genre = genres?.joinToString(", ")

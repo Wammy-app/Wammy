@@ -1,9 +1,12 @@
 package eu.kanade.tachiyomi.source.builtin.novel
 
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import okhttp3.Headers
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.concurrent.TimeUnit
@@ -28,6 +31,28 @@ abstract class BuiltinNovelSource : HttpSource() {
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .add("Referer", "$baseUrl/")
 
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val url = resolveUrl(manga.url)
+        return GET(url, headers)
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val url = resolveUrl(manga.url)
+        return GET(url, headers)
+    }
+
+    /**
+     * Resolves a URL that may be absolute or relative into a fully qualified URL.
+     * Prevents double-domain concatenation errors like "https://domain.comhttps://domain.com/path".
+     */
+    protected fun resolveUrl(pathOrUrl: String): String {
+        return when {
+            pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://") -> pathOrUrl
+            pathOrUrl.startsWith("/") -> "$baseUrl$pathOrUrl"
+            else -> "$baseUrl/$pathOrUrl"
+        }
+    }
+
     override fun pageListParse(response: Response): List<Page> {
         val url = response.request.url.toString()
         return listOf(Page(0, url))
@@ -50,7 +75,9 @@ abstract class BuiltinNovelSource : HttpSource() {
             "script, style, iframe, link, button, input, textarea, form, noscript, " +
                 ".ad, .ads, .advertisement, [id*='ad-'], [class*='ad-'], [id*='google_ads'], " +
                 ".report-container, .comments-widget, .chapternav, .navbar, .header, .footer, " +
-                ".social-share, .watermark, .share-buttons, .vote-wrapper, .prevchap, .nextchap",
+                ".social-share, .watermark, .share-buttons, .vote-wrapper, .prevchap, .nextchap, " +
+                ".printfooter, #catlinks, .navbox, .vertical-navbox, .thumb, .infobox, .gallery, " +
+                "table:has(a:contains(Return to)), td:contains(Return to)",
         ).remove()
 
         // Extract paragraphs if available
