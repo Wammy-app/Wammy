@@ -9,6 +9,9 @@ import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import eu.kanade.tachiyomi.source.builtin.comix.tap
+import eu.kanade.tachiyomi.util.system.setDefaultSettings
+import eu.kanade.tachiyomi.util.system.setUserAgent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +66,7 @@ class ChallengeSolverActivity : BaseActivity() {
     private val targetUrl: String by lazy { intent.getStringExtra(EXTRA_URL).orEmpty() }
     private val targetHost: String by lazy { intent.getStringExtra(EXTRA_HOST).orEmpty() }
     private val targetUserAgent: String by lazy { intent.getStringExtra(EXTRA_USER_AGENT).orEmpty() }
+    private val targetOldClearance: String? by lazy { intent.getStringExtra(EXTRA_OLD_CLEARANCE) }
 
     private var resultReported = AtomicBoolean(false)
 
@@ -78,6 +83,7 @@ class ChallengeSolverActivity : BaseActivity() {
                 url = targetUrl,
                 host = targetHost,
                 userAgent = targetUserAgent,
+                oldClearance = targetOldClearance,
                 onDismiss = { finishWithResult(false) },
                 onSuccess = { finishWithResult(true) },
             )
@@ -102,12 +108,14 @@ class ChallengeSolverActivity : BaseActivity() {
         const val EXTRA_URL = "extra_challenge_url"
         const val EXTRA_HOST = "extra_challenge_host"
         const val EXTRA_USER_AGENT = "extra_challenge_user_agent"
+        const val EXTRA_OLD_CLEARANCE = "extra_old_clearance"
 
-        fun newIntent(context: Context, url: String, host: String, userAgent: String): Intent {
+        fun newIntent(context: Context, url: String, host: String, userAgent: String, oldClearance: String? = null): Intent {
             return Intent(context, ChallengeSolverActivity::class.java).apply {
                 putExtra(EXTRA_URL, url)
                 putExtra(EXTRA_HOST, host)
                 putExtra(EXTRA_USER_AGENT, userAgent)
+                putExtra(EXTRA_OLD_CLEARANCE, oldClearance)
             }
         }
     }
@@ -119,12 +127,32 @@ private fun ChallengeSolverDialog(
     url: String,
     host: String,
     userAgent: String,
+    oldClearance: String? = null,
     onDismiss: () -> Unit,
     onSuccess: () -> Unit,
 ) {
     var isVerified by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+
+    fun isChallengeTitle(title: String?): Boolean {
+        if (title.isNullOrBlank()) return true
+        val lower = title.lowercase().trim()
+        return lower == "about:blank" ||
+            lower.contains("just a moment") ||
+            lower.contains("attention required") ||
+            lower.contains("cloudflare") ||
+            lower.contains("third-party app") ||
+            lower.contains("security check")
+    }
+
+    fun checkPassed(view: WebView? = webViewRef): Boolean {
+        if (isLoading) return false
+        val current = BossChallengeCoordinator.getClearanceCookie(url) ?: return false
+        val title = view?.title.orEmpty().trim()
+        if (isChallengeTitle(title)) return false
+        return true
+    }
 
     BackHandler {
         onDismiss()
@@ -142,13 +170,56 @@ private fun ChallengeSolverDialog(
                 CookieManager.getInstance().flush()
             } catch (_: Throwable) {}
 
-            if (BossChallengeCoordinator.hasClearance(url)) {
+            if (checkPassed(webViewRef)) {
                 isVerified = true
                 delay(350)
                 onSuccess()
                 break
             }
-            delay(200)
+
+            // Auto-detect and tap Turnstile "Verify you are human" checkbox or Comix navigation button
+            val view = webViewRef
+            if (view != null) {
+                view.evaluateJavascript(
+                    """
+                    (function() {
+                        if (document.title.toLowerCase().includes('third-party') || window.location.href.includes('third-party')) {
+                            window.location.replace('https://comix.to/');
+                            return '';
+                        }
+                        const iframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
+                        if (iframe) {
+                            try { iframe.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
+                            const rect = iframe.getBoundingClientRect();
+                            if (rect.width > 0 && rect.height > 0) {
+                                return (rect.left + 30) + ',' + (rect.top + 32);
+                            }
+                        }
+                        const wrapper = document.querySelector('#turnstile-wrapper, .cf-turnstile');
+                        if (wrapper) {
+                            try { wrapper.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
+                            const rect = wrapper.getBoundingClientRect();
+                            if (rect.width > 0 && rect.height > 0) {
+                                return (rect.left + 30) + ',' + (rect.top + rect.height / 2);
+                            }
+                        }
+                        return '';
+                    })();
+                    """.trimIndent(),
+                ) { result ->
+                    val raw = result?.trim('"', '\'')
+                    val coords = raw?.split(',')
+                    if (coords != null && coords.size == 2) {
+                        val x = coords[0].toFloatOrNull()
+                        val y = coords[1].toFloatOrNull()
+                        if (x != null && y != null && x > 0 && y > 0) {
+                            view.tap(x, y)
+                        }
+                    }
+                }
+            }
+
+            delay(350)
         }
     }
 
@@ -164,12 +235,7 @@ private fun ChallengeSolverDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-                onClick = onDismiss,
-            ),
+            .background(Color.Black.copy(alpha = 0.5f)),
         contentAlignment = Alignment.Center,
     ) {
         Card(
@@ -211,12 +277,25 @@ private fun ChallengeSolverDialog(
                         )
                     }
 
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    Row {
+                        IconButton(onClick = {
+                            BossChallengeCoordinator.clearClearance(url)
+                            webViewRef?.loadUrl("https://$host/")
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
 
@@ -236,7 +315,7 @@ private fun ChallengeSolverDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(300.dp)
+                        .height(440.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surface),
                     contentAlignment = Alignment.Center,
@@ -249,42 +328,36 @@ private fun ChallengeSolverDialog(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                 )
-                                settings.apply {
-                                    javaScriptEnabled = true
-                                    domStorageEnabled = true
-                                    databaseEnabled = true
-                                    blockNetworkImage = false
-                                    if (userAgent.isNotBlank()) {
-                                        userAgentString = userAgent
-                                    }
-                                    useWideViewPort = true
-                                    loadWithOverviewMode = true
+                                setDefaultSettings()
+                                if (userAgent.isNotBlank()) {
+                                    setUserAgent(userAgent)
                                 }
 
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {
                                         isLoading = true
-                                        if (BossChallengeCoordinator.hasClearance(url)) {
+                                        if (checkPassed(view)) {
                                             isVerified = true
                                         }
                                     }
 
                                     override fun onPageFinished(view: WebView?, pageUrl: String?) {
                                         isLoading = false
-                                        if (BossChallengeCoordinator.hasClearance(url)) {
+                                        if (checkPassed(view)) {
                                             isVerified = true
                                         }
                                     }
 
                                     override fun doUpdateVisitedHistory(view: WebView?, pageUrl: String?, isReload: Boolean) {
-                                        if (BossChallengeCoordinator.hasClearance(url)) {
+                                        if (checkPassed(view)) {
                                             isVerified = true
                                         }
                                     }
                                 }
 
                                 webViewRef = this
-                                loadUrl(url)
+                                val initialUrl = if (host.contains("comix.to")) "https://$host/" else url
+                                loadUrl(initialUrl)
                             }
                         },
                     )

@@ -7,43 +7,84 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.challenge.BossChallengeCoordinator
+import eu.kanade.tachiyomi.util.system.setDefaultSettings
+import eu.kanade.tachiyomi.util.system.setUserAgent
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.ByteArrayInputStream
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
-import logcat.LogPriority
-import logcat.logcat
 
 class ComixWebViewHelper(
     private val context: Context,
     private val onMaterialCaptured: ((CipherMaterial) -> Unit)? = null,
 ) {
+    private val chapterListPacer = RequestPacer(minGapMs = 2500, maxGapMs = 5000)
+
+    private class RequestPacer(private val minGapMs: Long, private val maxGapMs: Long) {
+        private var nextNanos = 0L
+
+        fun waitForSlot() {
+            val waitNanos = synchronized(this) {
+                val now = System.nanoTime()
+                val start = maxOf(now, nextNanos)
+                nextNanos = start + kotlin.random.Random.nextLong(minGapMs, maxGapMs) * 1_000_000
+                start - now
+            }
+            if (waitNanos > 0) Thread.sleep(waitNanos / 1_000_000)
+        }
+    }
+
+    companion object {
+        private val captureMutex = Mutex()
+
+        fun randomName(): String = (1..(10..20).random())
+            .map { (('a'..'z') + ('A'..'Z')).random() }
+            .joinToString("")
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     suspend fun runWebViewCapture(
         url: String,
         userAgent: String,
         initialHtml: String? = null,
-        timeout: Duration = 25.seconds,
-        buildScript: (passPayloadName: String, rejectName: String) -> String,
-    ): WebViewCapture = withContext(Dispatchers.Main) {
-        val deferred = CompletableDeferred<WebViewCapture>()
-        val mainHandler = Handler(Looper.getMainLooper())
-        val destroyed = AtomicBoolean(false)
+        timeout: Duration = 120.seconds,
+        initializationScript: String? = null,
+        pollScript: ((passPayloadName: String) -> String)? = null,
+        pageScript: ((passPayloadName: String, rejectName: String, touchName: String) -> String)? = null,
+    ): WebViewCapture = captureMutex.withLock {
+        delay(250)
+        withContext(Dispatchers.Main) {
+            val deferred = CompletableDeferred<WebViewCapture>()
+            val mainHandler = Handler(Looper.getMainLooper())
+            val destroyed = AtomicBoolean(false)
+
+        logcat(LogPriority.INFO) { "ComixWebViewHelper: Starting capture for $url" }
+        CookieManager.getInstance().flush()
 
         val webView = WebView(context)
         val metrics = context.resources.displayMetrics
@@ -54,20 +95,18 @@ class ComixWebViewHelper(
         )
         webView.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
 
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            databaseEnabled = true
-            blockNetworkImage = false
-            userAgentString = userAgent
-        }
+        webView.setDefaultSettings()
+        webView.settings.setSupportMultipleWindows(true)
+        webView.setUserAgent(userAgent)
 
-        val bridgeName = "wammyBridge" + (1000..9999).random()
-        val errorBridgeName = "wammyError" + (1000..9999).random()
-        val materialBridgeName = "wammyMaterial" + (1000..9999).random()
-        val debugBridgeName = "wammyDebug" + (1000..9999).random()
-        val passPayloadName = "passPayload" + (1000..9999).random()
-        val rejectName = "rejectPayload" + (1000..9999).random()
+        val bridgeName = randomName()
+        val errorBridgeName = randomName()
+        val materialBridgeName = randomName()
+        val debugBridgeName = randomName()
+        val touchBridgeName = randomName()
+        val touchName = randomName()
+        val passPayloadName = randomName()
+        val rejectName = randomName()
 
         webView.addJavascriptInterface(
             object {
@@ -78,7 +117,7 @@ class ComixWebViewHelper(
                         val capture = message.parseAs<WebViewCapture>()
                         capture.material?.takeIf { it.isValid() }?.let { onMaterialCaptured?.invoke(it) }
                         deferred.complete(capture)
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         deferred.complete(WebViewCapture(payload = message))
                     }
                 }
@@ -91,6 +130,7 @@ class ComixWebViewHelper(
                 @JavascriptInterface
                 fun post(error: String) {
                     if (destroyed.get()) return
+                    logcat(LogPriority.WARN) { "ComixWebView: Received error from page: $error" }
                     deferred.completeExceptionally(Exception("WebView script error: $error"))
                 }
             },
@@ -105,7 +145,11 @@ class ComixWebViewHelper(
                     try {
                         val material = json.parseAs<CipherMaterial>()
                         if (material.isValid()) {
+                            logcat(LogPriority.INFO) { "ComixWebView: Cipher material captured directly via bridge" }
                             onMaterialCaptured?.invoke(material)
+                            if (pollScript == null && pageScript == null) {
+                                deferred.complete(WebViewCapture(payload = "", material = material))
+                            }
                         }
                     } catch (_: Exception) {}
                 }
@@ -123,94 +167,208 @@ class ComixWebViewHelper(
             debugBridgeName,
         )
 
-        val captureScript = buildScript(passPayloadName, rejectName)
+        webView.addJavascriptInterface(
+            object {
+                @JavascriptInterface
+                fun postMessage(message: String) {
+                    if (destroyed.get()) return
+                    val points = message.split(',').mapNotNull { it.toFloatOrNull() }
+                    mainHandler.post {
+                        if (destroyed.get()) return@post
+                        when (points.size) {
+                            2 -> webView.tap(points[0], points[1])
+                            4 -> webView.swipe(points[0], points[1], points[2], points[3])
+                            else -> logcat(LogPriority.WARN) { "ComixWebView: Bad touch coordinates: $message" }
+                        }
+                    }
+                }
+            },
+            touchBridgeName,
+        )
+
+        val capturePollScript = pollScript?.invoke(passPayloadName)
+        val singlePageScript = pageScript?.invoke(passPayloadName, rejectName, touchName)
+        val startFlag = randomName()
 
         val bootstrapScript = """
-            (function () {
-                window.__wammyLog = function(msg) {
-                    try {
-                        if (window.$debugBridgeName) window.$debugBridgeName.log(String(msg));
-                    } catch (e) {}
-                };
-                window.__wammyLog('bootstrapScript initialized on ' + window.location.href);
+            (() => {
+                if (window.top !== window || window['$startFlag']) return;
+                window['$startFlag'] = true;
 
-                const captures = window.__comixCipherCaptures = (window.__comixCipherCaptures || []);
-                const originalAtob = window.atob.bind(window);
-                window.atob = function (value) {
-                    const decoded = originalAtob(value);
+                window['$touchName'] = function (points) {
                     try {
-                        const bytes = Array.from(decoded, char => char.charCodeAt(0) & 255);
-                        if (bytes.length === 256 || bytes.length === 24 || bytes.length === 32) {
-                            captures.push(bytes);
-                            window.__wammyLog('atob captured bytes len=' + bytes.length + ', total=' + captures.length);
-                            const sboxes = captures.filter(item => item.length === 256).slice(0, 3);
-                            const keys = captures.filter(item => item.length === 24 || item.length === 32).slice(0, 3);
-                            if (sboxes.length === 3 && keys.length === 3) {
-                                window.__wammyLog('all 3 sboxes and 3 keys captured!');
-                                try {
-                                    window.$materialBridgeName && window.$materialBridgeName.post(JSON.stringify({ sboxes, keys }));
-                                } catch (e) {}
-                            }
-                        }
+                        if (window['$touchBridgeName']) window['$touchBridgeName'].postMessage(points.join(","));
                     } catch (e) {}
-                    return decoded;
                 };
-                window.$passPayloadName = function (payload) {
-                    window.__wammyLog('passPayloadName called with payload length=' + (payload ? payload.length : 0));
-                    const sboxes = captures.filter(item => item.length === 256).slice(0, 3);
-                    const keys = captures.filter(item => item.length === 24 || item.length === 32).slice(0, 3);
-                    const material = sboxes.length === 3 && keys.length === 3
-                        ? { sboxes, keys }
-                        : null;
-                    window.$bridgeName.post(JSON.stringify({ payload, material }));
+
+                window['$passPayloadName'] = function (payload) {
+                    try {
+                        window['$bridgeName'].post(JSON.stringify({
+                            payload: typeof payload === 'string' ? payload : JSON.stringify(payload),
+                            material: null
+                        }));
+                    } catch (e) {
+                        window['$bridgeName'].post(JSON.stringify({
+                            payload: String(payload),
+                            material: null
+                        }));
+                    }
                 };
-                window.$rejectName = function (error) {
-                    window.__wammyLog('rejectName called: ' + error);
-                    window.$errorBridgeName.post(String(error?.message || error));
+
+                window['$rejectName'] = function (error) {
+                    try {
+                        window['$errorBridgeName'].post(String(error?.message || error));
+                    } catch (e) {}
                 };
+
+                ${singlePageScript.orEmpty()}
             })();
+            ${initializationScript.orEmpty()}
         """.trimIndent()
+
+        val pageScriptInjected = AtomicBoolean(false)
+
+        val navHeaders = mapOf(
+            "Referer" to "https://comix.to/",
+            "Sec-Fetch-Site" to "same-origin",
+            "Sec-Fetch-Mode" to "navigate",
+            "Sec-Fetch-Dest" to "document",
+        )
+
+        val allowedOrigins = setOf("https://comix.to", "https://*.comix.to", "https://comix.ws", "https://*.comix.ws")
+        val supportsDocStart = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+        if (supportsDocStart) {
+            WebViewCompat.addDocumentStartJavaScript(webView, bootstrapScript, allowedOrigins)
+            if (capturePollScript != null) {
+                WebViewCompat.addDocumentStartJavaScript(webView, capturePollScript, allowedOrigins)
+            }
+        }
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                val msg = consoleMessage?.message().orEmpty()
+                val line = consoleMessage?.lineNumber() ?: 0
+                val src = consoleMessage?.sourceId().orEmpty()
+                logcat(LogPriority.INFO) { "ComixWebView Console: [$line] $msg (src=$src)" }
+                return true
+            }
+        }
 
         val emptyResponse = WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {
                 if (destroyed.get()) return
-                view?.evaluateJavascript(bootstrapScript, null)
-                view?.evaluateJavascript(captureScript, null)
+                if (!supportsDocStart) {
+                    view?.evaluateJavascript(bootstrapScript, null)
+                    if (capturePollScript != null) {
+                        view?.evaluateJavascript(capturePollScript, null)
+                    }
+                }
             }
 
             override fun onPageFinished(view: WebView?, pageUrl: String?) {
                 if (destroyed.get()) return
                 val title = view?.title.orEmpty()
                 logcat(LogPriority.INFO) { "ComixWebViewHelper: onPageFinished url=$pageUrl title=$title" }
-                if (title.contains("Just a moment", ignoreCase = true) || title.contains("Attention Required", ignoreCase = true)) {
-                    val coordinator = BossChallengeCoordinator.instance
-                    if (coordinator != null) {
-                        mainHandler.post {
-                            CoroutineScope(Dispatchers.Main).launch {
-                                val solved = coordinator.resolveAsync(url, force = true)
-                                if (solved && !destroyed.get()) {
-                                    view?.reload()
+                val isChallenge = title.contains("Just a moment", ignoreCase = true) ||
+                    title.contains("Attention Required", ignoreCase = true) ||
+                    title.contains("Cloudflare", ignoreCase = true)
+                if (isChallenge) {
+                    logcat(LogPriority.INFO) { "ComixWebViewHelper: Challenge detected on $pageUrl ($title), awaiting in-page solve_captcha" }
+                    return
+                }
+                if (title.contains("Third-party app", ignoreCase = true) || pageUrl?.contains("third-party", ignoreCase = true) == true) {
+                    logcat(LogPriority.ERROR) { "ComixWebViewHelper: Site returned third-party app block page ($title)" }
+                    deferred.completeExceptionally(Exception("Comix blocked: Third-party apps are not supported"))
+                    return
+                }
+                if (pageUrl?.startsWith("data:", ignoreCase = true) == true) {
+                    logcat(LogPriority.INFO) { "ComixWebViewHelper: Skipping interim data: URL in onPageFinished" }
+                    return
+                }
+
+                CookieManager.getInstance().flush()
+
+                if (!supportsDocStart) {
+                    view?.evaluateJavascript(bootstrapScript, null)
+                }
+                if (capturePollScript != null) {
+                    view?.evaluateJavascript(capturePollScript, null)
+                }
+
+                if (singlePageScript == null && capturePollScript == null) {
+                    view?.evaluateJavascript(
+                        """
+                        (function() {
+                            try {
+                                const raw = document.querySelector('script#initial-data')?.textContent;
+                                if (raw) return raw;
+                            } catch(e) {}
+                            return null;
+                        })()
+                        """.trimIndent(),
+                    ) { rawJson ->
+                        if (!deferred.isCompleted && !rawJson.isNullOrBlank() && rawJson != "null") {
+                            val clean = try {
+                                comixJson.parseToJsonElement(rawJson).jsonPrimitive.content
+                            } catch (_: Exception) {
+                                if (rawJson.startsWith("\"") && rawJson.endsWith("\"")) {
+                                    rawJson.substring(1, rawJson.length - 1).replace("\\\"", "\"").replace("\\\\", "\\")
+                                } else {
+                                    rawJson
                                 }
                             }
+                            logcat(LogPriority.INFO) { "ComixWebViewHelper: Extracted initial-data (${clean.length} chars) on page finished" }
+                            deferred.complete(WebViewCapture(payload = clean))
                         }
-                        return
                     }
                 }
-                view?.evaluateJavascript(bootstrapScript, null)
-                view?.evaluateJavascript(captureScript, null)
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                val reqUrl = request?.url?.toString()?.toHttpUrlOrNull() ?: return emptyResponse
-                val host = reqUrl.host
-                val allowed = host.contains("comix") ||
-                    host.contains("cloudflare") ||
-                    host.contains("challenges") ||
-                    host.contains("google") ||
-                    host.contains("gstatic")
-                return if (allowed) null else emptyResponse
+                val reqUrl = request?.url?.toString()?.toHttpUrlOrNull() ?: return null
+                val path = reqUrl.encodedPath.lowercase()
+                logcat(LogPriority.INFO) { "ComixWebView req: ${reqUrl.encodedPath}" }
+                if (path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
+                    path.endsWith(".webp") || path.endsWith(".gif") || path.endsWith(".mp4") ||
+                    path.endsWith(".svg") || path.endsWith(".woff") || path.endsWith(".woff2") ||
+                    path.endsWith(".ttf")
+                ) {
+                    return emptyResponse
+                }
+
+                if (path.startsWith("/api/v1/client-errors") ||
+                    path.startsWith("/api/v1/threads/") ||
+                    path.startsWith("/assets/uploads/")
+                ) {
+                    return emptyResponse
+                }
+
+                if (path.contains("/manga/") && path.endsWith("/chapters")) {
+                    chapterListPacer.waitForSlot()
+                }
+
+                val isFrameLoad = request?.requestHeaders?.get("Accept").orEmpty().contains("text/html")
+                if (reqUrl.encodedPath == "/@waf/challenge" && isFrameLoad) {
+                    val solverJs = ComixScripts.getSolveCaptcha(context)
+                    val page = "<script>($solverJs)(parent.$rejectName)</script>"
+                    return WebResourceResponse("text/html", "utf-8", page.byteInputStream())
+                }
+
+                val host = reqUrl.host.lowercase()
+                val allowed = host.isEmpty() ||
+                    host == "comix.to" ||
+                    host.endsWith(".comix.to") ||
+                    host == "comix.ws" ||
+                    host.endsWith(".comix.ws") ||
+                    host == "challenges.cloudflare.com" ||
+                    host.endsWith(".cloudflare.com")
+                if (!allowed) {
+                    return emptyResponse
+                }
+
+                return null
             }
 
             override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
@@ -220,21 +378,51 @@ class ComixWebViewHelper(
             }
         }
 
-        // Periodic poller every 500ms
+        // Periodic poller ONLY when capturePollScript is set
         val pollRunnable = object : Runnable {
             override fun run() {
                 if (destroyed.get() || deferred.isCompleted) return
-                webView.evaluateJavascript(captureScript, null)
-                mainHandler.postDelayed(this, 500L)
+
+                if (capturePollScript != null) {
+                    webView.evaluateJavascript(capturePollScript) { result ->
+                        logcat(LogPriority.DEBUG) { "ComixWebView Poll eval: ${result?.take(100)}" }
+                        if (!deferred.isCompleted && !result.isNullOrBlank() && result != "null" && result != "\"\"") {
+                            logcat(LogPriority.INFO) { "ComixWebView: Poll returned result length=${result.length}" }
+                            val clean = try {
+                                comixJson.parseToJsonElement(result).jsonPrimitive.content
+                            } catch (_: Exception) {
+                                if (result.startsWith("\"") && result.endsWith("\"")) {
+                                    result.substring(1, result.length - 1).replace("\\\"", "\"").replace("\\\\", "\\")
+                                } else {
+                                    result
+                                }
+                            }
+                            try {
+                                val capture = clean.parseAs<WebViewCapture>()
+                                capture.material?.takeIf { it.isValid() }?.let { onMaterialCaptured?.invoke(it) }
+                                deferred.complete(capture)
+                            } catch (_: Exception) {
+                                try {
+                                    deferred.complete(WebViewCapture(payload = clean))
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                }
+                mainHandler.postDelayed(this, 300L)
             }
         }
-        mainHandler.postDelayed(pollRunnable, 500L)
+        if (capturePollScript != null) {
+            mainHandler.postDelayed(pollRunnable, 300L)
+        }
 
         try {
             if (!initialHtml.isNullOrBlank()) {
-                webView.loadDataWithBaseURL(url, initialHtml, "text/html", "UTF-8", null)
+                logcat(LogPriority.INFO) { "ComixWebViewHelper: Loading initialHtml with base $url (len=${initialHtml.length})" }
+                webView.loadDataWithBaseURL(url, initialHtml, "text/html", "UTF-8", url)
             } else {
-                webView.loadUrl(url)
+                logcat(LogPriority.INFO) { "ComixWebViewHelper: Loading url $url" }
+                webView.loadUrl(url, navHeaders)
             }
 
             withTimeout(timeout) {
@@ -242,9 +430,12 @@ class ComixWebViewHelper(
             }
         } finally {
             destroyed.set(true)
-            mainHandler.removeCallbacks(pollRunnable)
+            if (capturePollScript != null) {
+                mainHandler.removeCallbacks(pollRunnable)
+            }
             webView.stopLoading()
             webView.destroy()
         }
     }
+}
 }

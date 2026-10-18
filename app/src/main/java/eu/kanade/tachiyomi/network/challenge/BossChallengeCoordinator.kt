@@ -12,8 +12,11 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.AndroidCookieJar
+import eu.kanade.tachiyomi.source.builtin.comix.tap
 import eu.kanade.tachiyomi.ui.base.activity.ForegroundActivityHolder
 import eu.kanade.tachiyomi.ui.challenge.ChallengeSolverActivity
+import eu.kanade.tachiyomi.util.system.setDefaultSettings
+import eu.kanade.tachiyomi.util.system.setUserAgent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +50,7 @@ class BossChallengeCoordinator(
     private val inFlight = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
     private val pendingInteractiveResults = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
     private val recentSuccessAt = ConcurrentHashMap<String, Long>()
+    private val lastDismissedAt = ConcurrentHashMap<String, Long>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun hasClearance(url: String): Boolean {
@@ -65,13 +69,10 @@ class BossChallengeCoordinator(
         val host = url.toHttpUrlOrNull()?.host.orEmpty()
         if (host.isEmpty()) return false
 
-        // Check if existing clearance is still active and recently verified (unless forced)
-        if (!force) {
-            val lastSuccess = recentSuccessAt[host] ?: 0L
-            if (System.currentTimeMillis() - lastSuccess < RECENT_COOLDOWN_MS && hasClearance(url)) {
-                logcat(LogPriority.INFO) { "BossChallengeCoordinator: $host already has active clearance" }
-                return true
-            }
+        // Check if existing clearance is still active and valid (unless forced)
+        if (!force && hasClearance(url)) {
+            logcat(LogPriority.INFO) { "BossChallengeCoordinator: $host already has active clearance" }
+            return true
         }
 
         // Await in-flight resolution for this host if another request is already solving it
@@ -85,7 +86,7 @@ class BossChallengeCoordinator(
             CompletableDeferred<Boolean>().also { fresh ->
                 inFlight[host] = fresh
                 scope.launch {
-                    val result = runResolution(url, host, headers)
+                    val result = runResolution(url, host, headers, force)
                     if (result) {
                         recentSuccessAt[host] = System.currentTimeMillis()
                     }
@@ -99,6 +100,9 @@ class BossChallengeCoordinator(
     }
 
     fun notifyInteractiveResult(host: String, success: Boolean) {
+        if (!success) {
+            lastDismissedAt[host] = System.currentTimeMillis()
+        }
         pendingInteractiveResults.remove(host)?.complete(success)
     }
 
@@ -106,46 +110,70 @@ class BossChallengeCoordinator(
         url: String,
         host: String,
         headers: Map<String, String>?,
+        force: Boolean = false,
     ): Boolean {
-        val httpUrl = url.toHttpUrlOrNull()
-        val challengeUrl = if (httpUrl != null && (httpUrl.encodedPath.contains("/api/") || httpUrl.encodedPath.endsWith(".json"))) {
-            "${httpUrl.scheme}://${httpUrl.host}/"
-        } else {
-            url
-        }
-
+        val challengeUrl = if (host.contains("comix.to")) "https://$host/" else url
         val userAgent = headers?.get("User-Agent")?.takeIf { it.isNotBlank() } ?: defaultUserAgentProvider()
 
-        // Invalidate stale clearance before starting solver so we strictly verify a fresh challenge pass
-        recentSuccessAt.remove(host)
-        Companion.clearClearance(challengeUrl)
+        val oldClearance = getClearanceCookie(challengeUrl)
+
+        if (!force) {
+            val lastSuccess = recentSuccessAt[host] ?: 0L
+            val isRecent = System.currentTimeMillis() - lastSuccess < RECENT_COOLDOWN_MS
+            if (isRecent && oldClearance != null) {
+                logcat(LogPriority.INFO) { "BossChallengeCoordinator: $host had recent clearance within cooldown, reusing without clear" }
+                return true
+            }
+
+            if (oldClearance != null) {
+                logcat(LogPriority.INFO) { "BossChallengeCoordinator: $host already has valid clearance, skipping clear" }
+                return true
+            }
+        } else {
+            recentSuccessAt.remove(host)
+            clearClearance(challengeUrl)
+        }
 
         // Stage 1: Silent Background Pass
-        logcat(LogPriority.INFO) { "BossChallengeCoordinator: Starting silent background solve for $host ($challengeUrl)" }
-        val silentSuccess = runSilentPass(challengeUrl, userAgent, headers)
+        Handler(Looper.getMainLooper()).post {
+            try {
+                android.widget.Toast.makeText(context, "Solving captcha automatically...", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {}
+        }
+        logcat(LogPriority.INFO) { "BossChallengeCoordinator: Starting silent background solve for $host ($challengeUrl), oldClearance=${oldClearance?.take(8)}..." }
+        val silentSuccess = runSilentPass(challengeUrl, userAgent, headers, oldClearance)
         if (silentSuccess) {
+            recentSuccessAt[host] = System.currentTimeMillis()
             logcat(LogPriority.INFO) { "BossChallengeCoordinator: Silent solve SUCCEEDED for $host" }
             flushCookies()
             return true
         }
 
         // Stage 2: Interactive Modal Prompt
-        logcat(LogPriority.INFO) { "BossChallengeCoordinator: Silent solve did not clear, launching interactive solver for $host" }
-        val foregroundActivity = foregroundActivityHolder.current
-        if (foregroundActivity == null) {
-            logcat(LogPriority.WARN) { "BossChallengeCoordinator: No foreground activity available for $host" }
+        val lastDismissed = lastDismissedAt[host] ?: 0L
+        if (System.currentTimeMillis() - lastDismissed < DISMISS_COOLDOWN_MS) {
+            logcat(LogPriority.INFO) { "BossChallengeCoordinator: Solver was recently dismissed for $host, skipping interactive prompt" }
             return false
         }
-
+        logcat(LogPriority.INFO) { "BossChallengeCoordinator: Silent solve did not clear, launching interactive solver for $host" }
+        val activity = foregroundActivityHolder.current
         val interactiveDeferred = CompletableDeferred<Boolean>()
         pendingInteractiveResults[host] = interactiveDeferred
 
-        val intent = Intent(foregroundActivity, ChallengeSolverActivity::class.java).apply {
+        val intent = Intent(activity ?: context, ChallengeSolverActivity::class.java).apply {
             putExtra(ChallengeSolverActivity.EXTRA_URL, challengeUrl)
             putExtra(ChallengeSolverActivity.EXTRA_HOST, host)
             putExtra(ChallengeSolverActivity.EXTRA_USER_AGENT, userAgent)
+            putExtra(ChallengeSolverActivity.EXTRA_OLD_CLEARANCE, oldClearance)
+            if (activity == null) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
         }
-        foregroundActivity.startActivity(intent)
+        if (activity != null) {
+            activity.startActivity(intent)
+        } else {
+            context.startActivity(intent)
+        }
 
         val success = withTimeoutOrNull(INTERACTIVE_TIMEOUT_MS) {
             interactiveDeferred.await()
@@ -153,6 +181,7 @@ class BossChallengeCoordinator(
 
         pendingInteractiveResults.remove(host)
         if (success) {
+            recentSuccessAt[host] = System.currentTimeMillis()
             flushCookies()
             logcat(LogPriority.INFO) { "BossChallengeCoordinator: Interactive solve SUCCEEDED for $host" }
         } else {
@@ -166,10 +195,30 @@ class BossChallengeCoordinator(
         url: String,
         userAgent: String,
         headers: Map<String, String>?,
+        oldClearance: String? = null,
     ): Boolean = withContext(Dispatchers.Main) {
+        val host = url.toHttpUrlOrNull()?.host.orEmpty()
         val resolved = AtomicBoolean(false)
         val destroyed = AtomicBoolean(false)
         var webView: WebView? = null
+
+        fun isChallengeTitle(title: String?): Boolean {
+            if (title.isNullOrBlank()) return true
+            val lower = title.lowercase().trim()
+            return lower == "about:blank" ||
+                lower.contains("just a moment") ||
+                lower.contains("attention required") ||
+                lower.contains("cloudflare") ||
+                lower.contains("third-party app") ||
+                lower.contains("security check")
+        }
+
+        fun checkPassed(view: WebView? = webView): Boolean {
+            val current = getClearanceCookie(url) ?: return false
+            val title = view?.title.orEmpty().trim()
+            if (isChallengeTitle(title)) return false
+            return true
+        }
 
         try {
             webView = WebView(context).apply {
@@ -177,25 +226,45 @@ class BossChallengeCoordinator(
                 layoutParams = ViewGroup.LayoutParams(dm.widthPixels, dm.heightPixels)
                 layout(0, 0, dm.widthPixels, dm.heightPixels)
 
-                settings.apply {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    databaseEnabled = true
-                    blockNetworkImage = false
-                    userAgentString = userAgent
-                    useWideViewPort = true
-                    loadWithOverviewMode = true
-                }
+                setDefaultSettings()
+                setUserAgent(userAgent)
 
                 webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView?, pageUrl: String?) {
-                        if (hasClearance(url)) {
+                    override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: android.graphics.Bitmap?) {
+                        flushCookies()
+                        if (checkPassed(view)) {
                             resolved.set(true)
                         }
                     }
 
+                    override fun onPageCommitVisible(view: WebView?, pageUrl: String?) {
+                        flushCookies()
+                        if (checkPassed(view)) {
+                            resolved.set(true)
+                        }
+                    }
+
+                    override fun onPageFinished(view: WebView?, pageUrl: String?) {
+                        flushCookies()
+                        if (checkPassed(view)) {
+                            resolved.set(true)
+                        }
+                    }
+
+                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                        val reqUrl = request?.url?.toString()?.toHttpUrlOrNull() ?: return null
+                        val isFrameLoad = request.requestHeaders?.get("Accept").orEmpty().contains("text/html")
+                        if (reqUrl.encodedPath == "/@waf/challenge" && isFrameLoad) {
+                            val solverJs = eu.kanade.tachiyomi.source.builtin.comix.ComixScripts.getSolveCaptcha(context)
+                            val page = "<script>($solverJs)(null)</script>"
+                            return WebResourceResponse("text/html", "utf-8", page.byteInputStream())
+                        }
+                        return null
+                    }
+
                     override fun doUpdateVisitedHistory(view: WebView?, pageUrl: String?, isReload: Boolean) {
-                        if (hasClearance(url)) {
+                        flushCookies()
+                        if (checkPassed(view)) {
                             resolved.set(true)
                         }
                     }
@@ -211,12 +280,46 @@ class BossChallengeCoordinator(
             val start = System.currentTimeMillis()
             while (System.currentTimeMillis() - start < SILENT_TIMEOUT_MS) {
                 flushCookies()
-                if (hasClearance(url) || resolved.get()) {
+                if (checkPassed(webView) || resolved.get()) {
                     return@withContext true
                 }
-                delay(250)
+
+                // Attempt auto-tap on Turnstile in headless WebView
+                webView.evaluateJavascript(
+                    """
+                    (function() {
+                        if (document.title.toLowerCase().includes('third-party') || window.location.href.includes('third-party')) {
+                            window.location.replace('https://comix.to/');
+                            return '';
+                        }
+                        const iframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
+                        if (iframe) {
+                            const rect = iframe.getBoundingClientRect();
+                            if (rect.width > 0 && rect.height > 0) return (rect.left + 30) + ',' + (rect.top + 32);
+                        }
+                        const wrapper = document.querySelector('#turnstile-wrapper, .cf-turnstile');
+                        if (wrapper) {
+                            const rect = wrapper.getBoundingClientRect();
+                            if (rect.width > 0 && rect.height > 0) return (rect.left + 30) + ',' + (rect.top + rect.height / 2);
+                        }
+                        return '';
+                    })();
+                    """.trimIndent(),
+                ) { result ->
+                    val raw = result?.trim('"', '\'')
+                    val coords = raw?.split(',')
+                    if (coords != null && coords.size == 2) {
+                        val x = coords[0].toFloatOrNull()
+                        val y = coords[1].toFloatOrNull()
+                        if (x != null && y != null && x > 0 && y > 0) {
+                            webView.tap(x, y)
+                        }
+                    }
+                }
+
+                delay(300)
             }
-            return@withContext hasClearance(url)
+            return@withContext checkPassed(webView) || resolved.get()
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "BossChallengeCoordinator: Silent pass error" }
             return@withContext false
@@ -237,9 +340,10 @@ class BossChallengeCoordinator(
     }
 
     companion object {
-        const val SILENT_TIMEOUT_MS = 6_000L
+        const val SILENT_TIMEOUT_MS = 7_000L
         const val INTERACTIVE_TIMEOUT_MS = 60_000L
-        const val RECENT_COOLDOWN_MS = 20_000L
+        const val RECENT_COOLDOWN_MS = 60_000L
+        const val DISMISS_COOLDOWN_MS = 30_000L
 
         @Volatile
         var instance: BossChallengeCoordinator? = null
@@ -257,7 +361,7 @@ class BossChallengeCoordinator(
             return coordinator
         }
 
-        fun hasClearance(url: String): Boolean {
+        fun getClearanceCookie(url: String): String? {
             val httpUrl = url.toHttpUrlOrNull()
             val urlsToCheck = buildList {
                 add(url)
@@ -273,33 +377,26 @@ class BossChallengeCoordinator(
                 } catch (_: Throwable) {
                     null
                 } ?: continue
-                val hasClearance = cookies.split(";")
-                    .map { it.trim() }
-                    .any { it.startsWith("cf_clearance=") && it.length > "cf_clearance=".length }
-                if (hasClearance) return true
+                for (c in cookies.split(";")) {
+                    val trimmed = c.trim()
+                    if (trimmed.startsWith("cf_clearance=")) {
+                        val value = trimmed.substringAfter("=").trim()
+                        if (value.isNotEmpty()) return value
+                    }
+                }
             }
-            return false
+            return null
         }
+
+        fun hasClearance(url: String): Boolean = getClearanceCookie(url) != null
 
         fun clearClearance(url: String) {
             val httpUrl = url.toHttpUrlOrNull() ?: return
             val cookieManager = try { CookieManager.getInstance() } catch (_: Throwable) { return }
-            val host = httpUrl.host
-            val urls = listOf(
-                url,
-                "${httpUrl.scheme}://$host/",
-                "https://$host/",
-                host,
-                ".$host",
-            )
-            for (u in urls) {
-                try {
-                    cookieManager.setCookie(u, "cf_clearance=; Max-Age=0; path=/")
-                    cookieManager.setCookie(u, "cf_clearance=; Max-Age=0; domain=$host; path=/")
-                    cookieManager.setCookie(u, "cf_clearance=; Max-Age=0; domain=.$host; path=/")
-                } catch (_: Throwable) {}
-            }
             try {
+                cookieManager.setCookie(url, "cf_clearance=; Max-Age=0")
+                cookieManager.setCookie("https://${httpUrl.host}/", "cf_clearance=; Max-Age=0")
+                cookieManager.setCookie(".${httpUrl.host}", "cf_clearance=; Max-Age=0")
                 cookieManager.flush()
             } catch (_: Throwable) {}
         }

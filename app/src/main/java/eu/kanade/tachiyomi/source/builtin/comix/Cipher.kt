@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class WebViewCapture(
-    val payload: String,
+    val payload: String = "",
     val material: CipherMaterial? = null,
 )
 
@@ -25,7 +25,7 @@ class EncryptedResponse(
     val e: String,
 )
 
-class ComixCipher(material: CipherMaterial) {
+class ComixCipher(val material: CipherMaterial) {
     private val sboxes = material.sboxes.map { values -> values.toIntArray() }
     private val keys = material.keys.map { values -> values.toIntArray() }
 

@@ -248,6 +248,7 @@ dependencies {
     implementation(libs.androidx.compose.uiUtil)
 
     implementation(libs.androidx.interpolator)
+    implementation(libs.androidx.webkit)
 
     implementation(libs.androidx.paging.runtime)
     implementation(libs.androidx.paging.compose)

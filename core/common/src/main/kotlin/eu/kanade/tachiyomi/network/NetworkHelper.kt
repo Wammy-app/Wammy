@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import eu.kanade.tachiyomi.network.interceptor.PerHostDynamicRateLimitInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
+import eu.kanade.tachiyomi.util.system.WebViewUtil
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -74,5 +75,15 @@ class NetworkHelper(
     @Suppress("UNUSED")
     val cloudflareClient: OkHttpClient = client
 
-    fun defaultUserAgentProvider() = preferences.defaultUserAgent.get().trim()
+    fun defaultUserAgentProvider(): String {
+        val custom = preferences.defaultUserAgent.get().trim()
+        if (custom.isNotBlank() && !custom.contains("Pixel 8") && !custom.contains("Chrome/131")) {
+            return custom
+        }
+        return try {
+            WebViewUtil.getInferredUserAgent(context)
+        } catch (_: Throwable) {
+            custom
+        }
+    }
 }

@@ -11,16 +11,25 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.serializer
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Calendar
@@ -55,6 +64,15 @@ val comixJson = Json {
 inline fun <reified T> String.parseAs(): T = comixJson.decodeFromString(this)
 inline fun <reified T> JsonElement.parseAs(): T = comixJson.decodeFromJsonElement(comixJson.serializersModule.serializer<T>(), this)
 
+val JsonElement.string: String get() = jsonPrimitive.content
+val JsonElement.stringOrNull: String? get() = jsonPrimitive.contentOrNull
+val JsonElement.int: Int get() = jsonPrimitive.int
+val JsonElement.intOrNull: Int? get() = jsonPrimitive.intOrNull
+val JsonElement.long: Long get() = jsonPrimitive.long
+val JsonElement.longOrNull: Long? get() = jsonPrimitive.longOrNull
+val JsonElement.boolean: Boolean get() = jsonPrimitive.boolean
+val JsonElement.booleanOrNull: Boolean? get() = jsonPrimitive.booleanOrNull
+
 const val MANGA_ID_MEMO = "mangaId"
 const val CHAPTER_ID_MEMO = "chapterId"
 const val CHAPTER_VOTES_MEMO = "votes"
@@ -76,8 +94,10 @@ class TagSearchHit(val id: Int)
 
 @Serializable
 class Manga(
-    val hid: String,
-    val title: String,
+    val hid: String = "",
+    val title: String = "",
+    val slug: String? = null,
+    val id: Int? = null,
     val altTitles: List<String> = emptyList(),
     @SerialName("alt_titles") val altTitlesOld: List<String> = emptyList(),
     val synopsis: String? = null,
@@ -139,8 +159,9 @@ class Manga(
         }
 
     fun toSManga() = SManga.create().apply {
-        url = this@Manga.url?.substringAfter("/title") ?: "/$hid"
-        memo = buildJsonObject { put(MANGA_ID_MEMO, hid) }
+        val targetSlug = slug ?: hid.takeIf { it.isNotBlank() } ?: id?.toString().orEmpty()
+        url = this@Manga.url?.substringAfter("/title") ?: "/$targetSlug"
+        memo = buildJsonObject { put(MANGA_ID_MEMO, hid.ifBlank { id?.toString().orEmpty() }) }
         title = this@Manga.title
 
         val actualAuthors = authors ?: authorOld
@@ -175,8 +196,9 @@ class Manga(
     }
 
     fun toBasicSManga() = SManga.create().apply {
-        url = this@Manga.url?.substringAfter("/title") ?: "/$hid"
-        memo = buildJsonObject { put(MANGA_ID_MEMO, hid) }
+        val targetSlug = slug ?: hid.takeIf { it.isNotBlank() } ?: id?.toString().orEmpty()
+        url = this@Manga.url?.substringAfter("/title") ?: "/$targetSlug"
+        memo = buildJsonObject { put(MANGA_ID_MEMO, hid.ifBlank { id?.toString().orEmpty() }) }
         title = this@Manga.title
         thumbnail_url = this@Manga.poster?.from("medium")
     }
@@ -281,12 +303,19 @@ class Chapter(
     }
 
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
-        val numStr = if (number != 0.0) number.toString().removeSuffix(".0") else chap.ifEmpty { "0" }
+        val numFormatted = if (number != 0.0) {
+            number.toString().removeSuffix(".0")
+        } else if (chap.isNotBlank()) {
+            chap
+        } else {
+            "0"
+        }
+
         url = this@Chapter.url.indexOf("/title/").let { index ->
             if (index != -1) {
                 this@Chapter.url.substring(index + 1)
             } else {
-                "title/$mangaSlug/$id-chapter-$numStr"
+                "title/$mangaSlug/$id-chapter-$numFormatted"
             }
         }
         memo = buildJsonObject {
@@ -297,7 +326,7 @@ class Chapter(
         }
         name = buildString {
             append("Chapter ")
-            append(numStr)
+            append(numFormatted)
             this@Chapter.name.takeUnless { it.isEmpty() }?.let { append(": $it") }
         }
         val dateStr = createdAtFormatted.ifEmpty { createdAtOld }
@@ -355,3 +384,34 @@ class ChapterResponse(
         val s: Int = 0,
     )
 }
+
+@Serializable
+class ChapterList(
+    val chapters: List<Chapter> = emptyList(),
+    val complete: Boolean = false,
+    val error: String? = null,
+)
+
+@Serializable
+class ChapterPages(
+    val baseUrl: String = "",
+    val items: List<PageDto> = emptyList(),
+    val alt: List<String>? = null,
+    val node: String? = null,
+) {
+    fun altHosts(host: String, index: Int): List<String> {
+        if (alt.isNullOrEmpty()) return emptyList()
+        val label = host.substringBefore('.')
+        val start = index % alt.size
+        val domains = alt.drop(start) + alt.take(start)
+        val hosts = domains.map { "$label.$it" } + domains.map { "${node ?: label}.$it" }
+        return List(6) { hosts[it % hosts.size] }
+    }
+
+    @Serializable
+    class PageDto(
+        val url: String,
+        val s: Int = 0,
+    )
+}
+

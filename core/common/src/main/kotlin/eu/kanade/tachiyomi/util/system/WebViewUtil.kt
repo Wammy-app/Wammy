@@ -148,6 +148,7 @@ fun WebView.setUserAgent(userAgent: String) {
             UserAgentMetadata.Builder(metadata)
                 .setBrandVersionList(brandVersionList)
                 .setFullVersion(fullVersion)
+                .setMobile(true)
                 .build(),
         )
     } catch (e: Exception) {
