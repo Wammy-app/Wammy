@@ -298,6 +298,10 @@ class BuiltinSourceManager(
     }
 
     companion object {
+        fun isBuiltin(sourceId: Long): Boolean {
+            return (sourceId in 80010001L..80010015L) || sourceId >= 80020000L
+        }
+
         fun getIconRes(sourceId: Long, sourceName: String? = null): Int? {
             return when (sourceId) {
                 80010001L -> R.drawable.source_mangadex

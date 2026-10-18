@@ -24,3 +24,7 @@ val Source.icon: ImageBitmap?
             ?.toBitmap()
             ?.asImageBitmap()
     }
+
+val Source.isBuiltin: Boolean
+    get() = BuiltinSourceManager.isBuiltin(id)
+
