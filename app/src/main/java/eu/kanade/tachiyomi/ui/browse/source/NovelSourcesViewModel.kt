@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import eu.kanade.domain.source.model.installedExtension
 import eu.kanade.domain.source.model.isAdultSource
+import eu.kanade.tachiyomi.source.builtin.BuiltinSourceManager
 
 class NovelSourcesViewModel(
     private val getEnabledNovelSources: GetEnabledNovelSources = Injekt.get(),
@@ -71,6 +72,11 @@ class NovelSourcesViewModel(
         sources.take(5).forEach { s ->
             logcat(LogPriority.DEBUG) { "  Source: id=${s.id}, name=${s.name}, lang=${s.lang}" }
         }
+        val builtinSources = sources
+            .filter { !it.isUsedLast && BuiltinSourceManager.isBuiltin(it.id) }
+            .distinctBy { it.id }
+            .sortedBy { it.id }
+
         mutableState.update { state ->
             val map = TreeMap<String, MutableList<Source>> { d1, d2 ->
                 // Sources without a lang defined will be placed at the end
@@ -108,13 +114,20 @@ class NovelSourcesViewModel(
             val items = buildList {
                 var groupsInserted = false
                 for ((key, value) in byLang) {
+                    val displaySources = if (key == LAST_USED_KEY) {
+                        value
+                    } else {
+                        value.filterNot { BuiltinSourceManager.isBuiltin(it.id) }
+                    }
+                    if (displaySources.isEmpty()) continue
+
                     val isSpecial = key == LAST_USED_KEY || key == PINNED_KEY
                     if (!isSpecial && !groupsInserted) {
                         addAll(groupSections)
                         groupsInserted = true
                     }
                     add(SourceUiModel.Header(key))
-                    value.forEach { source ->
+                    displaySources.forEach { source ->
                         add(
                             SourceUiModel.Item(
                                 source = source,
@@ -128,6 +141,7 @@ class NovelSourcesViewModel(
 
             state.copy(
                 isLoading = false,
+                builtinSources = builtinSources,
                 items = items,
             )
         }
@@ -201,10 +215,11 @@ class NovelSourcesViewModel(
     data class State(
         val dialog: Dialog? = null,
         val isLoading: Boolean = true,
+        val builtinSources: List<Source> = emptyList(),
         val items: List<SourceUiModel> = listOf(),
         val nsfwOnly: Boolean = false,
     ) {
-        val isEmpty = items.isEmpty()
+        val isEmpty = builtinSources.isEmpty() && items.isEmpty()
     }
 
     fun toggleNsfwOnly() {

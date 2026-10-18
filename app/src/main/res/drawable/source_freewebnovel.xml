@@ -1,0 +1,32 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Background -->
+    <path
+        android:fillColor="#1B9A59"
+        android:pathData="M0,0h96v96H0z" />
+    <!-- Subtle top-to-bottom glow highlight -->
+    <path
+        android:fillColor="#22C55E"
+        android:pathData="M0,0h96v36H0z" />
+    <!-- Book Spine & Pages -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,68c-8,-4 -16,-6 -26,-6v-34c10,0 18,2 26,6c8,-4 16,-6 26,-6v34c-10,0 -18,2 -26,6z" />
+    <path
+        android:fillColor="#166534"
+        android:pathData="M46,34h4v34h-4z" />
+    <!-- Bookmark ribbon -->
+    <path
+        android:fillColor="#FACC15"
+        android:pathData="M45,26h6v18l-3,-3l-3,3z" />
+    <!-- FreeWebNovel 'F' letter emblem -->
+    <path
+        android:fillColor="#15803D"
+        android:pathData="M30,36h12v4h-8v6h6v4h-6v10h-4z" />
+    <path
+        android:fillColor="#15803D"
+        android:pathData="M56,36h4l8,16v-16h4v24h-4l-8,-16v16h-4z" />
+</vector>

@@ -14,6 +14,10 @@ import eu.kanade.tachiyomi.source.builtin.mangakakalot.MangakakalotSource
 import eu.kanade.tachiyomi.source.builtin.manhuaplus.ManhuaPlusSource
 import eu.kanade.tachiyomi.source.builtin.webtoon.WebtoonsSource
 import eu.kanade.tachiyomi.source.builtin.weebcentral.WeebCentralSource
+import eu.kanade.tachiyomi.source.builtin.novel.FreeWebNovelSource
+import eu.kanade.tachiyomi.source.builtin.novel.NovelBuddySource
+import eu.kanade.tachiyomi.source.builtin.novel.NovelFireSource
+import eu.kanade.tachiyomi.source.builtin.novel.WuxiaBoxSource
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinEngineType
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinSourceRecord
 import kotlinx.coroutines.CoroutineScope
@@ -177,6 +181,38 @@ class BuiltinSourceManager(
             engineType = BuiltinEngineType.WEBTOONS,
             isDefaultEnabled = true,
         ),
+        BuiltinSourceRecord(
+            id = 80030001L,
+            name = "FreeWebNovel",
+            baseUrl = "https://freewebnovel.com",
+            lang = "en",
+            engineType = BuiltinEngineType.FREEWEBNOVEL,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80030002L,
+            name = "NovelFire",
+            baseUrl = "https://novelfire.net",
+            lang = "en",
+            engineType = BuiltinEngineType.NOVELFIRE,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80030003L,
+            name = "NovelBuddy",
+            baseUrl = "https://novelbuddy.com",
+            lang = "en",
+            engineType = BuiltinEngineType.NOVELBUDDY,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80030004L,
+            name = "Wuxia Box",
+            baseUrl = "https://www.wuxiabox.com",
+            lang = "en",
+            engineType = BuiltinEngineType.WUXIABOX,
+            isDefaultEnabled = true,
+        ),
     )
 
     init {
@@ -222,6 +258,10 @@ class BuiltinSourceManager(
                 BuiltinEngineType.MANHUAPLUS -> ManhuaPlusSource(id = record.id, baseUrl = record.baseUrl, lang = record.lang)
                 BuiltinEngineType.COMICK -> ComickSource(id = record.id, baseUrl = record.baseUrl, lang = record.lang)
                 BuiltinEngineType.WEBTOONS -> WebtoonsSource(id = record.id, baseUrl = record.baseUrl, lang = record.lang)
+                BuiltinEngineType.FREEWEBNOVEL -> FreeWebNovelSource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.NOVELFIRE -> NovelFireSource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.NOVELBUDDY -> NovelBuddySource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.WUXIABOX -> WuxiaBoxSource(id = record.id, baseUrl = record.baseUrl)
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Failed to instantiate built-in source: ${record.name}" }
@@ -299,7 +339,7 @@ class BuiltinSourceManager(
 
     companion object {
         fun isBuiltin(sourceId: Long): Boolean {
-            return (sourceId in 80010001L..80010015L) || sourceId >= 80020000L
+            return (sourceId in 80010001L..80010015L) || (sourceId in 80030001L..80030020L) || sourceId >= 80020000L
         }
 
         fun getIconRes(sourceId: Long, sourceName: String? = null): Int? {
@@ -319,6 +359,10 @@ class BuiltinSourceManager(
                 80010013L -> R.drawable.source_manhuaplus
                 80010014L -> R.drawable.source_comick
                 80010015L -> R.drawable.source_webtoons
+                80030001L -> R.drawable.source_freewebnovel
+                80030002L -> R.drawable.source_novelfire
+                80030003L -> R.drawable.source_novelbuddy
+                80030004L -> R.drawable.source_wuxiabox
                 else -> when (sourceName?.lowercase()?.trim()) {
                     "mangadex" -> R.drawable.source_mangadex
                     "mangakakalot" -> R.drawable.source_mangakakalot
@@ -335,6 +379,10 @@ class BuiltinSourceManager(
                     "manhuaplus", "manhua plus" -> R.drawable.source_manhuaplus
                     "comick", "comic k" -> R.drawable.source_comick
                     "webtoons", "webtoon", "line webtoon" -> R.drawable.source_webtoons
+                    "freewebnovel", "free web novel" -> R.drawable.source_freewebnovel
+                    "novelfire", "novel fire" -> R.drawable.source_novelfire
+                    "novelbuddy", "novel buddy" -> R.drawable.source_novelbuddy
+                    "wuxiabox", "wuxia box" -> R.drawable.source_wuxiabox
                     else -> null
                 }
             }

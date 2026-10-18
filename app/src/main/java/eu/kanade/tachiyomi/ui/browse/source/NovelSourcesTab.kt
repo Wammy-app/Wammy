@@ -71,6 +71,7 @@ fun Screen.novelSourcesTab(): TabContent {
                 state = SourcesViewModel.State(
                     dialog = mappedDialog,
                     isLoading = state.isLoading,
+                    builtinSources = state.builtinSources,
                     items = state.items,
                 ),
                 contentPadding = contentPadding,

@@ -15,6 +15,10 @@ enum class BuiltinEngineType {
     MANHUAPLUS,
     COMICK,
     WEBTOONS,
+    FREEWEBNOVEL,
+    NOVELFIRE,
+    NOVELBUDDY,
+    WUXIABOX,
 }
 
 @Serializable
