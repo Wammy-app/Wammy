@@ -19,6 +19,10 @@ enum class BuiltinEngineType {
     NOVELFIRE,
     NOVELBUDDY,
     WUXIABOX,
+    WUXIACLICK,
+    NOVELCOOL,
+    BAKATSUKI,
+    MVLEMPYR,
 }
 
 @Serializable

@@ -1,0 +1,44 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Signature Violet Background -->
+    <path
+        android:fillColor="#7C3AED"
+        android:pathData="M0,0h96v96H0z" />
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M0,0h96v38H0z" />
+    <!-- Imperial Crown Core -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M28,42L34,26L48,36L62,26L68,42z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M28,42h40v4H28z" />
+    <!-- Crown Jewels -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,25a2,2 0 1,1 0,-4a2,2 0 1,1 0,4z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,35a2,2 0 1,1 0,-4a2,2 0 1,1 0,4z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,25a2,2 0 1,1 0,-4a2,2 0 1,1 0,4z" />
+    <!-- Open Web Novel Pages -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,78c-8,-4 -17,-6 -27,-6v-22c10,0 19,2 27,6c8,-4 17,-6 27,-6v22c-10,0 -19,2 -27,6z" />
+    <path
+        android:fillColor="#6D28D9"
+        android:pathData="M46,55h4v23h-4z" />
+    <!-- Letter M and E on pages -->
+    <path
+        android:fillColor="#8C54FF"
+        android:pathData="M28,58h3.5l4.5,8l4.5,-8h3.5v12h-3v-7.5l-4,7h-2l-4,-7v7.5h-3z" />
+    <path
+        android:fillColor="#8C54FF"
+        android:pathData="M57,58h11v2.5h-8v2.5h7v2.5h-7v2h8v2.5h-11z" />
+</vector>

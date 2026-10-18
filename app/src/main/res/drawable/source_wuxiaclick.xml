@@ -1,0 +1,35 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Dark Blood Lotus Background -->
+    <path
+        android:fillColor="#110909"
+        android:pathData="M0,0h96v96H0z" />
+    <path
+        android:fillColor="#1F1212"
+        android:pathData="M0,0h96v38H0z" />
+    <!-- Blood Lotus Outer Petals -->
+    <path
+        android:fillColor="#DC2626"
+        android:pathData="M48,16c-6,10 -16,18 -16,28c0,12 8,20 16,22c8,-2 16,-10 16,-22c0,-10 -10,-18 -16,-28z" />
+    <!-- Inner Lotus Glow -->
+    <path
+        android:fillColor="#F87171"
+        android:pathData="M48,28c-3,6 -9,11 -9,17c0,7 5,12 9,13c4,-1 9,-6 9,-13c0,-6 -6,-11 -9,-17z" />
+    <!-- Base Book Scroll -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,78c-8,-4 -17,-6 -27,-6v-16c10,0 19,2 27,6c8,-4 17,-6 27,-6v16c-10,0 -19,2 -27,6z" />
+    <path
+        android:fillColor="#991B1B"
+        android:pathData="M46,60h4v19h-4z" />
+    <!-- Central Blade Core -->
+    <path
+        android:fillColor="#FEF2F2"
+        android:pathData="M46,36h4v18h-4z" />
+    <path
+        android:fillColor="#FEF2F2"
+        android:pathData="M48,26L52,36H44z" />
+</vector>

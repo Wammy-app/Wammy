@@ -14,10 +14,14 @@ import eu.kanade.tachiyomi.source.builtin.mangakakalot.MangakakalotSource
 import eu.kanade.tachiyomi.source.builtin.manhuaplus.ManhuaPlusSource
 import eu.kanade.tachiyomi.source.builtin.webtoon.WebtoonsSource
 import eu.kanade.tachiyomi.source.builtin.weebcentral.WeebCentralSource
+import eu.kanade.tachiyomi.source.builtin.novel.BakaTsukiSource
 import eu.kanade.tachiyomi.source.builtin.novel.FreeWebNovelSource
+import eu.kanade.tachiyomi.source.builtin.novel.MvlEmpyrSource
 import eu.kanade.tachiyomi.source.builtin.novel.NovelBuddySource
+import eu.kanade.tachiyomi.source.builtin.novel.NovelCoolSource
 import eu.kanade.tachiyomi.source.builtin.novel.NovelFireSource
 import eu.kanade.tachiyomi.source.builtin.novel.WuxiaBoxSource
+import eu.kanade.tachiyomi.source.builtin.novel.WuxiaClickSource
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinEngineType
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinSourceRecord
 import kotlinx.coroutines.CoroutineScope
@@ -213,6 +217,38 @@ class BuiltinSourceManager(
             engineType = BuiltinEngineType.WUXIABOX,
             isDefaultEnabled = true,
         ),
+        BuiltinSourceRecord(
+            id = 80030005L,
+            name = "WuxiaClick",
+            baseUrl = "https://wuxia.click",
+            lang = "en",
+            engineType = BuiltinEngineType.WUXIACLICK,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80030006L,
+            name = "NovelCool",
+            baseUrl = "https://novelcool.com",
+            lang = "en",
+            engineType = BuiltinEngineType.NOVELCOOL,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80030007L,
+            name = "Baka-Tsuki",
+            baseUrl = "https://www.baka-tsuki.org",
+            lang = "en",
+            engineType = BuiltinEngineType.BAKATSUKI,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80030008L,
+            name = "MVLEMPYR",
+            baseUrl = "https://www.mvlempyr.io",
+            lang = "en",
+            engineType = BuiltinEngineType.MVLEMPYR,
+            isDefaultEnabled = true,
+        ),
     )
 
     init {
@@ -262,6 +298,10 @@ class BuiltinSourceManager(
                 BuiltinEngineType.NOVELFIRE -> NovelFireSource(id = record.id, baseUrl = record.baseUrl)
                 BuiltinEngineType.NOVELBUDDY -> NovelBuddySource(id = record.id, baseUrl = record.baseUrl)
                 BuiltinEngineType.WUXIABOX -> WuxiaBoxSource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.WUXIACLICK -> WuxiaClickSource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.NOVELCOOL -> NovelCoolSource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.BAKATSUKI -> BakaTsukiSource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.MVLEMPYR -> MvlEmpyrSource(id = record.id, baseUrl = record.baseUrl)
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Failed to instantiate built-in source: ${record.name}" }
@@ -363,6 +403,10 @@ class BuiltinSourceManager(
                 80030002L -> R.drawable.source_novelfire
                 80030003L -> R.drawable.source_novelbuddy
                 80030004L -> R.drawable.source_wuxiabox
+                80030005L -> R.drawable.source_wuxiaclick
+                80030006L -> R.drawable.source_novelcool
+                80030007L -> R.drawable.source_bakatsuki
+                80030008L -> R.drawable.source_mvlempyr
                 else -> when (sourceName?.lowercase()?.trim()) {
                     "mangadex" -> R.drawable.source_mangadex
                     "mangakakalot" -> R.drawable.source_mangakakalot
@@ -383,6 +427,10 @@ class BuiltinSourceManager(
                     "novelfire", "novel fire" -> R.drawable.source_novelfire
                     "novelbuddy", "novel buddy" -> R.drawable.source_novelbuddy
                     "wuxiabox", "wuxia box" -> R.drawable.source_wuxiabox
+                    "wuxiaclick", "wuxia click" -> R.drawable.source_wuxiaclick
+                    "novelcool", "novel cool" -> R.drawable.source_novelcool
+                    "baka-tsuki", "bakatsuki", "baka tsuki" -> R.drawable.source_bakatsuki
+                    "mvlempyr", "mvl empyr" -> R.drawable.source_mvlempyr
                     else -> null
                 }
             }

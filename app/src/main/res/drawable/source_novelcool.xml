@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Cool Sky-Blue Background -->
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M0,0h96v96H0z" />
+    <path
+        android:fillColor="#0EA5E9"
+        android:pathData="M0,0h96v38H0z" />
+    <!-- Chill Ice Snowflake / Star Core -->
+    <path
+        android:fillColor="#BAE6FD"
+        android:pathData="M48,16L51,26L61,26L53,32L56,42L48,36L40,42L43,32L35,26L45,26z" />
+    <!-- Open Book Pages -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,76c-8,-4 -17,-6 -27,-6v-26c10,0 19,2 27,6c8,-4 17,-6 27,-6v26c-10,0 -19,2 -27,6z" />
+    <path
+        android:fillColor="#0369A1"
+        android:pathData="M46,49h4v27h-4z" />
+    <!-- Monogram N & C on book -->
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M28,54h4l7,12v-12h4v18h-4l-7,-12v12h-4z" />
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M66,56c-2,-2 -5,-3 -8,-3c-5,0 -9,4 -9,9s4,9 9,9c3,0 6,-1 8,-3v-4c-2,2 -4,3 -6,3c-3,0 -5,-2 -5,-5s2,-5 5,-5c2,0 4,1 6,3z" />
+</vector>
