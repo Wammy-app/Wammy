@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Centered rounded container (X=8 to 88, Y=8 to 88) -->
+    <path
+        android:fillColor="#1C1917"
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v48c0,8.84 -7.16,16 -16,16h-48c-8.84,0 -16,-7.16 -16,-16v-48c0,-8.84 7.16,-16 16,-16z" />
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v18h-80v-18c0,-8.84 7.16,-16 16,-16z" />
+    <!-- Temple/Hall Silhouette -->
+    <path
+        android:fillColor="#FDE68A"
+        android:pathData="M48,26l22,14h-44z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,42h6v28h-6zM45,42h6v28h-6zM60,42h6v28h-6z" />
+    <path
+        android:fillColor="#B45309"
+        android:pathData="M24,70h48v4h-48z" />
+</vector>

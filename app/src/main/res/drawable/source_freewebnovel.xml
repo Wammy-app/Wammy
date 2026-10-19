@@ -3,21 +3,21 @@
     android:height="96dp"
     android:viewportWidth="96"
     android:viewportHeight="96">
-    <!-- Background -->
+    <!-- Centered rounded container with margin -->
     <path
         android:fillColor="#1B9A59"
-        android:pathData="M0,0h96v96H0z" />
-    <!-- Subtle top-to-bottom glow highlight -->
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v48c0,8.84 -7.16,16 -16,16h-48c-8.84,0 -16,-7.16 -16,-16v-48c0,-8.84 7.16,-16 16,-16z" />
+    <!-- Top highlight -->
     <path
         android:fillColor="#22C55E"
-        android:pathData="M0,0h96v36H0z" />
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v18h-80v-18c0,-8.84 7.16,-16 16,-16z" />
     <!-- Book Spine & Pages -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M48,68c-8,-4 -16,-6 -26,-6v-34c10,0 18,2 26,6c8,-4 16,-6 26,-6v34c-10,0 -18,2 -26,6z" />
+        android:pathData="M48,68c-8,-4 -16,-6 -26,-6v-26c10,0 18,2 26,6c8,-4 16,-6 26,-6v26c-10,0 -18,2 -26,6z" />
     <path
         android:fillColor="#166534"
-        android:pathData="M46,34h4v34h-4z" />
+        android:pathData="M46,42h4v26h-4z" />
     <!-- Bookmark ribbon -->
     <path
         android:fillColor="#FACC15"
@@ -25,8 +25,8 @@
     <!-- FreeWebNovel 'F' letter emblem -->
     <path
         android:fillColor="#15803D"
-        android:pathData="M30,36h12v4h-8v6h6v4h-6v10h-4z" />
+        android:pathData="M30,42h10v3h-7v4h5v3h-5v8h-3z" />
     <path
         android:fillColor="#15803D"
-        android:pathData="M56,36h4l8,16v-16h4v24h-4l-8,-16v16h-4z" />
+        android:pathData="M56,42h3l7,12v-12h3v18h-3l-7,-12v12h-3z" />
 </vector>

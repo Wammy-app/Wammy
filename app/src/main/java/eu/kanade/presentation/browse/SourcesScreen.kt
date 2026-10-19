@@ -229,6 +229,8 @@ private fun BuiltinSourceCard(
 ) {
     val isPinned = Pin.Pinned in source.pin
     val iconRes = BuiltinSourceManager.getIconRes(source.id, source.name)
+    val isNovel = BuiltinSourceManager.isNovel(source.id)
+    val cardSize = if (isNovel) 46.dp else 52.dp
 
     Box(
         modifier = modifier.padding(vertical = 4.dp),
@@ -236,8 +238,8 @@ private fun BuiltinSourceCard(
     ) {
         Box(
             modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .size(cardSize)
+                .clip(RoundedCornerShape(8.dp))
                 .combinedClickable(
                     onClick = { onClickItem(source, Listing.Popular) },
                     onLongClick = { onLongClickItem(source) },
@@ -250,7 +252,7 @@ private fun BuiltinSourceCard(
                     contentDescription = source.name,
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(10.dp)),
+                        .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop,
                 )
             } else {
@@ -258,7 +260,7 @@ private fun BuiltinSourceCard(
                     source = source,
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(10.dp)),
+                        .clip(RoundedCornerShape(8.dp)),
                 )
             }
 

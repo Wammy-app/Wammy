@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Centered rounded container (X=8 to 88, Y=8 to 88) -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v48c0,8.84 -7.16,16 -16,16h-48c-8.84,0 -16,-7.16 -16,-16v-48c0,-8.84 7.16,-16 16,-16z" />
+    <path
+        android:fillColor="#6366F1"
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v18h-80v-18c0,-8.84 7.16,-16 16,-16z" />
+    <!-- Globe & Feather Quill -->
+    <path
+        android:fillColor="#C7D2FE"
+        android:pathData="M48,34a18,18 0 1,0 0.001,0z" />
+    <path
+        android:fillColor="#4338CA"
+        android:pathData="M48,34a18,18 0 0,1 0,36a18,18 0 0,1 0,-36z" />
+    <!-- Open Book Crest -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,72c-7,-3 -14,-5 -22,-5v-20c8,0 15,2 22,5c7,-3 14,-5 22,-5v20c-8,0 -15,2 -22,5z" />
+    <!-- Quill Nib -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M48,22l4,14h-8z" />
+</vector>

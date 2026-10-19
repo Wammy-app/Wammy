@@ -3,33 +3,26 @@
     android:height="96dp"
     android:viewportWidth="96"
     android:viewportHeight="96">
-    <!-- Dark Blood Lotus Background -->
+    <!-- Centered rounded container with margin -->
     <path
         android:fillColor="#110909"
-        android:pathData="M0,0h96v96H0z" />
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v48c0,8.84 -7.16,16 -16,16h-48c-8.84,0 -16,-7.16 -16,-16v-48c0,-8.84 7.16,-16 16,-16z" />
     <path
         android:fillColor="#1F1212"
-        android:pathData="M0,0h96v38H0z" />
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v20h-80v-20c0,-8.84 7.16,-16 16,-16z" />
     <!-- Blood Lotus Outer Petals -->
     <path
         android:fillColor="#DC2626"
-        android:pathData="M48,16c-6,10 -16,18 -16,28c0,12 8,20 16,22c8,-2 16,-10 16,-22c0,-10 -10,-18 -16,-28z" />
+        android:pathData="M48,18c-5,8 -13,15 -13,23c0,10 7,16 13,18c6,-2 13,-8 13,-18c0,-8 -8,-15 -13,-23z" />
     <!-- Inner Lotus Glow -->
     <path
         android:fillColor="#F87171"
-        android:pathData="M48,28c-3,6 -9,11 -9,17c0,7 5,12 9,13c4,-1 9,-6 9,-13c0,-6 -6,-11 -9,-17z" />
+        android:pathData="M48,28c-2,5 -7,9 -7,14c0,5 4,9 7,10c3,-1 7,-5 7,-10c0,-5 -5,-9 -7,-14z" />
     <!-- Base Book Scroll -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M48,78c-8,-4 -17,-6 -27,-6v-16c10,0 19,2 27,6c8,-4 17,-6 27,-6v16c-10,0 -19,2 -27,6z" />
+        android:pathData="M48,76c-7,-3 -15,-5 -23,-5v-13c8,0 15,2 23,5c8,-3 15,-5 23,-5v13c-8,0 -15,2 -23,5z" />
     <path
         android:fillColor="#991B1B"
-        android:pathData="M46,60h4v19h-4z" />
-    <!-- Central Blade Core -->
-    <path
-        android:fillColor="#FEF2F2"
-        android:pathData="M46,36h4v18h-4z" />
-    <path
-        android:fillColor="#FEF2F2"
-        android:pathData="M48,26L52,36H44z" />
+        android:pathData="M46,62h4v15h-4z" />
 </vector>

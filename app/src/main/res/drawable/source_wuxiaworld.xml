@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Centered rounded container (X=8 to 88, Y=8 to 88) -->
+    <path
+        android:fillColor="#091E3A"
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v48c0,8.84 -7.16,16 -16,16h-48c-8.84,0 -16,-7.16 -16,-16v-48c0,-8.84 7.16,-16 16,-16z" />
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v20h-80v-20c0,-8.84 7.16,-16 16,-16z" />
+    <!-- Golden Martial Blade / Scroll emblem -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M48,22l14,24h-10v26h-8v-26h-10z" />
+    <!-- White Inner Edge -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,26l8,16h-6v24h-4v-24h-6z" />
+    <!-- Mountain Base -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M20,76l14,-14l10,10l12,-12l20,16h-56z" />
+</vector>

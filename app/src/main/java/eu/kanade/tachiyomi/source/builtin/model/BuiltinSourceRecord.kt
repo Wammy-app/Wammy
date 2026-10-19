@@ -22,6 +22,10 @@ enum class BuiltinEngineType {
     NOVELCOOL,
     BAKATSUKI,
     MVLEMPYR,
+    NOVELBIN,
+    WUXIAWORLD,
+    NOVELHALL,
+    LIGHTNOVELWORLD,
 }
 
 @Serializable

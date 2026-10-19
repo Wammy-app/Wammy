@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Centered rounded container with margin -->
+    <!-- Base Rounded Plate (X=8 to 88, Y=8 to 88) -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v48c0,8.84 -7.16,16 -16,16h-48c-8.84,0 -16,-7.16 -16,-16v-48c0,-8.84 7.16,-16 16,-16z" />
+    <!-- Gradient Top Header -->
+    <path
+        android:fillColor="#0EA5E9"
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v18h-80v-18c0,-8.84 7.16,-16 16,-16z" />
+    <!-- Book symbol -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,68c-8,-4 -16,-6 -24,-6v-26c8,0 16,2 24,6c8,-4 16,-6 24,-6v26c-8,0 -16,2 -24,6z" />
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M46,42h4v26h-4z" />
+    <!-- Letter N -->
+    <path
+        android:fillColor="#F0F9FF"
+        android:pathData="M32,46h4l8,14v-14h4v18h-4l-8,-14v14h-4z" />
+</vector>

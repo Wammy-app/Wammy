@@ -19,6 +19,10 @@ import eu.kanade.tachiyomi.source.builtin.novel.MvlEmpyrSource
 import eu.kanade.tachiyomi.source.builtin.novel.NovelBuddySource
 import eu.kanade.tachiyomi.source.builtin.novel.NovelCoolSource
 import eu.kanade.tachiyomi.source.builtin.novel.NovelFireSource
+import eu.kanade.tachiyomi.source.builtin.novel.NovelBinSource
+import eu.kanade.tachiyomi.source.builtin.novel.WuxiaWorldSource
+import eu.kanade.tachiyomi.source.builtin.novel.NovelhallSource
+import eu.kanade.tachiyomi.source.builtin.novel.LightNovelWorldSource
 import eu.kanade.tachiyomi.source.builtin.novel.WuxiaBoxSource
 import eu.kanade.tachiyomi.source.builtin.novel.WuxiaClickSource
 import eu.kanade.tachiyomi.source.builtin.model.BuiltinEngineType
@@ -241,6 +245,38 @@ class BuiltinSourceManager(
             engineType = BuiltinEngineType.MVLEMPYR,
             isDefaultEnabled = true,
         ),
+        BuiltinSourceRecord(
+            id = 80030009L,
+            name = "Novel Bin",
+            baseUrl = "https://novelbin.com",
+            lang = "en",
+            engineType = BuiltinEngineType.NOVELBIN,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80030010L,
+            name = "Wuxiaworld",
+            baseUrl = "https://wuxiaworld.site",
+            lang = "en",
+            engineType = BuiltinEngineType.WUXIAWORLD,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80030011L,
+            name = "Novelhall",
+            baseUrl = "https://novelhall.com",
+            lang = "en",
+            engineType = BuiltinEngineType.NOVELHALL,
+            isDefaultEnabled = true,
+        ),
+        BuiltinSourceRecord(
+            id = 80030012L,
+            name = "LightNovelWorld",
+            baseUrl = "https://www.lightnovelworld.com",
+            lang = "en",
+            engineType = BuiltinEngineType.LIGHTNOVELWORLD,
+            isDefaultEnabled = true,
+        ),
     )
 
     init {
@@ -293,6 +329,10 @@ class BuiltinSourceManager(
                 BuiltinEngineType.NOVELCOOL -> NovelCoolSource(id = record.id, baseUrl = record.baseUrl)
                 BuiltinEngineType.BAKATSUKI -> BakaTsukiSource(id = record.id, baseUrl = record.baseUrl)
                 BuiltinEngineType.MVLEMPYR -> MvlEmpyrSource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.NOVELBIN -> NovelBinSource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.WUXIAWORLD -> WuxiaWorldSource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.NOVELHALL -> NovelhallSource(id = record.id, baseUrl = record.baseUrl)
+                BuiltinEngineType.LIGHTNOVELWORLD -> LightNovelWorldSource(id = record.id, baseUrl = record.baseUrl)
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Failed to instantiate built-in source: ${record.name}" }
@@ -373,6 +413,10 @@ class BuiltinSourceManager(
             return (sourceId in 80010001L..80010015L) || (sourceId in 80030001L..80030020L) || sourceId >= 80020000L
         }
 
+        fun isNovel(sourceId: Long): Boolean {
+            return sourceId in 80030001L..80039999L
+        }
+
         fun getIconRes(sourceId: Long, sourceName: String? = null): Int? {
             return when (sourceId) {
                 80010001L -> R.drawable.source_mangadex
@@ -397,6 +441,10 @@ class BuiltinSourceManager(
                 80030006L -> R.drawable.source_novelcool
                 80030007L -> R.drawable.source_bakatsuki
                 80030008L -> R.drawable.source_mvlempyr
+                80030009L -> R.drawable.source_novelbin
+                80030010L -> R.drawable.source_wuxiaworld
+                80030011L -> R.drawable.source_novelhall
+                80030012L -> R.drawable.source_lightnovelworld
                 else -> when (sourceName?.lowercase()?.trim()) {
                     "mangadex" -> R.drawable.source_mangadex
                     "mangakakalot" -> R.drawable.source_mangakakalot
@@ -420,6 +468,10 @@ class BuiltinSourceManager(
                     "novelcool", "novel cool" -> R.drawable.source_novelcool
                     "baka-tsuki", "bakatsuki", "baka tsuki" -> R.drawable.source_bakatsuki
                     "mvlempyr", "mvl empyr" -> R.drawable.source_mvlempyr
+                    "novelbin", "novel bin" -> R.drawable.source_novelbin
+                    "wuxiaworld", "wuxia world" -> R.drawable.source_wuxiaworld
+                    "novelhall", "novel hall" -> R.drawable.source_novelhall
+                    "lightnovelworld", "light novel world" -> R.drawable.source_lightnovelworld
                     else -> null
                 }
             }

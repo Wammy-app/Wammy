@@ -3,37 +3,29 @@
     android:height="96dp"
     android:viewportWidth="96"
     android:viewportHeight="96">
-    <!-- Deep Crimson / Maroon Background -->
+    <!-- Centered rounded container with margin -->
     <path
         android:fillColor="#881337"
-        android:pathData="M0,0h96v96H0z" />
-    <!-- Gradient upper banner -->
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v48c0,8.84 -7.16,16 -16,16h-48c-8.84,0 -16,-7.16 -16,-16v-48c0,-8.84 7.16,-16 16,-16z" />
     <path
         android:fillColor="#9F1239"
-        android:pathData="M0,0h96v38H0z" />
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v18h-80v-18c0,-8.84 7.16,-16 16,-16z" />
     <!-- Celestial Gold Diamond / Seal Crest -->
     <path
         android:fillColor="#F59E0B"
-        android:pathData="M48,12L68,32L48,52L28,32z" />
+        android:pathData="M48,16L64,32L48,48L32,32z" />
     <path
         android:fillColor="#78350F"
-        android:pathData="M48,18L62,32L48,46L34,32z" />
-    <!-- Center Martial Sword / Pagoda Blade -->
+        android:pathData="M48,22L58,32L48,42L38,32z" />
+    <!-- Center Martial Sword -->
     <path
         android:fillColor="#FEF08A"
-        android:pathData="M46,20h4v18h3v3h-3v5h-4v-5h-3v-3h3z" />
+        android:pathData="M46,24h4v14h3v2h-3v4h-4v-4h-3v-2h3z" />
     <!-- Open Book / Ancient Scroll -->
     <path
         android:fillColor="#FEF3C7"
-        android:pathData="M48,80c-8,-4 -17,-6 -27,-6v-25c10,0 19,2 27,6c8,-4 17,-6 27,-6v25c-10,0 -19,2 -27,6z" />
+        android:pathData="M48,76c-7,-3 -15,-5 -23,-5v-20c8,0 15,2 23,5c8,-3 15,-5 23,-5v20c-8,0 -15,2 -23,5z" />
     <path
         android:fillColor="#B45309"
-        android:pathData="M46,54h4v26h-4z" />
-    <!-- Stylized W and B characters on scroll -->
-    <path
-        android:fillColor="#881337"
-        android:pathData="M27,59l4,14l3,-9l3,9l4,-14h-3l-2.5,9l-3,-9h-3l-2.5,9l-3,-9z" />
-    <path
-        android:fillColor="#881337"
-        android:pathData="M57,59h7c3,0 4.5,1.5 4.5,3.5c0,1.5 -0.9,2.7 -2.3,3.2c1.7,0.5 2.8,1.9 2.8,3.7c0,2.6 -2,4.6 -5,4.6h-7zM60.5,64.5h3c1,0 1.6,-0.6 1.6,-1.4c0,-0.8 -0.6,-1.4 -1.6,-1.4h-3zM60.5,70.5h3.2c1.1,0 1.8,-0.7 1.8,-1.6c0,-0.9 -0.7,-1.6 -1.8,-1.6h-3.2z" />
+        android:pathData="M46,55h4v21h-4z" />
 </vector>

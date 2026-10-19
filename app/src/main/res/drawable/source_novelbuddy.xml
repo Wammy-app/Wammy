@@ -3,40 +3,32 @@
     android:height="96dp"
     android:viewportWidth="96"
     android:viewportHeight="96">
-    <!-- Royal Blue Background -->
+    <!-- Centered rounded container with margin -->
     <path
         android:fillColor="#2563EB"
-        android:pathData="M0,0h96v96H0z" />
-    <!-- Gradient upper banner -->
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v48c0,8.84 -7.16,16 -16,16h-48c-8.84,0 -16,-7.16 -16,-16v-48c0,-8.84 7.16,-16 16,-16z" />
     <path
         android:fillColor="#3B82F6"
-        android:pathData="M0,0h96v38H0z" />
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v18h-80v-18c0,-8.84 7.16,-16 16,-16z" />
     <!-- Friendly Character/Buddy Circle Backing -->
     <path
-        android:fillColor="#60A5FA"
-        android:pathData="M48,16a18,18 0 1,0 0.001,0z" />
+        android:fillColor="#93C5FD"
+        android:pathData="M48,22a14,14 0 1,0 0.001,0z" />
     <!-- Buddy Eyes & Smile -->
     <path
         android:fillColor="#1E3A8A"
-        android:pathData="M42,28a3,3 0 1,1 0,-6a3,3 0 1,1 0,6z" />
+        android:pathData="M43,30a2.5,2.5 0 1,1 0,-5a2.5,2.5 0 1,1 0,5z" />
     <path
         android:fillColor="#1E3A8A"
-        android:pathData="M54,28a3,3 0 1,1 0,-6a3,3 0 1,1 0,6z" />
+        android:pathData="M53,30a2.5,2.5 0 1,1 0,-5a2.5,2.5 0 1,1 0,5z" />
     <path
         android:fillColor="#1E3A8A"
-        android:pathData="M44,35c2,3 6,3 8,0z" />
+        android:pathData="M45,36c1.5,2.5 4.5,2.5 6,0z" />
     <!-- Open Book in hands -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M48,76c-8,-4 -17,-6 -27,-6v-28c10,0 19,2 27,6c8,-4 17,-6 27,-6v28c-10,0 -19,2 -27,6z" />
+        android:pathData="M48,74c-7,-3 -15,-5 -23,-5v-22c8,0 15,2 23,5c8,-3 15,-5 23,-5v22c-8,0 -15,2 -23,5z" />
     <path
         android:fillColor="#1D4ED8"
-        android:pathData="M46,47h4v29h-4z" />
-    <!-- Letter N and B -->
-    <path
-        android:fillColor="#3B82F6"
-        android:pathData="M29,54h4l7,12v-12h4v18h-4l-7,-12v12h-4z" />
-    <path
-        android:fillColor="#3B82F6"
-        android:pathData="M57,54h7c3,0 5,2 5,4.5c0,1.8 -1.1,3.4 -2.7,4.1c2,0.8 3.3,2.4 3.3,4.4c0,3 -2.5,5 -5.6,5h-7zM61,61h2.5c1.2,0 2,-0.7 2,-1.7c0,-1 -0.8,-1.7 -2,-1.7h-2.5zM61,68h2.8c1.3,0 2.2,-0.8 2.2,-1.9c0,-1.1 -0.9,-1.9 -2.2,-1.9h-2.8z" />
+        android:pathData="M46,52h4v22h-4z" />
 </vector>

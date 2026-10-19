@@ -3,33 +3,22 @@
     android:height="96dp"
     android:viewportWidth="96"
     android:viewportHeight="96">
-    <!-- Deep Indigo Background -->
+    <!-- Centered rounded container with margin -->
     <path
         android:fillColor="#3730A3"
-        android:pathData="M0,0h96v96H0z" />
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v48c0,8.84 -7.16,16 -16,16h-48c-8.84,0 -16,-7.16 -16,-16v-48c0,-8.84 7.16,-16 16,-16z" />
     <path
         android:fillColor="#4338CA"
-        android:pathData="M0,0h96v38H0z" />
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v18h-80v-18c0,-8.84 7.16,-16 16,-16z" />
     <!-- Golden Crescent Moon (Tsuki) -->
     <path
         android:fillColor="#FBBF24"
-        android:pathData="M52,14c-12,0 -22,10 -22,22c0,10 6,18 15,21c-4,-3 -6,-8 -6,-14c0,-12 9,-21 21,-21c2,0 4,0.3 6,1c-4,-5 -9,-9 -14,-9z" />
-    <!-- Little Star -->
-    <path
-        android:fillColor="#FEF08A"
-        android:pathData="M66,22l1.5,3.5l3.5,1.5l-3.5,1.5l-1.5,3.5l-1.5,-3.5l-3.5,-1.5l3.5,-1.5z" />
+        android:pathData="M52,16c-10,0 -18,8 -18,18c0,8 5,15 12,17c-3,-2 -5,-6 -5,-11c0,-10 7,-17 17,-17c2,0 3,0.3 5,0.8c-3,-4 -7,-7.8 -11,-7.8z" />
     <!-- Open Light Novel Pages -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M48,78c-8,-4 -17,-6 -27,-6v-22c10,0 19,2 27,6c8,-4 17,-6 27,-6v22c-10,0 -19,2 -27,6z" />
+        android:pathData="M48,74c-7,-3 -15,-5 -23,-5v-18c8,0 15,2 23,5c8,-3 15,-5 23,-5v18c-8,0 -15,2 -23,5z" />
     <path
         android:fillColor="#312E81"
-        android:pathData="M46,55h4v23h-4z" />
-    <!-- Stylized BT Monogram -->
-    <path
-        android:fillColor="#4F46E5"
-        android:pathData="M29,58h6c2,0 3.5,1 3.5,2.5c0,1 -0.7,1.8 -1.7,2.2c1.3,0.4 2.2,1.3 2.2,2.5c0,1.8 -1.5,2.8 -4,2.8h-6zM32,62h2.5c0.8,0 1.5,-0.4 1.5,-1s-0.7,-1 -1.5,-1h-2.5zM32,66h2.7c0.9,0 1.6,-0.4 1.6,-1.1c0,-0.7 -0.7,-1.1 -1.6,-1.1h-2.7z" />
-    <path
-        android:fillColor="#4F46E5"
-        android:pathData="M56,58h14v3h-5.5v7h-3v-7h-5.5z" />
+        android:pathData="M46,55h4v19h-4z" />
 </vector>

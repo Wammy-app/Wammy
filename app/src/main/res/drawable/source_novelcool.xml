@@ -3,29 +3,22 @@
     android:height="96dp"
     android:viewportWidth="96"
     android:viewportHeight="96">
-    <!-- Cool Sky-Blue Background -->
+    <!-- Centered rounded container with margin -->
     <path
         android:fillColor="#0284C7"
-        android:pathData="M0,0h96v96H0z" />
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v48c0,8.84 -7.16,16 -16,16h-48c-8.84,0 -16,-7.16 -16,-16v-48c0,-8.84 7.16,-16 16,-16z" />
     <path
         android:fillColor="#0EA5E9"
-        android:pathData="M0,0h96v38H0z" />
+        android:pathData="M24,8h48c8.84,0 16,7.16 16,16v18h-80v-18c0,-8.84 7.16,-16 16,-16z" />
     <!-- Chill Ice Snowflake / Star Core -->
     <path
         android:fillColor="#BAE6FD"
-        android:pathData="M48,16L51,26L61,26L53,32L56,42L48,36L40,42L43,32L35,26L45,26z" />
+        android:pathData="M48,18L50,26L58,26L52,31L54,39L48,34L42,39L44,31L38,26L46,26z" />
     <!-- Open Book Pages -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M48,76c-8,-4 -17,-6 -27,-6v-26c10,0 19,2 27,6c8,-4 17,-6 27,-6v26c-10,0 -19,2 -27,6z" />
+        android:pathData="M48,74c-7,-3 -15,-5 -23,-5v-22c8,0 15,2 23,5c8,-3 15,-5 23,-5v22c-8,0 -15,2 -23,5z" />
     <path
         android:fillColor="#0369A1"
-        android:pathData="M46,49h4v27h-4z" />
-    <!-- Monogram N & C on book -->
-    <path
-        android:fillColor="#0284C7"
-        android:pathData="M28,54h4l7,12v-12h4v18h-4l-7,-12v12h-4z" />
-    <path
-        android:fillColor="#0284C7"
-        android:pathData="M66,56c-2,-2 -5,-3 -8,-3c-5,0 -9,4 -9,9s4,9 9,9c3,0 6,-1 8,-3v-4c-2,2 -4,3 -6,3c-3,0 -5,-2 -5,-5s2,-5 5,-5c2,0 4,1 6,3z" />
+        android:pathData="M46,52h4v22h-4z" />
 </vector>
