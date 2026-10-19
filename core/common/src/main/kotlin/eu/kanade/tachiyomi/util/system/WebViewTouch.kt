@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.source.builtin.comix
+package eu.kanade.tachiyomi.util.system
 
 import android.os.Handler
 import android.os.Looper
@@ -13,7 +13,6 @@ import kotlin.random.Random
 /**
  * Natural touchscreen human touch simulation for Android WebView.
  * Dispatches real hardware MotionEvents so that JavaScript event.isTrusted === true.
- * Ported from Keiyoushi's Comix implementation.
  */
 fun WebView.swipe(fromX: Float, fromY: Float, toX: Float, toY: Float) {
     val frames = Random.nextInt(25, 37)

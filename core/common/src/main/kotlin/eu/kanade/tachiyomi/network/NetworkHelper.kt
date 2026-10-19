@@ -45,7 +45,8 @@ class NetworkHelper(
             builder.addNetworkInterceptor(httpLoggingInterceptor)
         }
 
-        when (preferences.dohProvider.get()) {
+        val doh = preferences.dohProvider.get().let { if (it == -1) PREF_DOH_CLOUDFLARE else it }
+        when (doh) {
             PREF_DOH_CLOUDFLARE -> builder.dohCloudflare()
             PREF_DOH_GOOGLE -> builder.dohGoogle()
             PREF_DOH_ADGUARD -> builder.dohAdGuard()
@@ -77,7 +78,7 @@ class NetworkHelper(
 
     fun defaultUserAgentProvider(): String {
         val custom = preferences.defaultUserAgent.get().trim()
-        if (custom.isNotBlank() && !custom.contains("Pixel 8") && !custom.contains("Chrome/131")) {
+        if (custom.isNotBlank() && !custom.contains("Pixel 8") && !custom.contains("Chrome/131") && !custom.contains("Chrome/149")) {
             return custom
         }
         return try {

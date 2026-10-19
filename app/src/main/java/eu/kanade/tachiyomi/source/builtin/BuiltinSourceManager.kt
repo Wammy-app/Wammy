@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.builtin.atsumaru.AtsumaruSource
 import eu.kanade.tachiyomi.source.builtin.bbato.BbatoSource
 import eu.kanade.tachiyomi.source.builtin.comick.ComickSource
-import eu.kanade.tachiyomi.source.builtin.comix.ComixSource
 import eu.kanade.tachiyomi.source.builtin.engine.MadaraEngineSource
 import eu.kanade.tachiyomi.source.builtin.engine.MangaThemesiaEngineSource
 import eu.kanade.tachiyomi.source.builtin.mangadex.MangaDexSource
@@ -152,14 +151,7 @@ class BuiltinSourceManager(
             lang = "en",
             engineType = BuiltinEngineType.MANGATHEMESIA,
             isDefaultEnabled = true,
-        ),
-        BuiltinSourceRecord(
-            id = 80010012L,
-            name = "Comix",
-            baseUrl = "https://comix.to",
-            lang = "en",
-            engineType = BuiltinEngineType.COMIX,
-            isDefaultEnabled = true,
+
         ),
         BuiltinSourceRecord(
             id = 80010013L,
@@ -290,7 +282,6 @@ class BuiltinSourceManager(
                     baseUrl = record.baseUrl,
                     lang = record.lang,
                 )
-                BuiltinEngineType.COMIX -> ComixSource(id = record.id, lang = record.lang)
                 BuiltinEngineType.MANHUAPLUS -> ManhuaPlusSource(id = record.id, baseUrl = record.baseUrl, lang = record.lang)
                 BuiltinEngineType.COMICK -> ComickSource(id = record.id, baseUrl = record.baseUrl, lang = record.lang)
                 BuiltinEngineType.WEBTOONS -> WebtoonsSource(id = record.id, baseUrl = record.baseUrl, lang = record.lang)
@@ -395,7 +386,6 @@ class BuiltinSourceManager(
                 80010009L -> R.drawable.source_atsumaru
                 80010010L -> R.drawable.source_bbato
                 80010011L -> R.drawable.source_comicasura
-                80010012L -> R.drawable.source_comix
                 80010013L -> R.drawable.source_manhuaplus
                 80010014L -> R.drawable.source_comick
                 80010015L -> R.drawable.source_webtoons
@@ -419,7 +409,6 @@ class BuiltinSourceManager(
                     "atsumaru" -> R.drawable.source_atsumaru
                     "bbato", "bato" -> R.drawable.source_bbato
                     "comic asura", "asura comic", "asura scans", "comicasura" -> R.drawable.source_comicasura
-                    "comix" -> R.drawable.source_comix
                     "manhuaplus", "manhua plus" -> R.drawable.source_manhuaplus
                     "comick", "comic k" -> R.drawable.source_comick
                     "webtoons", "webtoon", "line webtoon" -> R.drawable.source_webtoons

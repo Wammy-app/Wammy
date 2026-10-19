@@ -11,7 +11,6 @@ enum class BuiltinEngineType {
     MANGATHEMESIA,
     ATSUMARU,
     BBATO,
-    COMIX,
     MANHUAPLUS,
     COMICK,
     WEBTOONS,

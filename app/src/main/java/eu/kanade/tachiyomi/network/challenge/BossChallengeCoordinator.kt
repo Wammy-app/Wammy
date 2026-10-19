@@ -12,7 +12,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.AndroidCookieJar
-import eu.kanade.tachiyomi.source.builtin.comix.tap
+import eu.kanade.tachiyomi.util.system.tap
 import eu.kanade.tachiyomi.ui.base.activity.ForegroundActivityHolder
 import eu.kanade.tachiyomi.ui.challenge.ChallengeSolverActivity
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
@@ -112,7 +112,7 @@ class BossChallengeCoordinator(
         headers: Map<String, String>?,
         force: Boolean = false,
     ): Boolean {
-        val challengeUrl = if (host.contains("comix.to")) "https://$host/" else url
+        val challengeUrl = url
         val userAgent = headers?.get("User-Agent")?.takeIf { it.isNotBlank() } ?: defaultUserAgentProvider()
 
         val oldClearance = getClearanceCookie(challengeUrl)
@@ -209,7 +209,6 @@ class BossChallengeCoordinator(
                 lower.contains("just a moment") ||
                 lower.contains("attention required") ||
                 lower.contains("cloudflare") ||
-                lower.contains("third-party app") ||
                 lower.contains("security check")
         }
 
@@ -251,16 +250,6 @@ class BossChallengeCoordinator(
                         }
                     }
 
-                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                        val reqUrl = request?.url?.toString()?.toHttpUrlOrNull() ?: return null
-                        val isFrameLoad = request.requestHeaders?.get("Accept").orEmpty().contains("text/html")
-                        if (reqUrl.encodedPath == "/@waf/challenge" && isFrameLoad) {
-                            val solverJs = eu.kanade.tachiyomi.source.builtin.comix.ComixScripts.getSolveCaptcha(context)
-                            val page = "<script>($solverJs)(null)</script>"
-                            return WebResourceResponse("text/html", "utf-8", page.byteInputStream())
-                        }
-                        return null
-                    }
 
                     override fun doUpdateVisitedHistory(view: WebView?, pageUrl: String?, isReload: Boolean) {
                         flushCookies()
@@ -288,10 +277,6 @@ class BossChallengeCoordinator(
                 webView.evaluateJavascript(
                     """
                     (function() {
-                        if (document.title.toLowerCase().includes('third-party') || window.location.href.includes('third-party')) {
-                            window.location.replace('https://comix.to/');
-                            return '';
-                        }
                         const iframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
                         if (iframe) {
                             const rect = iframe.getBoundingClientRect();
@@ -312,6 +297,7 @@ class BossChallengeCoordinator(
                         val x = coords[0].toFloatOrNull()
                         val y = coords[1].toFloatOrNull()
                         if (x != null && y != null && x > 0 && y > 0) {
+                            logcat(LogPriority.INFO) { "BossChallengeCoordinator: Silent auto-tapping Turnstile at ($x, $y)" }
                             webView.tap(x, y)
                         }
                     }
@@ -340,7 +326,7 @@ class BossChallengeCoordinator(
     }
 
     companion object {
-        const val SILENT_TIMEOUT_MS = 7_000L
+        const val SILENT_TIMEOUT_MS = 25_000L
         const val INTERACTIVE_TIMEOUT_MS = 60_000L
         const val RECENT_COOLDOWN_MS = 60_000L
         const val DISMISS_COOLDOWN_MS = 30_000L

@@ -129,19 +129,23 @@ fun WebView.setUserAgent(userAgent: String) {
 
     try {
         val metadata = WebSettingsCompat.getUserAgentMetadata(settings)
-        val brandVersionList = metadata.brandVersionList.map { brandVersion ->
-            val brand = when (brandVersion.brand) {
-                WEBVIEW_BRAND -> CHROME_BRAND
-                CHROMIUM_BRAND -> CHROMIUM_BRAND
-                else -> return@map brandVersion
-            }
-
+        val brandVersionList = listOf(
             UserAgentMetadata.BrandVersion.Builder()
-                .setBrand(brand)
+                .setBrand(CHROME_BRAND)
                 .setMajorVersion(majorVersion)
                 .setFullVersion(fullVersion)
-                .build()
-        }
+                .build(),
+            UserAgentMetadata.BrandVersion.Builder()
+                .setBrand(CHROMIUM_BRAND)
+                .setMajorVersion(majorVersion)
+                .setFullVersion(fullVersion)
+                .build(),
+            UserAgentMetadata.BrandVersion.Builder()
+                .setBrand("Not?A_Brand")
+                .setMajorVersion("24")
+                .setFullVersion("24.0.0.0")
+                .build(),
+        )
 
         WebSettingsCompat.setUserAgentMetadata(
             settings,

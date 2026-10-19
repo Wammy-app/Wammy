@@ -9,9 +9,11 @@ import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import eu.kanade.tachiyomi.source.builtin.comix.tap
+import eu.kanade.tachiyomi.util.system.tap
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
 import eu.kanade.tachiyomi.util.system.setUserAgent
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -142,7 +144,6 @@ private fun ChallengeSolverDialog(
             lower.contains("just a moment") ||
             lower.contains("attention required") ||
             lower.contains("cloudflare") ||
-            lower.contains("third-party app") ||
             lower.contains("security check")
     }
 
@@ -177,16 +178,12 @@ private fun ChallengeSolverDialog(
                 break
             }
 
-            // Auto-detect and tap Turnstile "Verify you are human" checkbox or Comix navigation button
+            // Auto-detect and tap Turnstile "Verify you are human" checkbox
             val view = webViewRef
             if (view != null) {
                 view.evaluateJavascript(
                     """
                     (function() {
-                        if (document.title.toLowerCase().includes('third-party') || window.location.href.includes('third-party')) {
-                            window.location.replace('https://comix.to/');
-                            return '';
-                        }
                         const iframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
                         if (iframe) {
                             try { iframe.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
@@ -213,6 +210,7 @@ private fun ChallengeSolverDialog(
                         val x = coords[0].toFloatOrNull()
                         val y = coords[1].toFloatOrNull()
                         if (x != null && y != null && x > 0 && y > 0) {
+                            logcat(LogPriority.INFO) { "ChallengeSolverActivity: Interactive auto-tapping Turnstile at ($x, $y)" }
                             view.tap(x, y)
                         }
                     }
@@ -356,8 +354,7 @@ private fun ChallengeSolverDialog(
                                 }
 
                                 webViewRef = this
-                                val initialUrl = if (host.contains("comix.to")) "https://$host/" else url
-                                loadUrl(initialUrl)
+                                loadUrl(url)
                             }
                         },
                     )
