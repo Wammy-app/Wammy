@@ -7,6 +7,8 @@ import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.util.system.tap
@@ -144,38 +146,48 @@ private fun ChallengeSolverDialog(
             lower.contains("just a moment") ||
             lower.contains("attention required") ||
             lower.contains("cloudflare") ||
-            lower.contains("security check")
+            lower.contains("security check") ||
+            lower.contains("404") ||
+            lower.contains("not found") ||
+            lower.contains("sorry") ||
+            lower.contains("error")
     }
 
-    val startTime = remember { System.currentTimeMillis() }
+    val startTimeSeconds = remember { System.currentTimeMillis() / 1000 }
+    val initialOldClearance = remember {
+        oldClearance ?: BossChallengeCoordinator.getClearanceCookie(url)
+    }
+
+    fun parseClearanceTimestamp(cookie: String): Long? {
+        val parts = cookie.split("-")
+        return parts.getOrNull(1)?.toLongOrNull()
+    }
 
     fun checkPassed(): Boolean {
-        val current = BossChallengeCoordinator.getClearanceCookie(url)
-        // 1. Fresh clearance cookie issued
-        if (current != null && (oldClearance == null || current != oldClearance)) {
-            return true
+        val current = BossChallengeCoordinator.getClearanceCookie(url) ?: return false
+
+        // 1. If we have a recorded old clearance string, current MUST differ from it
+        if (initialOldClearance != null) {
+            return current != initialOldClearance
         }
 
-        // 2. Real destination page loaded and challenge bypassed
+        // 2. If there was no recorded old clearance, check if the cookie's embedded timestamp is fresh
+        val ts = parseClearanceTimestamp(current)
+        if (ts != null) {
+            return ts >= (startTimeSeconds - 10)
+        }
+
+        // 3. Fallback: only if no timestamp can be parsed and the page navigated away from challenge
         val view = webViewRef
         val title = view?.title.orEmpty().trim()
         val currentUrl = view?.url.orEmpty()
         val nonWww = host.removePrefix("www.")
         val hostMatches = currentUrl.contains(host) || (nonWww.isNotEmpty() && currentUrl.contains(nonWww))
-        val elapsed = System.currentTimeMillis() - startTime
-
-        if (view != null &&
-            elapsed > 1200L &&
-            hostMatches &&
+        return hostMatches &&
             !isChallengeTitle(title) &&
             !currentUrl.contains("__cf_chl") &&
             currentUrl != "about:blank" &&
             currentUrl.isNotEmpty()
-        ) {
-            return true
-        }
-
-        return false
     }
 
     BackHandler {
@@ -383,9 +395,25 @@ private fun ChallengeSolverDialog(
                                         }
                                     }
 
+                                    override fun onReceivedHttpError(
+                                        view: WebView?,
+                                        request: WebResourceRequest?,
+                                        errorResponse: WebResourceResponse?,
+                                    ) {
+                                        super.onReceivedHttpError(view, request, errorResponse)
+                                        if (request?.isForMainFrame == true && errorResponse?.statusCode == 404) {
+                                            view?.loadUrl("https://$host/")
+                                        }
+                                    }
+
                                     override fun onPageFinished(view: WebView?, pageUrl: String?) {
                                         isLoading = false
                                         try { CookieManager.getInstance().flush() } catch (_: Throwable) {}
+                                        val title = view?.title.orEmpty().lowercase()
+                                        if (title.contains("404") || title.contains("not found")) {
+                                            view?.loadUrl("https://$host/")
+                                            return
+                                        }
                                         if (checkPassed()) {
                                             isVerified = true
                                         }

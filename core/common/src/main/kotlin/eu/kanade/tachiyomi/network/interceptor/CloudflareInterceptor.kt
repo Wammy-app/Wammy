@@ -164,22 +164,27 @@ class CloudflareInterceptor(
             }
 
             // Explicitly sync and attach cookies directly from CookieManager
-            val rawCookies = try {
-                android.webkit.CookieManager.getInstance().getCookie(request.url.toString())
-            } catch (_: Throwable) {
-                null
-            }
+            val host = request.url.host
+            val nonWww = host.removePrefix("www.")
+            val cookieManager = try { android.webkit.CookieManager.getInstance() } catch (_: Throwable) { null }
+            val cookiesFromUrl = cookieManager?.getCookie(request.url.toString())
+            val cookiesFromHost = cookieManager?.getCookie("https://$host/")
+            val cookiesFromNonWww = cookieManager?.getCookie("https://$nonWww/")
+
+            val allCookies = listOfNotNull(cookiesFromUrl, cookiesFromHost, cookiesFromNonWww)
+                .flatMap { it.split(";") }
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinctBy { it.substringBefore("=") }
+                .toMutableList()
 
             val clearance = getClearanceFromCookieManager(request.url.toString())
-            if (!rawCookies.isNullOrBlank()) {
-                val fullCookies = if (clearance != null && !rawCookies.contains("cf_clearance")) {
-                    "$rawCookies; cf_clearance=$clearance"
-                } else {
-                    rawCookies
-                }
-                retryBuilder.header("Cookie", fullCookies)
-            } else if (clearance != null) {
-                retryBuilder.header("Cookie", "cf_clearance=$clearance")
+            if (clearance != null && allCookies.none { it.startsWith("cf_clearance=") }) {
+                allCookies.add("cf_clearance=$clearance")
+            }
+
+            if (allCookies.isNotEmpty()) {
+                retryBuilder.header("Cookie", allCookies.joinToString("; "))
             }
 
             val retryResponse = chain.proceed(retryBuilder.build())

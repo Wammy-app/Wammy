@@ -123,24 +123,29 @@ class BossChallengeCoordinator(
         isCanceled: () -> Boolean = { false },
     ): Boolean {
         if (isCanceled()) return false
-        val challengeUrl = url
+        val challengeUrl = if (url.contains("/top/") || url.endsWith("/top")) {
+            "https://$host/"
+        } else {
+            url
+        }
         val userAgent = headers?.get("User-Agent")?.takeIf { it.isNotBlank() } ?: defaultUserAgentProvider()
 
         val oldClearance = getClearanceCookie(challengeUrl)
 
-        val lastSuccess = recentSuccessAt[host] ?: 0L
-        val isRecent = System.currentTimeMillis() - lastSuccess < RECENT_COOLDOWN_MS
-        if (isRecent && oldClearance != null) {
-            logcat(LogPriority.INFO) { "BossChallengeCoordinator: $host had recent clearance within cooldown (${System.currentTimeMillis() - lastSuccess}ms ago), reusing without clear" }
-            return true
-        }
-
         if (force) {
             recentSuccessAt.remove(host)
             clearClearance(challengeUrl)
-        } else if (oldClearance != null) {
-            logcat(LogPriority.INFO) { "BossChallengeCoordinator: $host already has valid clearance, skipping clear" }
-            return true
+        } else {
+            val lastSuccess = recentSuccessAt[host] ?: 0L
+            val isRecent = System.currentTimeMillis() - lastSuccess < RECENT_COOLDOWN_MS
+            if (isRecent && oldClearance != null) {
+                logcat(LogPriority.INFO) { "BossChallengeCoordinator: $host had recent clearance within cooldown (${System.currentTimeMillis() - lastSuccess}ms ago), reusing without clear" }
+                return true
+            }
+            if (oldClearance != null) {
+                logcat(LogPriority.INFO) { "BossChallengeCoordinator: $host already has valid clearance, skipping clear" }
+                return true
+            }
         }
 
         // Stage 1: Silent Background Pass (skip if explicitly a managed Turnstile challenge)
@@ -396,20 +401,21 @@ class BossChallengeCoordinator(
             val cookieManager = try { CookieManager.getInstance() } catch (_: Throwable) { return }
             val host = httpUrl.host
             val nonWww = host.removePrefix("www.")
-            val deleteCookieVal = "cf_clearance=; Domain=.$host; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0"
-            val deleteCookieNonWww = "cf_clearance=; Domain=.$nonWww; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0"
-            val deleteCookieSimple = "cf_clearance=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0"
+            val domains = listOf(host, ".$host", nonWww, ".$nonWww", "www.$nonWww", ".www.$nonWww")
+            val expires = "Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0"
 
-            try {
-                cookieManager.setCookie(url, deleteCookieVal)
-                cookieManager.setCookie(url, deleteCookieNonWww)
-                cookieManager.setCookie(url, deleteCookieSimple)
-                cookieManager.setCookie("https://$host/", deleteCookieVal)
-                cookieManager.setCookie("https://$host/", deleteCookieSimple)
-                cookieManager.setCookie("https://$nonWww/", deleteCookieNonWww)
-                cookieManager.setCookie("https://$nonWww/", deleteCookieSimple)
-                cookieManager.flush()
-            } catch (_: Throwable) {}
+            for (d in domains) {
+                try {
+                    cookieManager.setCookie("https://$d/", "cf_clearance=; Domain=$d; Path=/; $expires; Secure; SameSite=None")
+                    cookieManager.setCookie("https://$d/", "cf_clearance=; Domain=$d; Path=/; $expires")
+                    cookieManager.setCookie("https://$d/", "cf_clearance=; Path=/; $expires; Secure")
+                    cookieManager.setCookie("https://$d/", "cf_clearance=; Path=/; $expires")
+                    cookieManager.setCookie(url, "cf_clearance=; Domain=$d; Path=/; $expires; Secure; SameSite=None")
+                    cookieManager.setCookie(url, "cf_clearance=; Domain=$d; Path=/; $expires")
+                    cookieManager.setCookie(url, "cf_clearance=; Path=/; $expires")
+                } catch (_: Throwable) {}
+            }
+            try { cookieManager.flush() } catch (_: Throwable) {}
         }
     }
 }
