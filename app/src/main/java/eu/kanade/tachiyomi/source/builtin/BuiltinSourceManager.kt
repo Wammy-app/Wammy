@@ -21,7 +21,6 @@ import eu.kanade.tachiyomi.source.builtin.novel.NovelCoolSource
 import eu.kanade.tachiyomi.source.builtin.novel.NovelFireSource
 import eu.kanade.tachiyomi.source.builtin.novel.NovelBinSource
 import eu.kanade.tachiyomi.source.builtin.novel.WuxiaWorldSource
-import eu.kanade.tachiyomi.source.builtin.novel.NovelhallSource
 import eu.kanade.tachiyomi.source.builtin.novel.LightNovelWorldSource
 import eu.kanade.tachiyomi.source.builtin.novel.WuxiaBoxSource
 import eu.kanade.tachiyomi.source.builtin.novel.WuxiaClickSource
@@ -262,14 +261,6 @@ class BuiltinSourceManager(
             isDefaultEnabled = true,
         ),
         BuiltinSourceRecord(
-            id = 80030011L,
-            name = "Novelhall",
-            baseUrl = "https://www.novelhall.com",
-            lang = "en",
-            engineType = BuiltinEngineType.NOVELHALL,
-            isDefaultEnabled = true,
-        ),
-        BuiltinSourceRecord(
             id = 80030012L,
             name = "NovelFull",
             baseUrl = "https://novelfull.net",
@@ -331,7 +322,6 @@ class BuiltinSourceManager(
                 BuiltinEngineType.MVLEMPYR -> MvlEmpyrSource(id = record.id, baseUrl = record.baseUrl)
                 BuiltinEngineType.NOVELBIN -> NovelBinSource(id = record.id, baseUrl = record.baseUrl)
                 BuiltinEngineType.WUXIAWORLD -> WuxiaWorldSource(id = record.id, baseUrl = record.baseUrl)
-                BuiltinEngineType.NOVELHALL -> NovelhallSource(id = record.id, baseUrl = record.baseUrl)
                 BuiltinEngineType.LIGHTNOVELWORLD -> LightNovelWorldSource(id = record.id, baseUrl = record.baseUrl)
             }
         } catch (e: Exception) {
@@ -443,7 +433,6 @@ class BuiltinSourceManager(
                 80030008L -> R.drawable.source_mvlempyr
                 80030009L -> R.drawable.source_novelbin
                 80030010L -> R.drawable.source_wuxiaworld
-                80030011L -> R.drawable.source_novelhall
                 80030012L -> R.drawable.source_lightnovelworld
                 else -> when (sourceName?.lowercase()?.trim()) {
                     "mangadex" -> R.drawable.source_mangadex
@@ -470,7 +459,6 @@ class BuiltinSourceManager(
                     "mvlempyr", "mvl empyr" -> R.drawable.source_mvlempyr
                     "novelbin", "novel bin" -> R.drawable.source_novelbin
                     "wuxiaworld", "wuxia world" -> R.drawable.source_wuxiaworld
-                    "novelhall", "novel hall" -> R.drawable.source_novelhall
                     "lightnovelworld", "light novel world" -> R.drawable.source_lightnovelworld
                     else -> null
                 }

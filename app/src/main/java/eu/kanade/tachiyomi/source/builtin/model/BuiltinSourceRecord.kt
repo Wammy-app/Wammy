@@ -24,7 +24,6 @@ enum class BuiltinEngineType {
     MVLEMPYR,
     NOVELBIN,
     WUXIAWORLD,
-    NOVELHALL,
     LIGHTNOVELWORLD,
 }
 
