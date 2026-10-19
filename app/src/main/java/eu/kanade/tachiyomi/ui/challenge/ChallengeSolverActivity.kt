@@ -147,22 +147,49 @@ private fun ChallengeSolverDialog(
             lower.contains("security check")
     }
 
-    fun checkPassed(view: WebView? = webViewRef): Boolean {
-        if (isLoading) return false
-        val current = BossChallengeCoordinator.getClearanceCookie(url) ?: return false
+    val startTime = remember { System.currentTimeMillis() }
+
+    fun checkPassed(): Boolean {
+        val current = BossChallengeCoordinator.getClearanceCookie(url)
+        // 1. Fresh clearance cookie issued
+        if (current != null && (oldClearance == null || current != oldClearance)) {
+            return true
+        }
+
+        // 2. Real destination page loaded and challenge bypassed
+        val view = webViewRef
         val title = view?.title.orEmpty().trim()
-        if (isChallengeTitle(title)) return false
-        return true
+        val currentUrl = view?.url.orEmpty()
+        val nonWww = host.removePrefix("www.")
+        val hostMatches = currentUrl.contains(host) || (nonWww.isNotEmpty() && currentUrl.contains(nonWww))
+        val elapsed = System.currentTimeMillis() - startTime
+
+        if (view != null &&
+            elapsed > 1200L &&
+            hostMatches &&
+            !isChallengeTitle(title) &&
+            !currentUrl.contains("__cf_chl") &&
+            currentUrl != "about:blank" &&
+            currentUrl.isNotEmpty()
+        ) {
+            return true
+        }
+
+        return false
     }
 
     BackHandler {
         onDismiss()
     }
 
+    var lastTapTime by remember { mutableStateOf(0L) }
+    var tapAttempts by remember { mutableStateOf(0) }
+
     // Active polling for clearance cookie
     LaunchedEffect(url, isVerified) {
         if (isVerified) {
-            delay(350)
+            try { CookieManager.getInstance().flush() } catch (_: Throwable) {}
+            delay(200)
             onSuccess()
             return@LaunchedEffect
         }
@@ -171,19 +198,26 @@ private fun ChallengeSolverDialog(
                 CookieManager.getInstance().flush()
             } catch (_: Throwable) {}
 
-            if (checkPassed(webViewRef)) {
+            if (checkPassed()) {
                 isVerified = true
-                delay(350)
+                try {
+                    CookieManager.getInstance().flush()
+                } catch (_: Throwable) {}
+                delay(200)
                 onSuccess()
                 break
             }
 
-            // Auto-detect and tap Turnstile "Verify you are human" checkbox
+            // Auto-detect and tap Turnstile "Verify you are human" checkbox (throttled)
+            val now = System.currentTimeMillis()
             val view = webViewRef
-            if (view != null) {
+            if (view != null && now - lastTapTime > 3000L && tapAttempts < 3) {
                 view.evaluateJavascript(
                     """
                     (function() {
+                        const token = document.querySelector('[name="cf-turnstile-response"]')?.value;
+                        if (token && token.length > 10) return 'token_ready';
+
                         const iframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
                         if (iframe) {
                             try { iframe.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
@@ -205,13 +239,22 @@ private fun ChallengeSolverDialog(
                     """.trimIndent(),
                 ) { result ->
                     val raw = result?.trim('"', '\'')
-                    val coords = raw?.split(',')
-                    if (coords != null && coords.size == 2) {
-                        val x = coords[0].toFloatOrNull()
-                        val y = coords[1].toFloatOrNull()
-                        if (x != null && y != null && x > 0 && y > 0) {
-                            logcat(LogPriority.INFO) { "ChallengeSolverActivity: Interactive auto-tapping Turnstile at ($x, $y)" }
-                            view.tap(x, y)
+                    if (raw == "token_ready") {
+                        try { CookieManager.getInstance().flush() } catch (_: Throwable) {}
+                        if (checkPassed()) {
+                            isVerified = true
+                        }
+                    } else {
+                        val coords = raw?.split(',')
+                        if (coords != null && coords.size == 2) {
+                            val x = coords[0].toFloatOrNull()
+                            val y = coords[1].toFloatOrNull()
+                            if (x != null && y != null && x > 0 && y > 0) {
+                                lastTapTime = System.currentTimeMillis()
+                                tapAttempts++
+                                logcat(LogPriority.INFO) { "ChallengeSolverActivity: Interactive auto-tapping Turnstile (attempt $tapAttempts) at ($x, $y)" }
+                                view.tap(x, y)
+                            }
                         }
                     }
                 }
@@ -334,20 +377,23 @@ private fun ChallengeSolverDialog(
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {
                                         isLoading = true
-                                        if (checkPassed(view)) {
+                                        try { CookieManager.getInstance().flush() } catch (_: Throwable) {}
+                                        if (checkPassed()) {
                                             isVerified = true
                                         }
                                     }
 
                                     override fun onPageFinished(view: WebView?, pageUrl: String?) {
                                         isLoading = false
-                                        if (checkPassed(view)) {
+                                        try { CookieManager.getInstance().flush() } catch (_: Throwable) {}
+                                        if (checkPassed()) {
                                             isVerified = true
                                         }
                                     }
 
                                     override fun doUpdateVisitedHistory(view: WebView?, pageUrl: String?, isReload: Boolean) {
-                                        if (checkPassed(view)) {
+                                        try { CookieManager.getInstance().flush() } catch (_: Throwable) {}
+                                        if (checkPassed()) {
                                             isVerified = true
                                         }
                                     }

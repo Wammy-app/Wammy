@@ -44,6 +44,7 @@ class SourceRateLimitPolicy(
             // extension (e.g. a CDN on an unrelated domain) is still a real, unknown site that
             // deserves conservative pacing by default.
             ?: run {
+                if (normalized in exemptInfrastructureHosts) return RateLimitSpec.NONE
                 logWouldThrottle(normalized, resolver.resolveDefaultIgnoringToggle())
                 return resolver.resolveDefault()
             }
@@ -138,5 +139,33 @@ class SourceRateLimitPolicy(
 
     private companion object {
         const val CACHE_TTL_NANOS = 5_000_000_000L // 5 seconds
+
+        val exemptInfrastructureHosts = setOf(
+            "cloudflare-dns.com",
+            "dns.google",
+            "dns-unfiltered.adguard.com",
+            "dns.quad9.net",
+            "dns.alidns.com",
+            "doh.pub",
+            "doh.360.cn",
+            "dns.twnic.tw",
+            "dns.mullvad.net",
+            "freedns.controld.com",
+            "dns.njal.la",
+            "free.shecan.ir",
+            "1.1.1.1",
+            "1.0.0.1",
+            "8.8.8.8",
+            "8.8.4.4",
+            "yomite-parsers.onrender.com",
+            "animecorner.me",
+            "www.animenewsnetwork.com",
+            "animenewsnetwork.com",
+            "firestore.googleapis.com",
+            "identitytoolkit.googleapis.com",
+            "securetoken.googleapis.com",
+            "raw.githubusercontent.com",
+            "api.github.com",
+        )
     }
 }

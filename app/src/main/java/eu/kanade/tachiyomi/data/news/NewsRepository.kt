@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.data.news.model.NewsFeedResponse
 import eu.kanade.tachiyomi.data.news.model.NewsItem
 import eu.kanade.tachiyomi.data.news.model.extractYouTubeVideoId
 import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.interceptor.rateLimitExempt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -24,7 +25,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class NewsRepository(
-    private val client: OkHttpClient = Injekt.get<NetworkHelper>().client,
+    private val client: OkHttpClient = Injekt.get<NetworkHelper>().client.rateLimitExempt(),
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -32,6 +33,12 @@ class NewsRepository(
     private val fastClient: OkHttpClient = client.newBuilder()
         .connectTimeout(3, TimeUnit.SECONDS)
         .readTimeout(4, TimeUnit.SECONDS)
+        .build()
+
+    // Dedicated client for RSS fallback with a reasonable 10s timeout
+    private val rssClient: OkHttpClient = client.newBuilder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
     // In-memory cache for feed (15 min freshness)
@@ -176,7 +183,7 @@ class NewsRepository(
         val results = mutableListOf<NewsItem>()
         try {
             val acRequest = Request.Builder().url(ANIME_CORNER_FEED).header("User-Agent", "Wammy/1.0").build()
-            client.newCall(acRequest).execute().use { response ->
+            rssClient.newCall(acRequest).execute().use { response ->
                 if (response.isSuccessful) {
                     val xml = response.body.string()
                     val doc = Jsoup.parse(xml, "", Parser.xmlParser())
@@ -215,7 +222,7 @@ class NewsRepository(
         val results = mutableListOf<NewsItem>()
         try {
             val annRequest = Request.Builder().url(ANN_FEED).header("User-Agent", "Wammy/1.0").build()
-            client.newCall(annRequest).execute().use { response ->
+            rssClient.newCall(annRequest).execute().use { response ->
                 if (response.isSuccessful) {
                     val xml = response.body.string()
                     val doc = Jsoup.parse(xml, "", Parser.xmlParser())

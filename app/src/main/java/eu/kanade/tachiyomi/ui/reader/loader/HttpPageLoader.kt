@@ -2,11 +2,14 @@ package eu.kanade.tachiyomi.ui.reader.loader
 
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.database.models.toDomainChapter
+import eu.kanade.tachiyomi.network.interceptor.InteractiveRateLimitBypass
 import eu.kanade.tachiyomi.source.isNovelSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.rateLimitHost
 import eu.kanade.tachiyomi.ui.reader.model.ReaderChapter
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -205,13 +208,22 @@ internal class HttpPageLoader(
             // Manga path (matches mihon baseline).
             if (page.imageUrl.isNullOrEmpty()) {
                 page.status = Page.State.LoadPage
-                page.imageUrl = source.getImageUrl(page)
+                val sourceHost = source.rateLimitHost()
+                page.imageUrl = InteractiveRateLimitBypass.bypassing(sourceHost) {
+                    source.getImageUrl(page)
+                }
             }
             val imageUrl = page.imageUrl!!
 
             if (force || !chapterCache.isImageInCache(imageUrl)) {
                 page.status = Page.State.DownloadImage
-                val imageResponse = source.getImage(page)
+                val imageHost = imageUrl.toHttpUrlOrNull()?.host
+                val sourceHost = source.rateLimitHost()
+                val imageResponse = InteractiveRateLimitBypass.bypassing(imageHost) {
+                    InteractiveRateLimitBypass.bypassing(sourceHost) {
+                        source.getImage(page)
+                    }
+                }
                 chapterCache.putImageToCache(imageUrl, imageResponse)
             }
 

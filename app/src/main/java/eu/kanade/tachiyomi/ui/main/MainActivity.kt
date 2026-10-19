@@ -124,7 +124,13 @@ class MainActivity : BaseActivity() {
     // To be checked by splash screen. If true then splash screen will be removed.
     var ready = false
 
-    private var navigator: Navigator? = null
+    var navigator: Navigator? = null
+        private set
+
+    fun isTopScreenHomeScreen(): Boolean {
+        val lastItem = navigator?.lastItem ?: return true
+        return lastItem is HomeScreen
+    }
 
     init {
         registerSecureActivity(this)
@@ -653,6 +659,14 @@ class MainActivity : BaseActivity() {
                     intent.data?.getQueryParameter("url")?.let { repoUrl ->
                         navigator.popUntilRoot()
                         navigator.push(NovelExtensionReposScreen(repoUrl))
+                    }
+                }
+                // Deep link to open source by ID
+                else if (intent.scheme == "wammy" && intent.data?.host == "source") {
+                    val sourceId = intent.data?.lastPathSegment?.toLongOrNull()
+                    if (sourceId != null) {
+                        navigator.popUntilRoot()
+                        navigator.push(BrowseSourceScreen(sourceId, null))
                     }
                 }
                 null

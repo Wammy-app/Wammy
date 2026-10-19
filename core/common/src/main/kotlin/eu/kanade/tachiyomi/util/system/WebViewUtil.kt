@@ -31,11 +31,21 @@ object WebViewUtil {
      * Example of Chrome on Android:
      *   Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.3
      */
+    @Volatile
+    private var cachedInferredUserAgent: String? = null
+
     fun getInferredUserAgent(context: Context): String {
-        return WebView(context)
-            .getDefaultUserAgentString()
+        cachedInferredUserAgent?.let { return it }
+        val raw = try {
+            WebSettings.getDefaultUserAgent(context)
+        } catch (_: Throwable) {
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36"
+        }
+        val clean = raw
             .replace("; Android .*?\\)".toRegex(), "; Android 10; K)")
             .replace("Version/.* Chrome/".toRegex(), "Chrome/")
+        cachedInferredUserAgent = clean
+        return clean
     }
 
     fun getVersion(context: Context): String {

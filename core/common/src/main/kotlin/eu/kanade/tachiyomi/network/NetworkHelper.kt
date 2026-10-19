@@ -77,14 +77,10 @@ class NetworkHelper(
     val cloudflareClient: OkHttpClient = client
 
     fun defaultUserAgentProvider(): String {
-        val custom = preferences.defaultUserAgent.get().trim()
-        if (custom.isNotBlank() && !custom.contains("Pixel 8") && !custom.contains("Chrome/131") && !custom.contains("Chrome/149")) {
-            return custom
-        }
         return try {
             WebViewUtil.getInferredUserAgent(context)
         } catch (_: Throwable) {
-            custom
+            preferences.defaultUserAgent.get().trim()
         }
     }
 }

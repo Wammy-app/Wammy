@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.util.system.isOutdated
 import eu.kanade.tachiyomi.util.system.toast
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -37,6 +38,17 @@ class CloudflareInterceptor(
     override fun shouldIntercept(response: Response): Boolean {
         // Only 403 and 503 can be Cloudflare challenge responses
         if (response.code !in ERROR_CODES) return false
+
+        // Do not intercept or trigger full challenge solving for static image/cover requests
+        val path = response.request.url.encodedPath.lowercase()
+        val accept = response.request.header("Accept").orEmpty()
+        val isStaticAsset = path.endsWith(".jpg") || path.endsWith(".jpeg") ||
+            path.endsWith(".png") || path.endsWith(".webp") || path.endsWith(".gif") ||
+            path.endsWith(".avif") || path.endsWith(".svg") ||
+            accept.startsWith("image/")
+        if (isStaticAsset) {
+            return false
+        }
 
         val serverHeader = response.header("Server").orEmpty().lowercase()
         val isCloudflareServer = SERVER_CHECK.any { serverHeader.contains(it) }
@@ -89,11 +101,22 @@ class CloudflareInterceptor(
         response: Response,
     ): Response {
         try {
+            val isManaged = response.header("cf-mitigated")?.equals("challenge", ignoreCase = true) == true
             response.close()
+
+            if (chain.call().isCanceled()) {
+                throw IOException("Canceled")
+            }
+
             val resolver = ChallengeCoordinator.instance
             val bypassed = if (resolver != null) {
                 val headers = parseHeaders(request.headers)
-                resolver.resolve(request.url.toString(), headers)
+                resolver.resolve(
+                    url = request.url.toString(),
+                    headers = headers,
+                    isManaged = isManaged,
+                    isCanceled = { chain.call().isCanceled() },
+                )
             } else {
                 val oldCookie = cookieManager.get(request.url)
                     .firstOrNull { it.name == "cf_clearance" }
@@ -102,11 +125,69 @@ class CloudflareInterceptor(
                 true
             }
 
+            if (chain.call().isCanceled()) {
+                throw IOException("Canceled")
+            }
+
             if (!bypassed) {
                 throw CloudflareBypassException()
             }
 
-            return chain.proceed(request)
+            // Build fresh request with cookies and full Chromium client hints matching WebView
+            val userAgent = defaultUserAgentProvider()
+            val match = CHROME_VERSION_REGEX.find(userAgent)
+            val major = match?.groupValues?.getOrNull(1) ?: "130"
+            val full = major + (match?.groupValues?.getOrNull(2)?.ifEmpty { ".0.0.0" } ?: ".0.6723.102")
+
+            val retryBuilder = request.newBuilder()
+                .header("User-Agent", userAgent)
+                .header("Sec-CH-UA", "\"Chromium\";v=\"$major\", \"Not?A_Brand\";v=\"24\", \"Google Chrome\";v=\"$major\"")
+                .header("Sec-CH-UA-Mobile", "?1")
+                .header("Sec-CH-UA-Platform", "\"Android\"")
+                .header("Sec-CH-UA-Platform-Version", "\"10.0.0\"")
+                .header("Sec-CH-UA-Arch", "\"\"")
+                .header("Sec-CH-UA-Bitness", "\"64\"")
+                .header("Sec-CH-UA-Model", "\"K\"")
+                .header("Sec-CH-UA-Full-Version", "\"$full\"")
+                .header("Sec-CH-UA-Full-Version-List", "\"Chromium\";v=\"$full\", \"Not?A_Brand\";v=\"24.0.0.0\", \"Google Chrome\";v=\"$full\"")
+                .header("Sec-Fetch-Dest", "document")
+                .header("Sec-Fetch-Mode", "navigate")
+                .header("Sec-Fetch-Site", "none")
+                .header("Sec-Fetch-User", "?1")
+                .header("Upgrade-Insecure-Requests", "1")
+
+            if (request.header("Accept").isNullOrBlank()) {
+                retryBuilder.header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+            }
+            if (request.header("Accept-Language").isNullOrBlank()) {
+                retryBuilder.header("Accept-Language", "en-US,en;q=0.9")
+            }
+
+            // Explicitly sync and attach cookies directly from CookieManager
+            val rawCookies = try {
+                android.webkit.CookieManager.getInstance().getCookie(request.url.toString())
+            } catch (_: Throwable) {
+                null
+            }
+
+            val clearance = getClearanceFromCookieManager(request.url.toString())
+            if (!rawCookies.isNullOrBlank()) {
+                val fullCookies = if (clearance != null && !rawCookies.contains("cf_clearance")) {
+                    "$rawCookies; cf_clearance=$clearance"
+                } else {
+                    rawCookies
+                }
+                retryBuilder.header("Cookie", fullCookies)
+            } else if (clearance != null) {
+                retryBuilder.header("Cookie", "cf_clearance=$clearance")
+            }
+
+            val retryResponse = chain.proceed(retryBuilder.build())
+            if (shouldIntercept(retryResponse)) {
+                retryResponse.close()
+                throw CloudflareBypassException()
+            }
+            return retryResponse
         }
         // Because OkHttp's enqueue only handles IOExceptions, wrap the exception so that
         // we don't crash the entire app
@@ -115,6 +196,36 @@ class CloudflareInterceptor(
         } catch (e: Exception) {
             throw IOException(e)
         }
+    }
+
+    private fun getClearanceFromCookieManager(url: String): String? {
+        val httpUrl = url.toHttpUrlOrNull()
+        val urlsToCheck = buildList {
+            add(url)
+            if (httpUrl != null) {
+                val host = httpUrl.host
+                val nonWww = host.removePrefix("www.")
+                val www = if (host.startsWith("www.")) host else "www.$host"
+                add("${httpUrl.scheme}://$host/")
+                add("${httpUrl.scheme}://$nonWww/")
+                add("${httpUrl.scheme}://$www/")
+                add("https://$host/")
+                add("https://$nonWww/")
+                add("https://$www/")
+            }
+        }
+        val cm = try { android.webkit.CookieManager.getInstance() } catch (_: Throwable) { return null }
+        for (u in urlsToCheck) {
+            val cookies = try { cm.getCookie(u) } catch (_: Throwable) { null } ?: continue
+            for (c in cookies.split(";")) {
+                val trimmed = c.trim()
+                if (trimmed.startsWith("cf_clearance=")) {
+                    val value = trimmed.substringAfter("=").trim()
+                    if (value.isNotEmpty()) return value
+                }
+            }
+        }
+        return null
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -241,5 +352,6 @@ class CloudflareInterceptor(
 private val ERROR_CODES = listOf(403, 503)
 private val SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
 private val COOKIE_NAMES = listOf("cf_clearance")
+private val CHROME_VERSION_REGEX = """Chrome/(\d+)(\.[\d.]+)?""".toRegex()
 
 private class CloudflareBypassException : Exception()

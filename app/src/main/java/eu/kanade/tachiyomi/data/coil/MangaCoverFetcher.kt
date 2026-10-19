@@ -63,6 +63,15 @@ class MangaCoverFetcher(
     private val diskCacheKey: String
         get() = diskCacheKeyLazy.value
 
+    private val effectiveUrl: String? by lazy {
+        if (url?.contains("images.novelbin.com") == true || url?.contains("novel_80_113") == true) {
+            val slug = url.substringAfterLast("/").substringBeforeLast(".")
+            if (slug.isNotBlank()) "https://rs.novelbuddy.me/covers/$slug.png" else url
+        } else {
+            url
+        }
+    }
+
     override suspend fun fetch(): FetchResult {
         // Use custom cover if exists
         val useCustomCover = options.extras.getOrDefault(USE_CUSTOM_COVER_KEY)
@@ -75,12 +84,13 @@ class MangaCoverFetcher(
 
         // diskCacheKey is thumbnail_url
         // Return error silently for null/empty URLs - Coil will use the error placeholder
-        if (url.isNullOrEmpty()) {
+        val targetUrl = effectiveUrl
+        if (targetUrl.isNullOrEmpty()) {
             throw IOException("No cover URL available")
         }
-        return when (getResourceType(url)) {
-            Type.File -> fileLoader(File(url.substringAfter("file://")))
-            Type.URI -> fileUriLoader(url)
+        return when (getResourceType(targetUrl)) {
+            Type.File -> fileLoader(File(targetUrl.substringAfter("file://")))
+            Type.URI -> fileUriLoader(targetUrl)
             Type.URL -> httpLoader()
             null -> throw IOException("Invalid cover URL format")
         }
@@ -209,14 +219,26 @@ class MangaCoverFetcher(
     }
 
     private suspend fun executeNetworkRequest(): Response {
+        val reqUrl = effectiveUrl ?: throw IOException("No cover URL available")
         val client = sourceLazy.value?.client ?: callFactoryLazy.value
-        // Cover thumbnails only ever load while some screen is actually showing them (Browse,
-        // Library, Updates, etc.) - background jobs never render Compose UI, so they never reach
-        // this fetcher. Bypassing rate limiting here matches the same interactive-vs-background
-        // reasoning as MangaScreenModel's fetches, just applied to a shared, screen-agnostic
-        // fetcher instead of a single call site.
-        val host = sourceLazy.value?.baseUrl?.toHttpUrlOrNull()?.host
-        val response = InteractiveRateLimitBypass.bypassing(host) { client.newCall(newRequest()).await() }
+        val coverHost = reqUrl.toHttpUrlOrNull()?.host
+        val sourceHost = sourceLazy.value?.baseUrl?.toHttpUrlOrNull()?.host
+        var response = InteractiveRateLimitBypass.bypassing(coverHost) {
+            InteractiveRateLimitBypass.bypassing(sourceHost) {
+                client.newCall(newRequest(reqUrl)).await()
+            }
+        }
+
+        // If the primary cover URL failed with 404 and is a rewritten novel cover, try novellunar fallback
+        if (!response.isSuccessful && response.code == 404 && reqUrl.contains("rs.novelbuddy.me/covers/")) {
+            val slug = reqUrl.substringAfterLast("/").substringBeforeLast(".")
+            val fallbackUrl = "https://img.novellunar.com/$slug.webp"
+            try {
+                response.close()
+                response = client.newCall(newRequest(fallbackUrl)).await()
+            } catch (_: Exception) {}
+        }
+
         if (!response.isSuccessful && response.code != HTTP_NOT_MODIFIED) {
             response.close()
             throw IOException(response.message)
@@ -224,9 +246,9 @@ class MangaCoverFetcher(
         return response
     }
 
-    private fun newRequest(): Request {
+    private fun newRequest(requestUrl: String = effectiveUrl!!): Request {
         val request = Request.Builder().apply {
-            url(url!!)
+            url(requestUrl)
 
             val sourceHeaders = sourceLazy.value?.headers
             if (sourceHeaders != null) {

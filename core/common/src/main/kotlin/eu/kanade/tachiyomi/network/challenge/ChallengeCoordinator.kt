@@ -8,8 +8,13 @@ object ChallengeCoordinator {
     @Volatile
     var instance: ChallengeResolver? = null
 
-    fun resolve(url: String, headers: Map<String, String>? = null): Boolean {
-        return instance?.resolve(url, headers) ?: false
+    fun resolve(
+        url: String,
+        headers: Map<String, String>? = null,
+        isManaged: Boolean = false,
+        isCanceled: () -> Boolean = { false },
+    ): Boolean {
+        return instance?.resolve(url, headers, isManaged, isCanceled) ?: false
     }
 
     fun hasClearance(url: String): Boolean {

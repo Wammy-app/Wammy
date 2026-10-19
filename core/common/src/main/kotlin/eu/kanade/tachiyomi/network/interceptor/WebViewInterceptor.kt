@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 
 abstract class WebViewInterceptor(
     private val context: Context,
-    private val defaultUserAgentProvider: () -> String,
+    protected val defaultUserAgentProvider: () -> String,
 ) : Interceptor {
 
     /**

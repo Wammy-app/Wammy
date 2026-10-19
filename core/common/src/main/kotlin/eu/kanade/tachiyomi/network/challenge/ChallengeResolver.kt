@@ -9,7 +9,12 @@ interface ChallengeResolver {
      * Resolves a challenge for the given [url].
      * Blocks or suspends until resolution completes, returning true if resolved, false otherwise.
      */
-    fun resolve(url: String, headers: Map<String, String>? = null): Boolean
+    fun resolve(
+        url: String,
+        headers: Map<String, String>? = null,
+        isManaged: Boolean = false,
+        isCanceled: () -> Boolean = { false },
+    ): Boolean
 
     /**
      * Checks if the given [url] or host already has an active clearance cookie.

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.network
 
+import eu.kanade.tachiyomi.network.interceptor.rateLimitExempt
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.dnsoverhttps.DnsOverHttps
@@ -22,8 +23,10 @@ const val PREF_DOH_CONTROLD = 10
 const val PREF_DOH_NJALLA = 11
 const val PREF_DOH_SHECAN = 12
 
+private fun OkHttpClient.Builder.buildDohClient(): OkHttpClient = build().rateLimitExempt()
+
 fun OkHttpClient.Builder.dohCloudflare() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("162.159.36.1"),
@@ -40,7 +43,7 @@ fun OkHttpClient.Builder.dohCloudflare() = dns(
 )
 
 fun OkHttpClient.Builder.dohGoogle() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://dns.google/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("8.8.4.4"),
@@ -54,7 +57,7 @@ fun OkHttpClient.Builder.dohGoogle() = dns(
 // AdGuard "Default" DNS works too but for the sake of making sure no site is blacklisted,
 // we use "Unfiltered"
 fun OkHttpClient.Builder.dohAdGuard() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://dns-unfiltered.adguard.com/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("94.140.14.140"),
@@ -66,7 +69,7 @@ fun OkHttpClient.Builder.dohAdGuard() = dns(
 )
 
 fun OkHttpClient.Builder.dohQuad9() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://dns.quad9.net/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("9.9.9.9"),
@@ -78,7 +81,7 @@ fun OkHttpClient.Builder.dohQuad9() = dns(
 )
 
 fun OkHttpClient.Builder.dohAliDNS() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://dns.alidns.com/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("223.5.5.5"),
@@ -90,7 +93,7 @@ fun OkHttpClient.Builder.dohAliDNS() = dns(
 )
 
 fun OkHttpClient.Builder.dohDNSPod() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://doh.pub/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("1.12.12.12"),
@@ -100,7 +103,7 @@ fun OkHttpClient.Builder.dohDNSPod() = dns(
 )
 
 fun OkHttpClient.Builder.doh360() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://doh.360.cn/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("101.226.4.6"),
@@ -115,7 +118,7 @@ fun OkHttpClient.Builder.doh360() = dns(
 )
 
 fun OkHttpClient.Builder.dohQuad101() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://dns.twnic.tw/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("101.101.101.101"),
@@ -131,7 +134,7 @@ fun OkHttpClient.Builder.dohQuad101() = dns(
  * Source: https://mullvad.net/en/help/dns-over-https-and-dns-over-tls
  */
 fun OkHttpClient.Builder.dohMullvad() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url(" https://dns.mullvad.net/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("194.242.2.2"),
@@ -146,7 +149,7 @@ fun OkHttpClient.Builder.dohMullvad() = dns(
  * Source: https://controld.com/free-dns/?
  */
 fun OkHttpClient.Builder.dohControlD() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://freedns.controld.com/p0".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("76.76.2.0"),
@@ -162,7 +165,7 @@ fun OkHttpClient.Builder.dohControlD() = dns(
  * Non logging and uncensored
  */
 fun OkHttpClient.Builder.dohNajalla() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://dns.njal.la/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("95.215.19.53"),
@@ -175,7 +178,7 @@ fun OkHttpClient.Builder.dohNajalla() = dns(
  * Source: https://shecan.ir/
  */
 fun OkHttpClient.Builder.dohShecan() = dns(
-    DnsOverHttps.Builder().client(build())
+    DnsOverHttps.Builder().client(buildDohClient())
         .url("https://free.shecan.ir/dns-query".toHttpUrl())
         .bootstrapDnsHosts(
             InetAddress.getByName("178.22.122.100"),

@@ -1,4 +1,4 @@
-﻿package eu.kanade.tachiyomi.ui.browse.source.browse
+package eu.kanade.tachiyomi.ui.browse.source.browse
 
 import android.content.res.Configuration
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -25,9 +25,11 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.translation.TranslationEngineManager
+import eu.kanade.tachiyomi.network.interceptor.InteractiveRateLimitBypass
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.isNovelSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.rateLimitHost
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -136,10 +138,14 @@ class BrowseSourceViewModel(
         viewModelScope.launchIO {
             val catalogueSource = source as? CatalogueSource ?: return@launchIO
 
+            val sourceHost = source.rateLimitHost()
+
             val latestDeferred = if (catalogueSource.supportsLatest) {
                 async {
                     try {
-                        val page = catalogueSource.getLatestUpdates(1)
+                        val page = InteractiveRateLimitBypass.bypassing(sourceHost) {
+                            catalogueSource.getLatestUpdates(1)
+                        }
                         page.mangas.map { it.toDomainManga(sourceId, catalogueSource.isNovelSource()) }
                             .distinctBy { it.url }
                             .let { networkToLocalManga(it) }
@@ -151,7 +157,9 @@ class BrowseSourceViewModel(
 
             val browseDeferred = async {
                 try {
-                    val page = catalogueSource.getPopularManga(1)
+                    val page = InteractiveRateLimitBypass.bypassing(sourceHost) {
+                        catalogueSource.getPopularManga(1)
+                    }
                     page.mangas.map { it.toDomainManga(sourceId, catalogueSource.isNovelSource()) }
                         .distinctBy { it.url }
                         .let { networkToLocalManga(it) }

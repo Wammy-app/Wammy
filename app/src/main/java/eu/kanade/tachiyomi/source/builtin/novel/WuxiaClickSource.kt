@@ -47,7 +47,9 @@ class WuxiaClickSource(
         if (nextData != null) {
             val root = runCatching { json.parseToJsonElement(nextData).jsonObject }.getOrNull()
             val pageProps = root?.get("props")?.jsonObject?.get("pageProps")?.jsonObject
-            val items = pageProps?.get("novels")?.jsonArray
+            val items = pageProps?.get("listing")?.jsonObject?.get("items")?.jsonArray
+                ?: pageProps?.get("result")?.jsonObject?.get("items")?.jsonArray
+                ?: pageProps?.get("novels")?.jsonArray
                 ?: pageProps?.get("items")?.jsonArray
                 ?: pageProps?.get("results")?.jsonArray
             if (items != null) {
@@ -58,7 +60,7 @@ class WuxiaClickSource(
                     val coverKey = obj["coverKey"]?.jsonPrimitive?.content
                     val coverOriginal = obj["coverOriginal"]?.jsonPrimitive?.content
                     val coverUrl = when {
-                        !coverKey.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverKey-360.webp"
+                        !coverKey.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverKey-240.webp"
                         !coverOriginal.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverOriginal"
                         else -> null
                     }
@@ -68,8 +70,15 @@ class WuxiaClickSource(
                         this.thumbnail_url = coverUrl
                     }
                 }
-                val hasNext = pageProps?.get("hasNext")?.jsonPrimitive?.content?.toBoolean()
-                    ?: (novels.size >= 20)
+                val hasNext = pageProps?.get("listing")?.jsonObject?.let { listing ->
+                    val pageNum = listing["page"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
+                    val totalPages = listing["totalPages"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
+                    pageNum < totalPages
+                } ?: pageProps?.get("result")?.jsonObject?.let { result ->
+                    val pageNum = result["page"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
+                    val totalPages = result["totalPages"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
+                    pageNum < totalPages
+                } ?: (novels.size >= 20)
                 return MangasPage(novels, hasNext)
             }
         }
@@ -124,7 +133,7 @@ class WuxiaClickSource(
                     val coverKey = novelObj["coverKey"]?.jsonPrimitive?.content
                     val coverOriginal = novelObj["coverOriginal"]?.jsonPrimitive?.content
                     thumbnail_url = when {
-                        !coverKey.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverKey-360.webp"
+                        !coverKey.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverKey-240.webp"
                         !coverOriginal.isNullOrBlank() -> "https://cdn.wuxiaworld.eu/$coverOriginal"
                         else -> doc.selectFirst("img[alt*='cover'], img.aspect-\\[3\\/4\\]")?.attr("src")
                             ?: doc.selectFirst("meta[property='og:image']")?.attr("content")
@@ -158,7 +167,8 @@ class WuxiaClickSource(
         if (nextData != null) {
             val root = runCatching { json.parseToJsonElement(nextData).jsonObject }.getOrNull()
             val pageProps = root?.get("props")?.jsonObject?.get("pageProps")?.jsonObject
-            val chaptersArray = pageProps?.get("chapters")?.jsonObject?.get("items")?.jsonArray
+            val chaptersArray = pageProps?.get("toc")?.jsonObject?.get("items")?.jsonArray
+                ?: pageProps?.get("chapters")?.jsonObject?.get("items")?.jsonArray
                 ?: pageProps?.get("items")?.jsonArray
             if (chaptersArray != null) {
                 return chaptersArray.mapNotNull { chEl ->
@@ -197,8 +207,10 @@ class WuxiaClickSource(
         if (nextData != null) {
             val root = runCatching { json.parseToJsonElement(nextData).jsonObject }.getOrNull()
             val pageProps = root?.get("props")?.jsonObject?.get("pageProps")?.jsonObject
-            val chapterObj = pageProps?.get("chapter")?.jsonObject
-            val contentArray = chapterObj?.get("content")?.jsonArray
+            val chapterObj = pageProps?.get("data")?.jsonObject?.get("chapter")?.jsonObject
+                ?: pageProps?.get("chapter")?.jsonObject
+            val contentArray = chapterObj?.get("paragraphs")?.jsonArray
+                ?: chapterObj?.get("content")?.jsonArray
             if (contentArray != null) {
                 val paragraphs = contentArray.mapNotNull { it.jsonPrimitive.content }
                 if (paragraphs.isNotEmpty()) {

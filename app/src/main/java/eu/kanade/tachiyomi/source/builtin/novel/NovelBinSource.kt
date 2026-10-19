@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.net.URI
 import java.net.URLEncoder
 
@@ -73,9 +74,7 @@ class NovelBinSource(
             }
 
             val title = titleEl.attr("title").ifBlank { titleEl.text() }.trim()
-            val cover = el.selectFirst("img.cover, .col-novel img, img")?.let { img ->
-                img.attr("data-src").ifBlank { img.attr("src") }
-            }?.let { resolveUrl(it) }
+            val cover = resolveCoverUrl(el.selectFirst("img.cover, .col-novel img, img"), cleanUrl)
 
             SManga.create().apply {
                 this.url = cleanUrl
@@ -88,10 +87,38 @@ class NovelBinSource(
         return MangasPage(novels, hasNext)
     }
 
+    private fun resolveCoverUrl(imgElement: Element?, novelUrl: String): String? {
+        val dataSrc = imgElement?.attr("data-src").orEmpty()
+        val dataCfSrc = imgElement?.attr("data-cfsrc").orEmpty()
+        val dataOrig = imgElement?.attr("data-original").orEmpty()
+        val src = imgElement?.attr("src").orEmpty()
+
+        val rawSrc = when {
+            dataSrc.isNotBlank() && !dataSrc.startsWith("data:") -> dataSrc
+            dataCfSrc.isNotBlank() && !dataCfSrc.startsWith("data:") -> dataCfSrc
+            dataOrig.isNotBlank() && !dataOrig.startsWith("data:") -> dataOrig
+            src.isNotBlank() && !src.startsWith("data:") -> src
+            else -> null
+        }
+
+        // If the cover URL points to dead images.novelbin.com (NXDOMAIN) or thumbnail path, rewrite to fast public CDN
+        if (rawSrc == null || rawSrc.contains("images.novelbin.com") || rawSrc.contains("novel_80_113")) {
+            val slug = rawSrc?.substringAfterLast("/")?.substringBeforeLast(".")?.trim()
+                ?.takeIf { it.isNotBlank() && it != "default" && it != "cover" }
+                ?: novelUrl.substringAfterLast("/").substringBefore("?").trim()
+            if (slug.isNotBlank()) {
+                return "https://rs.novelbuddy.me/covers/$slug.png"
+            }
+        }
+
+        return rawSrc?.let { resolveUrl(it) }
+    }
+
     // =========================== Manga Details ===========================
 
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
+        val novelUrl = response.request.url.encodedPath
         return SManga.create().apply {
             title = doc.selectFirst("h3.title, .title")?.text()?.trim().orEmpty()
             author = doc.select("ul.info li:has(h3:contains(Author)) a, .info-meta a[href*='/novelbin-author/'], .author a").eachText().joinToString()
@@ -101,9 +128,7 @@ class NovelBinSource(
                 doc.select("ul.info li:has(h3:contains(Status)) a:contains(Completed)").isNotEmpty() -> SManga.COMPLETED
                 else -> SManga.ONGOING
             }
-            thumbnail_url = doc.selectFirst(".books .book img, .desc .book img, img.cover")?.let { img ->
-                img.attr("data-src").ifBlank { img.attr("src") }
-            }?.let { resolveUrl(it) }
+            thumbnail_url = resolveCoverUrl(doc.selectFirst(".books .book img, .desc .book img, img.cover"), novelUrl)
         }
     }
 
@@ -111,21 +136,37 @@ class NovelBinSource(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val doc = response.asJsoup()
-        var chapterElements = doc.select("#list-chapter li a, .list-chapter li a, ul.list-chapter a")
-
-        // If chapter list is loaded dynamically, check for novelId to fetch AJAX archive
+        var chapterElements = doc.select("#list-chapter li a, .list-chapter li a, ul.list-chapter a, [data-chapter-item] a, li[data-chapter-id] a")
         if (chapterElements.isEmpty()) {
-            val novelId = doc.selectFirst("[data-novel-id], input#novelId, input[name='novelId']")?.let {
-                it.attr("data-novel-id").ifBlank { it.attr("value") }
+            val templateHtml = doc.select("template").map { it.html() }.joinToString("")
+            if (templateHtml.isNotBlank()) {
+                val tDoc = org.jsoup.Jsoup.parse(templateHtml)
+                chapterElements = tDoc.select("li a, a[href*='/chapter-'], [data-chapter-item] a")
             }
-            if (!novelId.isNullOrBlank()) {
+        }
+
+        // If chapter list is loaded dynamically or truncated, check for novelId to fetch full AJAX archive
+        val novelId = doc.selectFirst("[data-novel-id], input#novelId, input[name='novelId']")?.let {
+            it.attr("data-novel-id").ifBlank { it.attr("value") }
+        }
+        if (!novelId.isNullOrBlank()) {
+            try {
                 val ajaxUrl = "$baseUrl/ajax/chapter-archive?novelId=$novelId"
                 val ajaxResp = client.newCall(GET(ajaxUrl, headers)).execute()
                 if (ajaxResp.isSuccessful) {
                     val ajaxDoc = ajaxResp.asJsoup()
-                    chapterElements = ajaxDoc.select("li a, a[href*='/chapter-']")
+                    var ajaxElements = ajaxDoc.select("li a, a[href*='/chapter-'], [data-chapter-item] a, li[data-chapter-id] a")
+                    if (ajaxElements.isEmpty()) {
+                        val tHtml = ajaxDoc.select("template").map { it.html() }.joinToString("")
+                        if (tHtml.isNotBlank()) {
+                            ajaxElements = org.jsoup.Jsoup.parse(tHtml).select("li a, a[href*='/chapter-']")
+                        }
+                    }
+                    if (ajaxElements.isNotEmpty()) {
+                        chapterElements = ajaxElements
+                    }
                 }
-            }
+            } catch (_: Exception) {}
         }
 
         return chapterElements.mapIndexedNotNull { index, a ->

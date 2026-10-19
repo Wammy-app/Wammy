@@ -2,9 +2,12 @@ package tachiyomi.data.source
 
 import androidx.paging.PagingState
 import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.network.interceptor.InteractiveRateLimitBypass
 import eu.kanade.tachiyomi.source.isNovelSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.online.HttpSource
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,11 +74,14 @@ abstract class BaseSourcePagingSource(
                 }
             }
 
+            val sourceHost = (source as? HttpSource)?.baseUrl?.toHttpUrlOrNull()?.host
             val startTime = System.currentTimeMillis()
             val mangasPage = withIOContext {
-                requestNextPage(page.toInt())
-                    .takeIf { it.mangas.isNotEmpty() }
-                    ?: throw NoResultsException()
+                InteractiveRateLimitBypass.bypassing(sourceHost) {
+                    requestNextPage(page.toInt())
+                        .takeIf { it.mangas.isNotEmpty() }
+                        ?: throw NoResultsException()
+                }
             }
             lastLoadTime = System.currentTimeMillis()
 

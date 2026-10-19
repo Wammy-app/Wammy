@@ -20,7 +20,7 @@ import java.net.URLEncoder
  */
 class NovelhallSource(
     override val id: Long = 80030011L,
-    override val baseUrl: String = "https://novelhall.com",
+    override val baseUrl: String = "https://www.novelhall.com",
 ) : BuiltinNovelSource() {
 
     override val name: String = "Novelhall"
@@ -29,7 +29,8 @@ class NovelhallSource(
     // =========================== Popular ===========================
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = if (page <= 1) "$baseUrl/all2020-1.html" else "$baseUrl/all2020-$page.html"
+        val pageNum = if (page <= 1) 1 else page
+        val url = "$baseUrl/all2022-$pageNum.html"
         return GET(url, headers)
     }
 
@@ -41,7 +42,7 @@ class NovelhallSource(
     // =========================== Latest ===========================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = if (page <= 1) "$baseUrl/all2020-lastupdate-1.html" else "$baseUrl/all2020-lastupdate-$page.html"
+        val url = if (page <= 1) "$baseUrl/lastupdate.html" else "$baseUrl/lastupdate-$page.html"
         return GET(url, headers)
     }
 
@@ -63,10 +64,14 @@ class NovelhallSource(
     // =========================== Helper Parsing ===========================
 
     private fun parseNovelsFromDoc(doc: Document): MangasPage {
-        val novels = doc.select(".section-list li, .post-content, .book-info, tr:has(td.name)").mapNotNull { el ->
-            val titleEl = el.selectFirst("h2 a, a.name, h3 a, td.name a") ?: return@mapNotNull null
+        val elements = doc.select(".btm, tr:has(a[href*='-']), .section-list li, .book-info, li:has(a[href*='-']), .top-list li, ul li:has(img)")
+        val novels = elements.mapNotNull { el ->
+            val titleEl = el.selectFirst("td:not(.type):not(.hidden-xs) a, td a[href*='-']:not(.chapter):not(.writer), a.name, h2 a, h3 a, a[href*='-']")
+                ?: return@mapNotNull null
             val href = titleEl.attr("href").trim()
-            if (href.isBlank()) return@mapNotNull null
+            if (href.isBlank() || href.startsWith("javascript:") || href.contains("/genre/") || href.contains("/dmca")) {
+                return@mapNotNull null
+            }
 
             val cleanUrl = if (href.startsWith("http")) {
                 val uri = URI(href)
@@ -76,6 +81,8 @@ class NovelhallSource(
             }
 
             val title = titleEl.text().trim()
+            if (title.isBlank()) return@mapNotNull null
+
             val cover = el.selectFirst("img")?.let { img ->
                 img.attr("data-src").ifBlank { img.attr("src") }
             }?.let { resolveUrl(it) }
@@ -87,7 +94,7 @@ class NovelhallSource(
             }
         }.distinctBy { it.url }
 
-        val hasNext = doc.select(".page a:contains(>), .page a:contains(Next), a:contains(Next)").isNotEmpty()
+        val hasNext = doc.select(".page-nav a[rel='next'], .page-nav a:contains(>), .page a:contains(>), .page a:contains(Next), a:contains(Next)").isNotEmpty()
         return MangasPage(novels, hasNext)
     }
 

@@ -20,10 +20,22 @@ class AndroidCookieJar : CookieJar {
     }
 
     fun get(url: HttpUrl): List<Cookie> {
-        val cookies = manager.getCookie(url.toString())
+        val urlString = url.toString()
+        var cookies = manager.getCookie(urlString)
 
-        return if (cookies != null && cookies.isNotEmpty()) {
-            cookies.split(";").mapNotNull { Cookie.parse(url, it) }
+        // Fallback for www vs non-www domain matching, ensuring Cloudflare cf_clearance is never missed
+        if (cookies.isNullOrBlank() || !cookies.contains("cf_clearance")) {
+            val host = url.host
+            val altHost = if (host.startsWith("www.")) host.removePrefix("www.") else "www.$host"
+            val altCookies = manager.getCookie("${url.scheme}://$altHost/")
+                ?: manager.getCookie("${url.scheme}://$host/")
+            if (!altCookies.isNullOrBlank()) {
+                cookies = if (cookies.isNullOrBlank()) altCookies else "$cookies; $altCookies"
+            }
+        }
+
+        return if (!cookies.isNullOrBlank()) {
+            cookies.split(";").mapNotNull { Cookie.parse(url, it.trim()) }
         } else {
             emptyList()
         }

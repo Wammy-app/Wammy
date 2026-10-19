@@ -42,12 +42,14 @@ class MangaDexSource(
         .add("User-Agent", "Wammy/1.0 (Android; contact@wammy.app)")
         .add("Referer", "$baseUrl/")
 
+    private val contentRatings = "&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica"
+
     // =========================== Popular ===========================
 
     override fun popularMangaRequest(page: Int): Request {
         val offset = (page - 1) * 20
         val langParam = if (lang == "all") "" else "&availableTranslatedLanguage[]=$lang"
-        val url = "$apiBase/manga?limit=20&offset=$offset&order[followedCount]=desc&includes[]=cover_art&includes[]=author$langParam"
+        val url = "$apiBase/manga?limit=20&offset=$offset&order[followedCount]=desc&includes[]=cover_art&includes[]=author$contentRatings$langParam"
         return GET(url, headers)
     }
 
@@ -73,7 +75,7 @@ class MangaDexSource(
     override fun latestUpdatesRequest(page: Int): Request {
         val offset = (page - 1) * 20
         val langParam = if (lang == "all") "" else "&availableTranslatedLanguage[]=$lang"
-        val url = "$apiBase/manga?limit=20&offset=$offset&order[latestUploadedChapter]=desc&includes[]=cover_art&includes[]=author$langParam"
+        val url = "$apiBase/manga?limit=20&offset=$offset&order[latestUploadedChapter]=desc&includes[]=cover_art&includes[]=author$contentRatings$langParam"
         return GET(url, headers)
     }
 
@@ -85,7 +87,7 @@ class MangaDexSource(
         val offset = (page - 1) * 20
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val langParam = if (lang == "all") "" else "&availableTranslatedLanguage[]=$lang"
-        val url = "$apiBase/manga?limit=20&offset=$offset&title=$encoded&includes[]=cover_art&includes[]=author$langParam"
+        val url = "$apiBase/manga?limit=20&offset=$offset&title=$encoded&includes[]=cover_art&includes[]=author$contentRatings$langParam"
         return GET(url, headers)
     }
 

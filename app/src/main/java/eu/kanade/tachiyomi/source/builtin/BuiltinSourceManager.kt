@@ -264,15 +264,15 @@ class BuiltinSourceManager(
         BuiltinSourceRecord(
             id = 80030011L,
             name = "Novelhall",
-            baseUrl = "https://novelhall.com",
+            baseUrl = "https://www.novelhall.com",
             lang = "en",
             engineType = BuiltinEngineType.NOVELHALL,
             isDefaultEnabled = true,
         ),
         BuiltinSourceRecord(
             id = 80030012L,
-            name = "LightNovelWorld",
-            baseUrl = "https://www.lightnovelworld.com",
+            name = "NovelFull",
+            baseUrl = "https://novelfull.net",
             lang = "en",
             engineType = BuiltinEngineType.LIGHTNOVELWORLD,
             isDefaultEnabled = true,
