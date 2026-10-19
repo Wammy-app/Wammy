@@ -1,4 +1,4 @@
-﻿package eu.kanade.presentation.browse.components
+package eu.kanade.presentation.browse.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,6 +18,7 @@ import eu.kanade.presentation.library.components.MangaCompactGridItem
 import kotlinx.coroutines.flow.StateFlow
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaCover
+import tachiyomi.domain.manga.model.effectiveRating
 import tachiyomi.presentation.core.util.plus
 import eu.kanade.presentation.browse.components.GlobalSearchCardRow
 import tachiyomi.presentation.core.components.material.padding
@@ -157,6 +158,7 @@ private fun BrowseSourceCompactGridItem(
         coverBadgeStart = {
             InLibraryBadge(enabled = manga.favorite)
         },
+        rating = manga.effectiveRating,
         onLongClick = onLongClick,
         onClick = onClick,
     )

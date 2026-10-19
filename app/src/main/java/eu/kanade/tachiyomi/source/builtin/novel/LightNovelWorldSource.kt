@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
@@ -81,10 +83,19 @@ class LightNovelWorldSource(
                 img.attr("data-src").ifBlank { img.attr("src") }
             }?.let { resolveUrl(it) }
 
+            val author = el.selectFirst(".item a[href*='/author/'], a[href*='/author/'], .author")?.text()?.trim()
+            val scoreText = el.selectFirst(".score, .rate, [itemprop='ratingValue']")?.text()?.trim()
+            val rawScore = scoreText?.toDoubleOrNull()
+            val ratingVal = if (rawScore != null && rawScore > 0.0) {
+                if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+            } else null
+
             SManga.create().apply {
                 this.url = cleanUrl
                 this.title = title
                 this.thumbnail_url = cover
+                if (!author.isNullOrBlank()) this.author = author
+                if (ratingVal != null) this.rating = ratingVal
             }
         }.distinctBy { it.url }
 
@@ -108,6 +119,17 @@ class LightNovelWorldSource(
             thumbnail_url = doc.selectFirst(".pic img, .book img, img[fetchpriority='high']")?.let { img ->
                 img.attr("data-src").ifBlank { img.attr("src") }
             }?.let { resolveUrl(it) }
+
+            val scoreText = doc.selectFirst(".score, .rate, [itemprop='ratingValue'], .rating-num, .small-rate-info .rate-val")?.text()?.trim()
+            val rawScore = scoreText?.toDoubleOrNull()
+            if (rawScore != null && rawScore > 0.0) {
+                this.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+            }
+            val reviewText = doc.selectFirst(".reviews, [itemprop='reviewCount'], .total-votes, [itemprop='ratingCount']")?.text()?.trim()?.replace(Regex("[^0-9]"), "")
+            val reviews = reviewText?.toLongOrNull()
+            if (reviews != null && reviews > 0) {
+                this.views = reviews
+            }
         }
     }
 

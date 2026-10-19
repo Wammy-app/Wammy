@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
@@ -94,6 +96,17 @@ open class MadaraEngineSource(
 
         val img = element.select("img").first()
         manga.thumbnail_url = extractImageUrl(img)
+
+        val author = element.select(".post-author a, .author a, .mg_author a, .post-on a").text().trim()
+        if (author.isNotBlank()) {
+            manga.author = author
+        }
+        val scoreText = element.select(".post-total-rating .score, .score, [itemprop='ratingValue']").text().trim()
+        val rawScore = scoreText.toDoubleOrNull()
+        if (rawScore != null && rawScore > 0.0) {
+            manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+
         return manga
     }
 
@@ -163,6 +176,15 @@ open class MadaraEngineSource(
 
         val img = document.select(".summary_image img, .manga-poster img, .tab-summary img").first()
         manga.thumbnail_url = extractImageUrl(img)
+
+        val score = document.select(".post-total-rating .score, .score, [itemprop='ratingValue']").text().trim().toDoubleOrNull()
+        if (score != null && score > 0.0) {
+            manga.rating = if (score <= 5.0) score * 2.0 else score
+        }
+        val votes = document.select(".vote-count, .post-total-rating .total-votes, [itemprop='ratingCount']").text().trim().replace(Regex("[^0-9]"), "").toLongOrNull()
+        if (votes != null && votes > 0) {
+            manga.views = votes
+        }
 
         return manga
     }

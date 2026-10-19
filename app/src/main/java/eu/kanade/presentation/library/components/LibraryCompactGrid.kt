@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import eu.kanade.tachiyomi.ui.library.LibraryItem
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.MangaCover
+import tachiyomi.domain.manga.model.effectiveRating
 
 @Composable
 internal fun LibraryCompactGrid(
@@ -56,6 +57,7 @@ internal fun LibraryCompactGrid(
                         sourceLanguage = libraryItem.badges.sourceLanguage,
                     )
                 },
+                rating = manga.effectiveRating,
                 onLongClick = { onLongClick(libraryItem.libraryManga) },
                 onClick = { onClick(libraryItem.libraryManga) },
                 onClickContinueReading = if (onClickContinueReading != null && libraryItem.unreadCount > 0) {

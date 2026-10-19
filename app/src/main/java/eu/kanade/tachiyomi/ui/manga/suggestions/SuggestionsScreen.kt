@@ -27,6 +27,8 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import eu.kanade.presentation.util.Screen
+import tachiyomi.domain.manga.model.effectiveRating
+import tachiyomi.domain.manga.model.effectiveViews
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.screens.EmptyScreen
@@ -111,6 +113,9 @@ class SuggestionsScreen(
                             }
                         },
                         coverBadgeEnd = { },
+                        rating = manga.effectiveRating,
+                        views = manga.effectiveViews,
+                        subtitle = manga.author,
                         onLongClick = { },
                         onClick = {
                             navigator.push(MangaScreen(manga.id, true))

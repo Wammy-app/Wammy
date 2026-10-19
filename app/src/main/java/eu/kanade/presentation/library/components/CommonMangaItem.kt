@@ -16,6 +16,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.font.FontWeight
+import java.util.Locale
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
@@ -80,6 +88,8 @@ fun MangaCompactGridItem(
     coverAlpha: Float = 1f,
     coverBadgeStart: @Composable (RowScope.() -> Unit)? = null,
     coverBadgeEnd: @Composable (RowScope.() -> Unit)? = null,
+    coverBadgeBottomStart: @Composable (RowScope.() -> Unit)? = null,
+    rating: Double? = null,
 ) {
     GridItemSelectable(
         isSelected = isSelected,
@@ -97,6 +107,9 @@ fun MangaCompactGridItem(
             },
             badgesStart = coverBadgeStart,
             badgesEnd = coverBadgeEnd,
+            badgesBottomStart = coverBadgeBottomStart ?: rating?.takeIf { it > 0.0 }?.let { r ->
+                { RatingBadge(rating = r) }
+            },
             content = {
                 if (title != null) {
                     CoverTextOverlay(
@@ -188,6 +201,10 @@ fun MangaComfortableGridItem(
     coverAlpha: Float = 1f,
     coverBadgeStart: (@Composable RowScope.() -> Unit)? = null,
     coverBadgeEnd: (@Composable RowScope.() -> Unit)? = null,
+    coverBadgeBottomStart: (@Composable RowScope.() -> Unit)? = null,
+    rating: Double? = null,
+    views: Long? = null,
+    subtitle: String? = null,
     onClickContinueReading: (() -> Unit)? = null,
 ) {
     GridItemSelectable(
@@ -207,6 +224,9 @@ fun MangaComfortableGridItem(
                 },
                 badgesStart = coverBadgeStart,
                 badgesEnd = coverBadgeEnd,
+                badgesBottomStart = coverBadgeBottomStart ?: rating?.takeIf { it > 0.0 }?.let { r ->
+                    { RatingBadge(rating = r) }
+                },
                 content = {
                     if (onClickContinueReading != null) {
                         ContinueReadingButton(
@@ -221,12 +241,50 @@ fun MangaComfortableGridItem(
                 },
             )
             GridItemTitle(
-                modifier = Modifier.padding(4.dp),
+                modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
                 title = title,
                 style = MaterialTheme.typography.titleSmall,
-                minLines = 2,
+                minLines = 1,
                 maxLines = titleMaxLines,
             )
+            if (!subtitle.isNullOrBlank() || (views != null && views > 0)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = subtitle.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (views != null && views > 0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Visibility,
+                                contentDescription = null,
+                                tint = Color(0xFFFFA000),
+                                modifier = Modifier.size(13.dp),
+                            )
+                            Spacer(modifier = Modifier.width(2.5.dp))
+                            Text(
+                                text = formatViewsCount(views),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -240,6 +298,7 @@ private fun MangaGridCover(
     cover: @Composable BoxScope.() -> Unit = {},
     badgesStart: (@Composable RowScope.() -> Unit)? = null,
     badgesEnd: (@Composable RowScope.() -> Unit)? = null,
+    badgesBottomStart: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable (BoxScope.() -> Unit)? = null,
 ) {
     Box(
@@ -266,6 +325,56 @@ private fun MangaGridCover(
                 content = badgesEnd,
             )
         }
+
+        if (badgesBottomStart != null) {
+            BadgeGroup(
+                modifier = Modifier
+                    .padding(4.dp)
+                    .align(Alignment.BottomStart),
+                content = badgesBottomStart,
+            )
+        }
+    }
+}
+
+@Composable
+fun RatingBadge(
+    rating: Double,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(6.dp),
+        color = Color(0xDD181818),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Star,
+                contentDescription = null,
+                tint = Color(0xFFFFB300),
+                modifier = Modifier.size(11.dp),
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = String.format(Locale.US, "%.1f", rating),
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 11.sp,
+            )
+        }
+    }
+}
+
+fun formatViewsCount(count: Long): String {
+    return when {
+        count >= 1_000_000_000 -> String.format(Locale.US, "%.1fB", count / 1_000_000_000.0).replace(".0B", "B")
+        count >= 1_000_000 -> String.format(Locale.US, "%.1fM", count / 1_000_000.0).replace(".0M", "M")
+        count >= 1_000 -> String.format(Locale.US, "%.1fK", count / 1_000.0).replace(".0K", "K")
+        else -> count.toString()
     }
 }
 

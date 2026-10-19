@@ -32,6 +32,8 @@ import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.manga.model.asMangaCover
+import tachiyomi.domain.manga.model.effectiveRating
+import tachiyomi.domain.manga.model.effectiveViews
 import tachiyomi.presentation.core.components.material.padding
 
 @Composable
@@ -90,6 +92,9 @@ fun RelatedMangasRow(
                             coverData = title.asMangaCover(),
                             coverBadgeStart = {},
                             coverAlpha = if (title.favorite) CommonMangaItemDefaults.BrowseFavoriteCoverAlpha else 1f,
+                            rating = title.effectiveRating,
+                            views = title.effectiveViews,
+                            subtitle = title.author,
                             onClick = { onMangaClick(title) },
                             onLongClick = { onMangaLongClick(title) },
                         )

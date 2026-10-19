@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
@@ -71,6 +73,13 @@ open class MangaThemesiaEngineSource(
         manga.title = rawTitle.trim()
         manga.setUrlWithoutDomain(link?.attr("abs:href") ?: "")
         manga.thumbnail_url = extractImageUrl(img)
+
+        val scoreText = element.select(".rating .num, .numscore, .score").text().trim()
+        val rawScore = scoreText.toDoubleOrNull()
+        if (rawScore != null && rawScore > 0.0) {
+            manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+
         return manga
     }
 
@@ -142,6 +151,13 @@ open class MangaThemesiaEngineSource(
 
         val img = document.select("img[alt=poster], .infomanga > div[itemprop=image] img, .thumb img, .animefull .bigcontent img").first()
         manga.thumbnail_url = extractImageUrl(img)
+
+        val scoreText = document.select(".rating .num, .numscore, .score, [itemprop='ratingValue']").text().trim()
+        val rawScore = scoreText.toDoubleOrNull()
+        if (rawScore != null && rawScore > 0.0) {
+            manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+
         manga.initialized = true
         return manga
     }

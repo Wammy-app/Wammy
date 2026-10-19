@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
@@ -76,6 +78,18 @@ class ComickSource(
                 manga.url = "/comic/$slug"
                 manga.title = title
                 manga.thumbnail_url = thumb
+
+                val bayesian = item.optDouble("bayesian_rating", 0.0)
+                val rating = if (bayesian > 0.0) bayesian else item.optDouble("rating", 0.0)
+                if (rating > 0.0) {
+                    manga.rating = rating
+                }
+                val followCount = item.optLong("user_follow_count", 0L)
+                val views = if (followCount > 0L) followCount else item.optLong("view_count", 0L)
+                if (views > 0L) {
+                    manga.views = views
+                }
+
                 mangas.add(manga)
             }
         }
@@ -183,6 +197,17 @@ class ComickSource(
                     if (!g.isNullOrBlank()) genreList.add(g)
                 }
                 manga.genre = genreList.joinToString(", ")
+            }
+
+            val bayesian = json.optDouble("bayesian_rating", 0.0)
+            val rating = if (bayesian > 0.0) bayesian else json.optDouble("rating", 0.0)
+            if (rating > 0.0) {
+                manga.rating = rating
+            }
+            val followCount = json.optLong("user_follow_count", 0L)
+            val views = if (followCount > 0L) followCount else json.optLong("view_count", 0L)
+            if (views > 0L) {
+                manga.views = views
             }
         } else {
             // Fallback to meta tags

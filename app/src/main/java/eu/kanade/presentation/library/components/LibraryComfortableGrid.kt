@@ -8,6 +8,8 @@ import androidx.compose.ui.Modifier
 import eu.kanade.tachiyomi.ui.library.LibraryItem
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.MangaCover
+import tachiyomi.domain.manga.model.effectiveRating
+import tachiyomi.domain.manga.model.effectiveViews
 
 @Composable
 internal fun LibraryComfortableGrid(
@@ -56,6 +58,9 @@ internal fun LibraryComfortableGrid(
                         sourceLanguage = libraryItem.badges.sourceLanguage,
                     )
                 },
+                rating = manga.effectiveRating,
+                views = manga.effectiveViews,
+                subtitle = manga.author,
                 onLongClick = { onLongClick(libraryItem.libraryManga) },
                 onClick = { onClick(libraryItem.libraryManga) },
                 onClickContinueReading = if (onClickContinueReading != null && libraryItem.unreadCount > 0) {

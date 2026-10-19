@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.HttpSource
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -61,9 +63,39 @@ class MangaDexSource(
         val limit = json.optInt("limit", 20)
 
         val mangas = mutableListOf<SManga>()
+        val mangaIds = mutableListOf<String>()
         for (i in 0 until data.length()) {
             val item = data.getJSONObject(i)
+            val mangaId = item.optString("id")
+            if (mangaId.isNotBlank()) mangaIds.add(mangaId)
             mangas.add(parseMangaFromJson(item))
+        }
+
+        if (mangaIds.isNotEmpty()) {
+            try {
+                val statsQuery = mangaIds.joinToString("&") { "manga[]=$it" }
+                val statsReq = GET("$apiBase/statistics/manga?$statsQuery", headers)
+                val statsResp = client.newCall(statsReq).execute()
+                if (statsResp.isSuccessful) {
+                    val statsJson = JSONObject(statsResp.body.string())
+                    val statsObj = statsJson.optJSONObject("statistics") ?: JSONObject()
+                    for (manga in mangas) {
+                        val mId = manga.url.removePrefix("/manga/").substringBefore("/")
+                        val stat = statsObj.optJSONObject(mId) ?: continue
+                        val ratingObj = stat.optJSONObject("rating")
+                        val bayesian = ratingObj?.optDouble("bayesian", 0.0) ?: 0.0
+                        val average = ratingObj?.optDouble("average", 0.0) ?: 0.0
+                        val score = if (bayesian > 0.0) bayesian else average
+                        if (score > 0.0) {
+                            manga.rating = score
+                        }
+                        val follows = stat.optLong("follows", -1L)
+                        if (follows >= 0L) {
+                            manga.views = follows
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
         }
 
         val hasNextPage = (offset + limit) < total
@@ -104,7 +136,32 @@ class MangaDexSource(
     override fun mangaDetailsParse(response: Response): SManga {
         val json = JSONObject(response.body.string())
         val data = json.optJSONObject("data") ?: JSONObject()
-        return parseMangaFromJson(data)
+        val manga = parseMangaFromJson(data)
+        val mangaId = data.optString("id")
+        if (mangaId.isNotBlank()) {
+            try {
+                val statsReq = GET("$apiBase/statistics/manga/$mangaId", headers)
+                val statsResp = client.newCall(statsReq).execute()
+                if (statsResp.isSuccessful) {
+                    val statsJson = JSONObject(statsResp.body.string())
+                    val statsObj = statsJson.optJSONObject("statistics")?.optJSONObject(mangaId)
+                    if (statsObj != null) {
+                        val ratingObj = statsObj.optJSONObject("rating")
+                        val bayesian = ratingObj?.optDouble("bayesian", 0.0) ?: 0.0
+                        val average = ratingObj?.optDouble("average", 0.0) ?: 0.0
+                        val score = if (bayesian > 0.0) bayesian else average
+                        if (score > 0.0) {
+                            manga.rating = score
+                        }
+                        val follows = statsObj.optLong("follows", -1L)
+                        if (follows >= 0L) {
+                            manga.views = follows
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return manga
     }
 
     // =========================== Chapters ===========================

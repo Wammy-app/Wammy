@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
@@ -75,11 +77,20 @@ class NovelBinSource(
 
             val title = titleEl.attr("title").ifBlank { titleEl.text() }.trim()
             val cover = resolveCoverUrl(el.selectFirst("img.cover, .col-novel img, img"), cleanUrl)
+            val author = el.selectFirst(".author, .col-author, span.author, a[href*='/novelbin-author/'], .author a")?.text()?.trim()
+            val ratingEl = el.selectFirst(".rating, .score, [itemprop='ratingValue']")
+            val ratingVal = ratingEl?.text()?.trim()?.toDoubleOrNull()
 
             SManga.create().apply {
                 this.url = cleanUrl
                 this.title = title
                 this.thumbnail_url = cover
+                if (!author.isNullOrBlank()) {
+                    this.author = author
+                }
+                if (ratingVal != null && ratingVal > 0.0) {
+                    this.rating = ratingVal
+                }
             }
         }.distinctBy { it.url }
 
@@ -129,6 +140,17 @@ class NovelBinSource(
                 else -> SManga.ONGOING
             }
             thumbnail_url = resolveCoverUrl(doc.selectFirst(".books .book img, .desc .book img, img.cover"), novelUrl)
+
+            val ratingEl = doc.selectFirst(".rate-info [itemprop='ratingValue'], [itemprop='ratingValue'], .rating-val, .small-rate-info .rate-val")
+            val ratingVal = ratingEl?.text()?.trim()?.toDoubleOrNull()
+            if (ratingVal != null && ratingVal > 0.0) {
+                this.rating = ratingVal
+            }
+            val reviewEl = doc.selectFirst(".rate-info [itemprop='reviewCount'], [itemprop='reviewCount'], [itemprop='ratingCount']")
+            val reviewCount = reviewEl?.text()?.trim()?.replace(",", "")?.toLongOrNull()
+            if (reviewCount != null && reviewCount > 0) {
+                this.views = reviewCount
+            }
         }
     }
 

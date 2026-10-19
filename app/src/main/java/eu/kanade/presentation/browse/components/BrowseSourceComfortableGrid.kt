@@ -18,6 +18,8 @@ import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import kotlinx.coroutines.flow.StateFlow
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaCover
+import tachiyomi.domain.manga.model.effectiveRating
+import tachiyomi.domain.manga.model.effectiveViews
 import tachiyomi.presentation.core.util.plus
 import eu.kanade.presentation.browse.components.GlobalSearchCardRow
 import tachiyomi.presentation.core.components.material.padding
@@ -158,6 +160,9 @@ private fun BrowseSourceComfortableGridItem(
         coverBadgeStart = {
             InLibraryBadge(enabled = manga.favorite)
         },
+        rating = manga.effectiveRating,
+        views = manga.effectiveViews,
+        subtitle = manga.author,
         onLongClick = onLongClick,
         onClick = onClick,
     )

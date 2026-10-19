@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Request
@@ -85,10 +87,19 @@ class WuxiaWorldSource(
                     .ifBlank { img.attr("src") }
             }?.let { resolveUrl(it) }
 
+            val author = el.selectFirst(".mg_author .summary-content a, .author-content a, .post-author a, .post-on a")?.text()?.trim()
+            val scoreText = el.selectFirst(".score.font-meta, .post-total-rating .score, [itemprop='ratingValue']")?.text()?.trim()
+            val rawScore = scoreText?.toDoubleOrNull()
+            val ratingVal = if (rawScore != null && rawScore > 0.0) {
+                if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+            } else null
+
             SManga.create().apply {
                 this.url = cleanUrl
                 this.title = title
                 this.thumbnail_url = cover
+                if (!author.isNullOrBlank()) this.author = author
+                if (ratingVal != null) this.rating = ratingVal
             }
         }.distinctBy { it.url }
 
@@ -114,6 +125,17 @@ class WuxiaWorldSource(
                     .ifBlank { img.attr("data-lazy-src") }
                     .ifBlank { img.attr("src") }
             }?.let { resolveUrl(it) }
+
+            val scoreText = doc.selectFirst(".score.font-meta, .post-total-rating .score, [itemprop='ratingValue']")?.text()?.trim()
+            val rawScore = scoreText?.toDoubleOrNull()
+            if (rawScore != null && rawScore > 0.0) {
+                this.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+            }
+            val votesText = doc.selectFirst(".vote-count, .post-total-rating .total-votes, [itemprop='ratingCount']")?.text()?.trim()?.replace(Regex("[^0-9]"), "")
+            val votes = votesText?.toLongOrNull()
+            if (votes != null && votes > 0) {
+                this.views = votes
+            }
         }
     }
 

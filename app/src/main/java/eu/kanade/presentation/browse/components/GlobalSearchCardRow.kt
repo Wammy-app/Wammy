@@ -1,4 +1,4 @@
-﻿package eu.kanade.presentation.browse.components
+package eu.kanade.presentation.browse.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +31,8 @@ import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.manga.model.asMangaCover
+import tachiyomi.domain.manga.model.effectiveRating
+import tachiyomi.domain.manga.model.effectiveViews
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
@@ -59,6 +61,9 @@ fun GlobalSearchCardRow(
                 cover = title.asMangaCover(),
                 isFavorite = title.favorite,
                 isSelected = selection.any { selectedManga -> selectedManga.id == title.id },
+                rating = title.effectiveRating,
+                views = title.effectiveViews,
+                subtitle = title.author,
                 onClick = { onClick(title) },
                 onLongClick = { onLongClick(title) },
             )
@@ -72,6 +77,9 @@ private fun MangaItem(
     cover: MangaCover,
     isFavorite: Boolean,
     isSelected: Boolean,
+    rating: Double? = null,
+    views: Long? = null,
+    subtitle: String? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -85,6 +93,9 @@ private fun MangaItem(
             },
             coverAlpha = if (isFavorite) CommonMangaItemDefaults.BrowseFavoriteCoverAlpha else 1f,
             isSelected = isSelected,
+            rating = rating,
+            views = views,
+            subtitle = subtitle,
             onClick = onClick,
             onLongClick = onLongClick,
         )
