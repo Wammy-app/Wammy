@@ -68,6 +68,7 @@ import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.more.MoreTab
 import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -204,6 +205,11 @@ object HomeScreen : Screen() {
                         val bottomNavVisible by produceState(initialValue = true) {
                             showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
                         }
+                        val hasReadingHistory by produceState(initialValue = false) {
+                            historyRepository.getHistory("", limit = 1L)
+                                .catch { emit(emptyList()) }
+                                .collectLatest { value = it.isNotEmpty() }
+                        }
                         AnimatedVisibility(
                             visible = bottomNavVisible,
                             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -224,36 +230,40 @@ object HomeScreen : Screen() {
                                         scope.launch { tab.onReselect(navigator) }
                                     }
                                 },
-                                onReadingClick = {
-                                    scope.launch {
-                                        try {
-                                            val lastHistory = withIOContext { historyRepository.getLastHistory() }
-                                            if (lastHistory != null) {
-                                                val targetChapter = withIOContext {
-                                                    if (!lastHistory.chapterRead) {
-                                                        null
-                                                    } else {
-                                                        getNextChapters.await(
-                                                            lastHistory.mangaId,
-                                                            lastHistory.chapterId,
-                                                            onlyUnread = true,
-                                                        ).firstOrNull()
+                                onReadingClick = if (hasReadingHistory) {
+                                    {
+                                        scope.launch {
+                                            try {
+                                                val lastHistory = withIOContext { historyRepository.getLastHistory() }
+                                                if (lastHistory != null) {
+                                                    val targetChapter = withIOContext {
+                                                        if (!lastHistory.chapterRead) {
+                                                            null
+                                                        } else {
+                                                            getNextChapters.await(
+                                                                lastHistory.mangaId,
+                                                                lastHistory.chapterId,
+                                                                onlyUnread = true,
+                                                            ).firstOrNull()
+                                                        }
                                                     }
-                                                }
-                                                val (mangaId, chapterId) = if (targetChapter != null) {
-                                                    targetChapter.mangaId to targetChapter.id
+                                                    val (mangaId, chapterId) = if (targetChapter != null) {
+                                                        targetChapter.mangaId to targetChapter.id
+                                                    } else {
+                                                        lastHistory.mangaId to lastHistory.chapterId
+                                                    }
+                                                    context.startActivity(ReaderActivity.newIntent(context, mangaId, chapterId))
                                                 } else {
-                                                    lastHistory.mangaId to lastHistory.chapterId
+                                                    context.toast(MR.strings.no_next_chapter)
                                                 }
-                                                context.startActivity(ReaderActivity.newIntent(context, mangaId, chapterId))
-                                            } else {
+                                            } catch (e: Throwable) {
+                                                android.util.Log.e("HomeScreen", "Error resuming reading", e)
                                                 context.toast(MR.strings.no_next_chapter)
                                             }
-                                        } catch (e: Throwable) {
-                                            android.util.Log.e("HomeScreen", "Error resuming reading", e)
-                                            context.toast(MR.strings.no_next_chapter)
                                         }
                                     }
+                                } else {
+                                    null
                                 },
                                 badgeContent = { tab ->
                                     when {

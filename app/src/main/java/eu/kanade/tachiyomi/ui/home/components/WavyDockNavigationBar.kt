@@ -104,7 +104,7 @@ fun WavyDockNavigationBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
-            modifier = if (onReadingClick != null) Modifier.weight(1f) else Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(50),
             color = barContainer,
             contentColor = barContent,
@@ -143,32 +143,50 @@ fun WavyDockNavigationBar(
             }
         }
 
-        if (onReadingClick != null) {
-            Spacer(modifier = Modifier.width(6.dp))
-            Surface(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = androidx.compose.material3.ripple(),
-                        onClick = onReadingClick,
-                    ),
-                shape = RoundedCornerShape(18.dp),
-                color = selectedContainer,
-                contentColor = selectedContent,
-                shadowElevation = 4.dp,
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
+        AnimatedVisibility(
+            visible = onReadingClick != null,
+            enter = expandHorizontally(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium,
+                ),
+                expandFrom = Alignment.End,
+            ) + fadeIn(animationSpec = tween(180)),
+            exit = shrinkHorizontally(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium,
+                ),
+                shrinkTowards = Alignment.End,
+            ) + fadeOut(animationSpec = tween(120)),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Surface(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = androidx.compose.material3.ripple(),
+                            onClick = { onReadingClick?.invoke() },
+                        ),
+                    shape = RoundedCornerShape(18.dp),
+                    color = selectedContainer,
+                    contentColor = selectedContent,
+                    shadowElevation = 4.dp,
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.MenuBook,
-                        contentDescription = "Resume Reading",
-                        modifier = Modifier.size(26.dp),
-                        tint = selectedContent,
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.MenuBook,
+                            contentDescription = "Resume Reading",
+                            modifier = Modifier.size(26.dp),
+                            tint = selectedContent,
+                        )
+                    }
                 }
             }
         }
