@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.ui.discover
 
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -59,9 +61,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import eu.kanade.tachiyomi.R
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -618,12 +623,9 @@ private fun DiscoverFilterButtonRow(
             onClick = { onSelectSection(DiscoverSection.POPULAR) },
         )
 
-        // 3. News Button (on default source row right next to Popular)
+        // 3. News Image Banner Button (on default source row right next to Popular)
         if (onNewsClick != null) {
-            FilterPillButton(
-                selected = false,
-                text = "News",
-                icon = Icons.Outlined.Newspaper,
+            NewsImageBannerButton(
                 onClick = onNewsClick,
             )
         }
@@ -635,6 +637,35 @@ private fun DiscoverFilterButtonRow(
                 onClick = onToggleAdult,
             )
         }
+    }
+}
+
+@Composable
+private fun NewsImageBannerButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val buttonShape = RoundedCornerShape(8.dp)
+    Surface(
+        modifier = modifier
+            .height(36.dp)
+            .clip(buttonShape)
+            .clickable(onClick = onClick),
+        shape = buttonShape,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        ),
+    ) {
+        Image(
+            painter = painterResource(R.drawable.btn_news_banner),
+            contentDescription = "News",
+            modifier = Modifier
+                .height(36.dp)
+                .aspectRatio(1024f / 571f),
+            contentScale = ContentScale.Crop,
+        )
     }
 }
 
