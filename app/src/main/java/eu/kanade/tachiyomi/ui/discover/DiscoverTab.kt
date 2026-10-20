@@ -32,6 +32,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -130,9 +131,10 @@ object DiscoverTab : Tab {
 
         val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
-        var selectedSection by rememberSaveable { mutableStateOf(DiscoverSection.LATEST) }
-        var isAdultSelected by rememberSaveable { mutableStateOf(false) }
+        var defaultSection by rememberSaveable { mutableStateOf(DiscoverSection.LATEST) }
         var defaultPage by rememberSaveable { mutableIntStateOf(1) }
+        var extensionSection by rememberSaveable { mutableStateOf(DiscoverSection.LATEST) }
+        var extensionIsAdult by rememberSaveable { mutableStateOf(false) }
         var extensionPage by rememberSaveable { mutableIntStateOf(1) }
         val gridState = rememberLazyGridState()
 
@@ -165,10 +167,14 @@ object DiscoverTab : Tab {
                 if (animatedState.isLoading) {
                     DiscoverSkeletonScreen()
                 } else {
-                    val trendingAggregated = remember(viewModel.popularCache.toMap(), animatedState.regularSources) {
+                    val builtinRegularSources = remember(animatedState.regularSources) {
+                        animatedState.regularSources.filter { BuiltinSourceManager.isBuiltin(it.id) }
+                    }
+
+                    val trendingAggregated = remember(viewModel.popularCache.toMap(), builtinRegularSources) {
                         val result = mutableListOf<Manga>()
                         val seenTitles = mutableSetOf<String>()
-                        val lists = animatedState.regularSources.mapNotNull { viewModel.popularCache[it.id] }
+                        val lists = builtinRegularSources.mapNotNull { viewModel.popularCache[it.id] }
                         val maxLen = lists.maxOfOrNull { it.size } ?: 0
                         for (i in 0 until maxLen) {
                             for (list in lists) {
@@ -184,81 +190,40 @@ object DiscoverTab : Tab {
                         result
                     }
 
-                    val latestAggregated = remember(viewModel.latestCache.toMap(), animatedState.regularSources) {
-                        val result = mutableListOf<Manga>()
-                        val seenTitles = mutableSetOf<String>()
-                        val lists = animatedState.regularSources.mapNotNull { viewModel.latestCache[it.id] }
-                        val maxLen = lists.maxOfOrNull { it.size } ?: 0
-                        for (i in 0 until maxLen) {
-                            for (list in lists) {
-                                if (i < list.size) {
-                                    val manga = list[i]
-                                    val normalized = manga.title.trim().lowercase()
-                                    if (seenTitles.add(normalized)) {
-                                        result.add(manga)
-                                    }
-                                }
-                            }
+                    val featuredManga = remember(trendingAggregated) {
+                        trendingAggregated.take(5)
+                    }
+
+                    LaunchedEffect(featuredManga) {
+                        if (featuredManga.isNotEmpty()) {
+                            viewModel.fetchFeaturedDetails(featuredManga)
                         }
-                        result
                     }
 
-                    val adultTrendingAggregated = remember(viewModel.popularCache.toMap(), animatedState.adultSources) {
-                        val result = mutableListOf<Manga>()
-                        val seenTitles = mutableSetOf<String>()
-                        val lists = animatedState.adultSources.mapNotNull { viewModel.popularCache[it.id] }
-                        val maxLen = lists.maxOfOrNull { it.size } ?: 0
-                        for (i in 0 until maxLen) {
-                            for (list in lists) {
-                                if (i < list.size) {
-                                    val manga = list[i]
-                                    val normalized = manga.title.trim().lowercase()
-                                    if (seenTitles.add(normalized)) {
-                                        result.add(manga)
-                                    }
-                                }
-                            }
-                        }
-                        result
+                    val builtinSources = remember(animatedState.regularSources, defaultSection) {
+                        val s = animatedState.regularSources.filter { BuiltinSourceManager.isBuiltin(it.id) }
+                        if (defaultSection == DiscoverSection.LATEST) s.filter { it.supportsLatest } else s
                     }
 
-                    val adultLatestAggregated = remember(viewModel.latestCache.toMap(), animatedState.adultSources) {
-                        val result = mutableListOf<Manga>()
-                        val seenTitles = mutableSetOf<String>()
-                        val lists = animatedState.adultSources.mapNotNull { viewModel.latestCache[it.id] }
-                        val maxLen = lists.maxOfOrNull { it.size } ?: 0
-                        for (i in 0 until maxLen) {
-                            for (list in lists) {
-                                if (i < list.size) {
-                                    val manga = list[i]
-                                    val normalized = manga.title.trim().lowercase()
-                                    if (seenTitles.add(normalized)) {
-                                        result.add(manga)
-                                    }
-                                }
-                            }
-                        }
-                        result
+                    val extensionRegularSources = remember(animatedState.regularSources) {
+                        animatedState.regularSources.filter { !BuiltinSourceManager.isBuiltin(it.id) }
+                    }
+                    val extensionAdultSources = remember(animatedState.adultSources) {
+                        animatedState.adultSources.filter { !BuiltinSourceManager.isBuiltin(it.id) }
+                    }
+                    val hasExtensionAdultSources = extensionAdultSources.isNotEmpty()
+                    val hasAnyExtensionSources = extensionRegularSources.isNotEmpty() || extensionAdultSources.isNotEmpty()
+
+                    val activeExtensionSources = remember(extensionRegularSources, extensionAdultSources, extensionIsAdult, extensionSection) {
+                        val s = if (extensionIsAdult) extensionAdultSources else extensionRegularSources
+                        if (extensionSection == DiscoverSection.LATEST) s.filter { it.supportsLatest } else s
                     }
 
-                    val targetSources = remember(animatedState.regularSources, animatedState.adultSources, isAdultSelected, selectedSection) {
-                        val s = if (isAdultSelected) animatedState.adultSources else animatedState.regularSources
-                        if (selectedSection == DiscoverSection.LATEST) s.filter { it.supportsLatest } else s
-                    }
-
-                    val builtinSources = remember(targetSources) {
-                        targetSources.filter { BuiltinSourceManager.isBuiltin(it.id) }
-                    }
-
-                    val extensionSources = remember(targetSources) {
-                        targetSources.filter { !BuiltinSourceManager.isBuiltin(it.id) }
-                    }
-
-                    fun extractMangaFromSources(sources: List<CatalogueSource>): List<Manga> {
+                    fun extractMangaFromSources(sources: List<CatalogueSource>, isLatest: Boolean): List<Manga> {
                         val result = mutableListOf<Manga>()
                         val seenTitles = mutableSetOf<String>()
 
-                        val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
+                        val cache = if (isLatest) viewModel.latestCache else viewModel.popularCache
                         val lists1 = sources.mapNotNull { cache[it.id] }
                         val maxLen1 = lists1.maxOfOrNull { it.size } ?: 0
                         for (i in 0 until maxLen1) {
@@ -273,7 +238,7 @@ object DiscoverTab : Tab {
                             }
                         }
 
-                        val keySuffix = if (selectedSection == DiscoverSection.LATEST) "latest" else "popular"
+                        val keySuffix = if (isLatest) "latest" else "popular"
                         var p = 2
                         while (true) {
                             val listsP = sources.mapNotNull { viewModel.pageCache["${it.id}_${keySuffix}_$p"] }
@@ -296,25 +261,24 @@ object DiscoverTab : Tab {
                     }
 
                     val allBuiltinManga = remember(
-                        selectedSection,
-                        isAdultSelected,
+                        defaultSection,
                         viewModel.popularCache.toMap(),
                         viewModel.latestCache.toMap(),
                         viewModel.pageCache.toMap(),
                         builtinSources,
                     ) {
-                        extractMangaFromSources(builtinSources)
+                        extractMangaFromSources(builtinSources, defaultSection == DiscoverSection.LATEST)
                     }
 
                     val allExtensionManga = remember(
-                        selectedSection,
-                        isAdultSelected,
+                        extensionSection,
+                        extensionIsAdult,
                         viewModel.popularCache.toMap(),
                         viewModel.latestCache.toMap(),
                         viewModel.pageCache.toMap(),
-                        extensionSources,
+                        activeExtensionSources,
                     ) {
-                        extractMangaFromSources(extensionSources)
+                        extractMangaFromSources(activeExtensionSources, extensionSection == DiscoverSection.LATEST)
                     }
 
                     val totalBuiltin = allBuiltinManga.size
@@ -336,40 +300,25 @@ object DiscoverTab : Tab {
                             viewModel.loadSourcesForPage(
                                 sources = builtinSources,
                                 page = nextBuiltinSourcePage,
-                                isLatest = (selectedSection == DiscoverSection.LATEST),
+                                isLatest = (defaultSection == DiscoverSection.LATEST),
                             )
                         }
                     }
 
                     val nextExtensionSourcePage = (totalExtension / 20) + 2
-                    LaunchedEffect(safeExtensionPage, extensionSources, totalExtension) {
-                        if (safeExtensionPage * PAGE_SIZE >= totalExtension - (PAGE_SIZE * 2) && extensionSources.isNotEmpty()) {
+                    LaunchedEffect(safeExtensionPage, activeExtensionSources, totalExtension) {
+                        if (safeExtensionPage * PAGE_SIZE >= totalExtension - (PAGE_SIZE * 2) && activeExtensionSources.isNotEmpty()) {
                             viewModel.loadSourcesForPage(
-                                sources = extensionSources,
+                                sources = activeExtensionSources,
                                 page = nextExtensionSourcePage,
-                                isLatest = (selectedSection == DiscoverSection.LATEST),
+                                isLatest = (extensionSection == DiscoverSection.LATEST),
                             )
-                        }
-                    }
-
-                    val featuredManga = remember(trendingAggregated, adultTrendingAggregated, isAdultSelected) {
-                        if (isAdultSelected && adultTrendingAggregated.isNotEmpty()) {
-                            adultTrendingAggregated.take(5)
-                        } else {
-                            trendingAggregated.take(5)
-                        }
-                    }
-
-                    LaunchedEffect(featuredManga) {
-                        if (featuredManga.isNotEmpty()) {
-                            viewModel.fetchFeaturedDetails(featuredManga)
                         }
                     }
 
                     val allCachesLoaded = animatedState.sources.all { viewModel.popularCache.containsKey(it.id) }
                     val hasNoMangaAtAll = allCachesLoaded && viewModel.popularCache.values.all { it.isEmpty() }
-                    val hasAnyContent = trendingAggregated.isNotEmpty() || latestAggregated.isNotEmpty() ||
-                        (animatedState.hasAdultSources && (adultTrendingAggregated.isNotEmpty() || adultLatestAggregated.isNotEmpty()))
+                    val hasAnyContent = trendingAggregated.isNotEmpty() || allBuiltinManga.isNotEmpty() || allExtensionManga.isNotEmpty()
 
                     if (animatedState.sources.isEmpty() || hasNoMangaAtAll) {
                         EmptyDiscoverScreen(
@@ -401,53 +350,41 @@ object DiscoverTab : Tab {
                                         }
                                     )
                                 }
-                            } else if (targetSources.isNotEmpty() && !targetSources.all { viewModel.popularCache.containsKey(it.id) }) {
+                            } else if (builtinSources.isNotEmpty() && !builtinSources.all { viewModel.popularCache.containsKey(it.id) }) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
                                     HeroFeaturedCardSkeleton(shimmerBrush = shimmerBrush)
                                 }
                             }
 
-                            // 2. Filter Buttons Row (Latest Updates, Popular, Adult)
+                            // 2. Filter Buttons Row for Default Sources (Latest Updates, Popular — NO Adult)
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 DiscoverFilterButtonRow(
-                                    selectedSection = selectedSection,
-                                    isAdultSelected = isAdultSelected,
-                                    showAdultOption = animatedState.hasAdultSources,
+                                    selectedSection = defaultSection,
+                                    isAdultSelected = false,
+                                    showAdultOption = false,
                                     onSelectSection = { section ->
-                                        if (selectedSection != section) {
-                                            selectedSection = section
+                                        if (defaultSection != section) {
+                                            defaultSection = section
                                             defaultPage = 1
-                                            extensionPage = 1
                                             scope.launch { gridState.animateScrollToItem(0) }
                                         }
                                     },
-                                    onToggleAdult = {
-                                        isAdultSelected = !isAdultSelected
-                                        defaultPage = 1
-                                        extensionPage = 1
-                                        scope.launch { gridState.animateScrollToItem(0) }
-                                    },
+                                    onToggleAdult = {},
                                 )
                             }
 
-                            // 3. Section Title Header (e.g. "Latest Updates")
+                            // 3. Default Section Title Header (e.g. "Latest Updates" or "Popular Titles")
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 DiscoverSectionHeader(
-                                    selectedSection = selectedSection,
-                                    isAdultSelected = isAdultSelected,
+                                    selectedSection = defaultSection,
+                                    isAdultSelected = false,
                                 )
                             }
 
                             // 4. Built-in Manga Cards or Empty State or Skeleton
-                            if (isAdultSelected && animatedState.adultSources.isEmpty()) {
-                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                    AdultEmptyStateCard(
-                                        onBrowseExtensions = { tabNavigator.current = BrowseTab }
-                                    )
-                                }
-                            } else if (displayedBuiltinManga.isEmpty()) {
+                            if (displayedBuiltinManga.isEmpty()) {
                                 val isLoadingTarget = builtinSources.any { source ->
-                                    val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
+                                    val cache = if (defaultSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
                                     !cache.containsKey(source.id)
                                 }
                                 if (isLoadingTarget) {
@@ -507,7 +444,7 @@ object DiscoverTab : Tab {
                                                 viewModel.loadSourcesForPage(
                                                     sources = builtinSources,
                                                     page = nextBuiltinSourcePage,
-                                                    isLatest = (selectedSection == DiscoverSection.LATEST),
+                                                    isLatest = (defaultSection == DiscoverSection.LATEST),
                                                 )
                                                 defaultPage = safeBuiltinPage + 1
                                                 scope.launch { gridState.animateScrollToItem(0) }
@@ -518,21 +455,53 @@ object DiscoverTab : Tab {
                             }
 
                             // 6. Extension Section (Separate Section Below — only when extensions installed)
-                            if (extensionSources.isNotEmpty()) {
+                            if (hasAnyExtensionSources) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Spacer(modifier = Modifier.height(18.dp))
+                                    Spacer(modifier = Modifier.height(20.dp))
                                 }
 
                                 item(span = { GridItemSpan(maxLineSpan) }) {
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                        thickness = 1.dp,
+                                    )
+                                }
+
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Spacer(modifier = Modifier.height(14.dp))
+                                }
+
+                                // Extension Filter Buttons Row (Latest Updates, Popular, Adult)
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    DiscoverFilterButtonRow(
+                                        selectedSection = extensionSection,
+                                        isAdultSelected = extensionIsAdult,
+                                        showAdultOption = hasExtensionAdultSources,
+                                        onSelectSection = { section ->
+                                            if (extensionSection != section) {
+                                                extensionSection = section
+                                                extensionIsAdult = false
+                                                extensionPage = 1
+                                            }
+                                        },
+                                        onToggleAdult = {
+                                            extensionIsAdult = !extensionIsAdult
+                                            extensionPage = 1
+                                        },
+                                    )
+                                }
+
+                                // Extension Section Header (e.g. "Latest From Extensions", "18+ From Extensions")
+                                item(span = { GridItemSpan(maxLineSpan) }) {
                                     ExtensionSectionHeader(
-                                        selectedSection = selectedSection,
-                                        isAdultSelected = isAdultSelected,
+                                        selectedSection = extensionSection,
+                                        isAdultSelected = extensionIsAdult,
                                     )
                                 }
 
                                 if (displayedExtensionManga.isEmpty()) {
-                                    val isLoadingExt = extensionSources.any { source ->
-                                        val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
+                                    val isLoadingExt = activeExtensionSources.any { source ->
+                                        val cache = if (extensionSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
                                         !cache.containsKey(source.id)
                                     }
                                     if (isLoadingExt) {
@@ -548,7 +517,7 @@ object DiscoverTab : Tab {
                                                 contentAlignment = Alignment.Center,
                                             ) {
                                                 Text(
-                                                    text = "No titles from extensions.",
+                                                    text = if (extensionIsAdult) "No 18+ titles from extensions." else "No titles from extensions.",
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 )
@@ -588,9 +557,9 @@ object DiscoverTab : Tab {
                                                     extensionPage = safeExtensionPage + 1
                                                 } else {
                                                     viewModel.loadSourcesForPage(
-                                                        sources = extensionSources,
+                                                        sources = activeExtensionSources,
                                                         page = nextExtensionSourcePage,
-                                                        isLatest = (selectedSection == DiscoverSection.LATEST),
+                                                        isLatest = (extensionSection == DiscoverSection.LATEST),
                                                     )
                                                     extensionPage = safeExtensionPage + 1
                                                 }

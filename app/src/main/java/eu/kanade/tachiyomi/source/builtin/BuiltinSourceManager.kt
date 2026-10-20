@@ -400,7 +400,7 @@ class BuiltinSourceManager(
 
     companion object {
         fun isBuiltin(sourceId: Long): Boolean {
-            return (sourceId in 80010001L..80010015L) || (sourceId in 80030001L..80030020L) || sourceId >= 80020000L
+            return (sourceId in 80010001L..80019999L) || (sourceId in 80020000L..80029999L) || (sourceId in 80030001L..80039999L)
         }
 
         fun isNovel(sourceId: Long): Boolean {
