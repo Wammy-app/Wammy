@@ -75,14 +75,14 @@ open class MangaThemesiaEngineSource(
         manga.setUrlWithoutDomain(link?.attr("abs:href") ?: "")
         manga.thumbnail_url = extractImageUrl(img)
 
-        val scoreText = element.select(".rating .num, .numscore, .score, [itemprop='ratingValue'], .rating-prc, .rating").text().trim()
+        val scoreText = element.select(".rating .num, .numscore, .score, [itemprop='ratingValue'], .rating-prc, .rating, .rate, .num").text().trim()
         val numMatch = Regex("""\b(\d+(?:\.\d+)?)\b""").find(scoreText)?.value
         val rawScore = numMatch?.toDoubleOrNull()
         if (rawScore != null && rawScore > 0.0) {
             manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
         }
 
-        val viewsText = element.select(".view, .views, .post-views, .ts-views-count").text().trim()
+        val viewsText = element.select(".view, .views, .post-views, .ts-views-count, .readers, .readers-count").text().trim()
         if (viewsText.isNotBlank()) {
             parseHumanCount(viewsText)?.let { manga.views = it }
         }
@@ -159,15 +159,25 @@ open class MangaThemesiaEngineSource(
         val img = document.select("img[alt=poster], .infomanga > div[itemprop=image] img, .thumb img, .animefull .bigcontent img").first()
         manga.thumbnail_url = extractImageUrl(img)
 
-        val scoreText = document.select(".rating .num, .numscore, .score, [itemprop='ratingValue'], .rating-prc, .rating").text().trim()
+        val scoreText = document.select(".rating .num, .numscore, .score, [itemprop='ratingValue'], .rating-prc, .rating, .rate").text().trim()
         val numMatch = Regex("""\b(\d+(?:\.\d+)?)\b""").find(scoreText)?.value
-        val rawScore = numMatch?.toDoubleOrNull()
+        var rawScore = numMatch?.toDoubleOrNull()
+        if (rawScore == null || rawScore == 0.0) {
+            val match5 = Regex("""(\d+(?:\.\d+)?)\s*/\s*5\s*rating""", RegexOption.IGNORE_CASE).find(document.text())
+            rawScore = match5?.groupValues?.get(1)?.toDoubleOrNull()
+        }
         if (rawScore != null && rawScore > 0.0) {
             manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
         }
 
-        val viewsText = document.select(".ts-views-count, .views, .post-views, td:contains(Views) + td, tr:contains(Views) td, span:contains(Views)").text().trim()
-        if (viewsText.isNotBlank()) {
+        var viewsText = document.select(".ts-views-count, .views, .post-views, td:contains(Views) + td, tr:contains(Views) td, span:contains(Views)").text().trim()
+        if (viewsText.isBlank() || viewsText == "?") {
+            val readersMatch = Regex("""([\d,]+)\s+readers""", RegexOption.IGNORE_CASE).find(document.text())
+            if (readersMatch != null) {
+                viewsText = readersMatch.groupValues[1]
+            }
+        }
+        if (viewsText.isNotBlank() && viewsText != "?") {
             parseHumanCount(viewsText)?.let { manga.views = it }
         }
 

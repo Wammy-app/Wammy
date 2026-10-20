@@ -6,6 +6,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.parseHumanCount
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
@@ -68,6 +71,17 @@ class MangakakalotSource(
         manga.title = title
         manga.setUrlWithoutDomain(link?.attr("abs:href") ?: "")
         manga.thumbnail_url = img?.attr("abs:src")?.ifBlank { img.attr("abs:data-src") }
+
+        val viewsText = element.select(".view, .views, .story_item_right span:contains(View), span:contains(View)").text().trim()
+        if (viewsText.isNotBlank()) {
+            parseHumanCount(viewsText.substringAfter(":"))?.let { manga.views = it }
+        }
+        val scoreText = element.select(".score, .rate, [itemprop=ratingValue]").text().trim()
+        val rawScore = scoreText.toDoubleOrNull()
+        if (rawScore != null && rawScore > 0.0) {
+            manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+
         return manga
     }
 
@@ -133,6 +147,17 @@ class MangakakalotSource(
 
         val imgEl = document.select(".manga-info-pic img, .story-info-left img").first()
         manga.thumbnail_url = imgEl?.attr("abs:src")?.ifBlank { imgEl.attr("abs:data-src") }
+
+        val viewEl = document.selectFirst("li:contains(View), .manga-info-text li:contains(View), .story-info-right-extent p:contains(View)")
+        if (viewEl != null) {
+            val rawViews = viewEl.text().substringAfter(":").trim()
+            parseHumanCount(rawViews)?.let { manga.views = it }
+        }
+        val rateEl = document.selectFirst("[itemprop=ratingValue], em[property='v:average'], #rate_row_cmd, .rate_num")
+        val rawRate = rateEl?.text()?.trim()?.toDoubleOrNull()
+        if (rawRate != null && rawRate > 0.0) {
+            manga.rating = if (rawRate <= 5.0) rawRate * 2.0 else rawRate
+        }
 
         manga.setUrlWithoutDomain(document.location())
         manga.initialized = true

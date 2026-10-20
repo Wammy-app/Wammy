@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.parseHumanCount
 import eu.kanade.tachiyomi.source.model.rating
 import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
@@ -105,6 +106,11 @@ open class MadaraEngineSource(
         val rawScore = scoreText.toDoubleOrNull()
         if (rawScore != null && rawScore > 0.0) {
             manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+
+        val viewsText = element.select(".post-views, .views, .view, .post-views-count, .item-views, .font-meta:contains(views)").text().trim()
+        if (viewsText.isNotBlank()) {
+            parseHumanCount(viewsText)?.let { manga.views = it }
         }
 
         return manga

@@ -6,6 +6,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.parseHumanCount
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
@@ -75,6 +78,17 @@ class ManhuaPlusSource(
             it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
         }
         manga.thumbnail_url = thumb?.takeUnless { it.contains("loading", ignoreCase = true) }
+
+        val scoreText = element.select(".rating .num, .score, [itemprop=ratingValue]").text().trim()
+        val numMatch = Regex("""\b(\d+(?:\.\d+)?)\b""").find(scoreText)?.value
+        val rawScore = numMatch?.toDoubleOrNull()
+        if (rawScore != null && rawScore > 0.0) {
+            manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+        val viewsText = element.select(".post-views, .views, .view, .span-spc:contains(Views)").text().trim()
+        if (viewsText.isNotBlank()) {
+            parseHumanCount(viewsText)?.let { manga.views = it }
+        }
 
         return manga
     }
@@ -159,6 +173,16 @@ class ManhuaPlusSource(
             statusText.contains("hiatus") || statusText.contains("on-hold") -> SManga.ON_HIATUS
             statusText.contains("canceled") || statusText.contains("cancelled") -> SManga.CANCELLED
             else -> SManga.ONGOING
+        }
+
+        val scoreText = document.selectFirst("#ratingScore, .rating .num, .rating-prc [itemprop=ratingValue], [itemprop=ratingValue]")?.text()?.trim()
+        val rawScore = scoreText?.toDoubleOrNull()
+        if (rawScore != null && rawScore > 0.0) {
+            manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+        val viewsText = document.selectFirst(".post-views, .views, .view, .span-spc:contains(Views)")?.text()?.trim()
+        if (!viewsText.isNullOrBlank()) {
+            parseHumanCount(viewsText)?.let { manga.views = it }
         }
 
         return manga

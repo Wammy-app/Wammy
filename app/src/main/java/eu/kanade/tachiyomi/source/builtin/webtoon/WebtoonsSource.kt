@@ -6,6 +6,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.parseHumanCount
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
@@ -84,6 +87,16 @@ class WebtoonsSource(
 
         val img = element.selectFirst("img")
         manga.thumbnail_url = img?.attr("abs:src")?.ifEmpty { img.attr("abs:data-url") }
+
+        val viewsEl = element.selectFirst(".view_count, .count, .cnt, .type_like")
+        if (viewsEl != null) {
+            parseHumanCount(viewsEl.text().trim())?.let { manga.views = it }
+        }
+        val scoreEl = element.selectFirst(".grade_num, .rating, .score")
+        val rawScore = scoreEl?.text()?.toDoubleOrNull()
+        if (rawScore != null && rawScore > 0.0) {
+            manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
         return manga
     }
 
@@ -178,6 +191,16 @@ class WebtoonsSource(
         val ogImage = document.selectFirst("head meta[property='og:image']")?.attr("content")
         manga.thumbnail_url = ogImage?.ifEmpty { null }
             ?: banner?.attr("abs:src")?.ifEmpty { banner.attr("abs:data-url") }
+
+        val viewsEl = document.selectFirst("ul.grade_area li:has(.ico_view) .cnt, ul.grade_area li:has(.ico_subscribe) .cnt, .grade_area .cnt")
+        if (viewsEl != null) {
+            parseHumanCount(viewsEl.text().trim())?.let { manga.views = it }
+        }
+        val gradeEl = document.selectFirst(".grade_area .grade_num, em.grade_num, #_starScoreAverage")
+        val rawGrade = gradeEl?.text()?.toDoubleOrNull()
+        if (rawGrade != null && rawGrade > 0.0) {
+            manga.rating = if (rawGrade <= 5.0) rawGrade * 2.0 else rawGrade
+        }
 
         return manga
     }

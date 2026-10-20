@@ -79,15 +79,23 @@ class ComickSource(
                 manga.title = title
                 manga.thumbnail_url = thumb
 
-                val bayesian = item.optDouble("bayesian_rating", 0.0)
-                val rating = if (bayesian > 0.0) bayesian else item.optDouble("rating", 0.0)
+                val bStr = item.optString("bayesian_rating", "")
+                val bayesian = bStr.toDoubleOrNull() ?: item.optDouble("bayesian_rating", 0.0)
+                val rStr = item.optString("rating", "")
+                val rVal = rStr.toDoubleOrNull() ?: item.optDouble("rating", 0.0)
+                val rating = if (bayesian > 0.0) bayesian else rVal
                 if (rating > 0.0) {
                     manga.rating = rating
                 }
-                val followCount = item.optLong("user_follow_count", 0L)
-                val views = if (followCount > 0L) followCount else item.optLong("view_count", 0L)
-                if (views > 0L) {
-                    manga.views = views
+
+                val followCount = item.optLong("user_follow_count", 0L).takeIf { it > 0 }
+                    ?: item.optLong("follow_count", 0L).takeIf { it > 0 }
+                    ?: item.optLong("view_count", 0L).takeIf { it > 0 }
+                    ?: item.optLong("rating_count", 0L).takeIf { it > 0 }
+                    ?: item.optString("user_follow_count", "").replace(",", "").toLongOrNull()?.takeIf { it > 0 }
+                    ?: item.optString("view_count", "").replace(",", "").toLongOrNull()?.takeIf { it > 0 }
+                if (followCount != null && followCount > 0L) {
+                    manga.views = followCount
                 }
 
                 mangas.add(manga)
@@ -140,10 +148,16 @@ class ComickSource(
         }
 
         val manga = SManga.create()
-        val comicDataScript = document.selectFirst("#comic-data")?.data()
+        val comicDataEl = document.selectFirst("#comic-data, script#__NEXT_DATA__")
+        val comicDataScript = comicDataEl?.let { it.data().ifBlank { it.html() }.ifBlank { it.wholeText() } }?.trim()
 
         if (!comicDataScript.isNullOrBlank()) {
-            val json = JSONObject(comicDataScript)
+            val rawObj = JSONObject(comicDataScript)
+            val json = if (comicDataEl?.id() == "comic-data" || !rawObj.has("props")) {
+                rawObj
+            } else {
+                rawObj.optJSONObject("props")?.optJSONObject("pageProps")?.optJSONObject("comic") ?: rawObj
+            }
             val slug = json.optString("slug")
             if (slug.isNotBlank()) {
                 manga.url = "/comic/$slug"
@@ -199,15 +213,23 @@ class ComickSource(
                 manga.genre = genreList.joinToString(", ")
             }
 
-            val bayesian = json.optDouble("bayesian_rating", 0.0)
-            val rating = if (bayesian > 0.0) bayesian else json.optDouble("rating", 0.0)
+            val bStr = json.optString("bayesian_rating", "")
+            val bayesian = bStr.toDoubleOrNull() ?: json.optDouble("bayesian_rating", 0.0)
+            val rStr = json.optString("rating", "")
+            val rVal = rStr.toDoubleOrNull() ?: json.optDouble("rating", 0.0)
+            val rating = if (bayesian > 0.0) bayesian else rVal
             if (rating > 0.0) {
                 manga.rating = rating
             }
-            val followCount = json.optLong("user_follow_count", 0L)
-            val views = if (followCount > 0L) followCount else json.optLong("view_count", 0L)
-            if (views > 0L) {
-                manga.views = views
+
+            val followCount = json.optLong("user_follow_count", 0L).takeIf { it > 0 }
+                ?: json.optLong("follow_count", 0L).takeIf { it > 0 }
+                ?: json.optLong("view_count", 0L).takeIf { it > 0 }
+                ?: json.optLong("rating_count", 0L).takeIf { it > 0 }
+                ?: json.optString("user_follow_count", "").replace(",", "").toLongOrNull()?.takeIf { it > 0 }
+                ?: json.optString("view_count", "").replace(",", "").toLongOrNull()?.takeIf { it > 0 }
+            if (followCount != null && followCount > 0L) {
+                manga.views = followCount
             }
         } else {
             // Fallback to meta tags

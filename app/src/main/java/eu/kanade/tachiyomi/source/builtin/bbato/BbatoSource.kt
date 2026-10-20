@@ -6,6 +6,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.parseHumanCount
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
@@ -80,6 +83,16 @@ class BbatoSource(
                 setUrlWithoutDomain(poster.attr("abs:href"))
                 title = titleEl.text().trim()
                 thumbnail_url = extractImageUrl(img)
+
+                val scoreText = element.select(".rating, .score, [itemprop=ratingValue], .item-rate").text().trim()
+                val rawScore = Regex("""\b(\d+(?:\.\d+)?)\b""").find(scoreText)?.value?.toDoubleOrNull()
+                if (rawScore != null && rawScore > 0.0) {
+                    rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+                }
+                val viewsText = element.select(".views, .view, .item-views, .visited").text().trim()
+                if (viewsText.isNotBlank()) {
+                    parseHumanCount(viewsText)?.let { views = it }
+                }
             }
         }
 
@@ -113,6 +126,17 @@ class BbatoSource(
             }
 
             thumbnail_url = extractImageUrl(doc.selectFirst(".poster img"))
+
+            val scoreText = doc.select(".rating, .score, [itemprop=ratingValue], .item-rate").text().trim()
+            val rawScore = Regex("""\b(\d+(?:\.\d+)?)\b""").find(scoreText)?.value?.toDoubleOrNull()
+            if (rawScore != null && rawScore > 0.0) {
+                rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+            }
+            val viewsText = doc.select(".views, .view, .item-views, .visited, td:contains(Views) + td").text().trim()
+            if (viewsText.isNotBlank()) {
+                parseHumanCount(viewsText)?.let { views = it }
+            }
+
             initialized = true
         }
     }

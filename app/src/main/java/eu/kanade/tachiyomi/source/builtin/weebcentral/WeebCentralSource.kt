@@ -6,6 +6,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.parseHumanCount
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
@@ -64,6 +67,17 @@ class WeebCentralSource(
         val srcset = element.select("source").first()?.attr("srcset") ?: ""
         val src = element.select("img").first()?.attr("abs:src") ?: ""
         manga.thumbnail_url = if (srcset.isNotBlank()) srcset.replace("small", "normal") else src
+
+        val scoreText = element.select(".rating, .score, [itemprop=ratingValue]").text().trim()
+        val rawScore = Regex("""\b(\d+(?:\.\d+)?)\b""").find(scoreText)?.value?.toDoubleOrNull()
+        if (rawScore != null && rawScore > 0.0) {
+            manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+        val viewsText = element.select(".views, .view, .post-views").text().trim()
+        if (viewsText.isNotBlank()) {
+            parseHumanCount(viewsText)?.let { manga.views = it }
+        }
+
         return manga
     }
 
@@ -126,6 +140,16 @@ class WeebCentralSource(
             val s1 = sections[1]
             manga.title = s1.selectFirst("h1")?.text()?.trim() ?: ""
             manga.description = s1.selectFirst("li:has(strong:contains(Description)) > p")?.text()?.trim()
+        }
+
+        val scoreText = document.select(".rating, .score, [itemprop=ratingValue]").text().trim()
+        val rawScore = Regex("""\b(\d+(?:\.\d+)?)\b""").find(scoreText)?.value?.toDoubleOrNull()
+        if (rawScore != null && rawScore > 0.0) {
+            manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+        val viewsText = document.select("li:has(strong:contains(View)), li:has(strong:contains(Views)), .views, .view").text().trim()
+        if (viewsText.isNotBlank()) {
+            parseHumanCount(viewsText.substringAfter(":"))?.let { manga.views = it }
         }
 
         manga.setUrlWithoutDomain(document.location())
