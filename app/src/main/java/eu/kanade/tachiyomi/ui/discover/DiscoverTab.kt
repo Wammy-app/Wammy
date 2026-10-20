@@ -23,17 +23,15 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +39,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +58,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -125,7 +126,8 @@ object DiscoverTab : Tab {
 
         var selectedSection by rememberSaveable { mutableStateOf(DiscoverSection.LATEST) }
         var isAdultSelected by rememberSaveable { mutableStateOf(false) }
-        var currentPage by rememberSaveable { mutableIntStateOf(1) }
+        var maxLoadedPage by rememberSaveable { mutableIntStateOf(1) }
+        var isLoadingMore by remember { mutableStateOf(false) }
         val gridState = rememberLazyGridState()
 
         Scaffold(
@@ -238,11 +240,11 @@ object DiscoverTab : Tab {
                         if (selectedSection == DiscoverSection.LATEST) s.filter { it.supportsLatest } else s
                     }
 
-                    LaunchedEffect(currentPage, selectedSection, isAdultSelected, targetSources) {
-                        if (currentPage > 1) {
+                    LaunchedEffect(maxLoadedPage, selectedSection, isAdultSelected, targetSources) {
+                        if (maxLoadedPage > 1) {
                             viewModel.loadSourcesForPage(
                                 sources = targetSources,
-                                page = currentPage,
+                                page = maxLoadedPage,
                                 isLatest = (selectedSection == DiscoverSection.LATEST),
                             )
                         }
@@ -251,7 +253,7 @@ object DiscoverTab : Tab {
                     val displayedManga = remember(
                         selectedSection,
                         isAdultSelected,
-                        currentPage,
+                        maxLoadedPage,
                         viewModel.popularCache.toMap(),
                         viewModel.latestCache.toMap(),
                         viewModel.pageCache.toMap(),
@@ -259,27 +261,50 @@ object DiscoverTab : Tab {
                     ) {
                         val result = mutableListOf<Manga>()
                         val seenTitles = mutableSetOf<String>()
-                        val lists = if (currentPage == 1) {
-                            val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
-                            targetSources.mapNotNull { cache[it.id] }
-                        } else {
-                            val cache = viewModel.pageCache
-                            val keySuffix = if (selectedSection == DiscoverSection.LATEST) "latest" else "popular"
-                            targetSources.mapNotNull { cache["${it.id}_${keySuffix}_$currentPage"] }
-                        }
-                        val maxLen = lists.maxOfOrNull { it.size } ?: 0
-                        for (i in 0 until maxLen) {
-                            for (list in lists) {
-                                if (i < list.size) {
-                                    val manga = list[i]
-                                    val normalized = manga.title.trim().lowercase()
-                                    if (seenTitles.add(normalized)) {
-                                        result.add(manga)
+                        for (page in 1..maxLoadedPage) {
+                            val lists = if (page == 1) {
+                                val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
+                                targetSources.mapNotNull { cache[it.id] }
+                            } else {
+                                val cache = viewModel.pageCache
+                                val keySuffix = if (selectedSection == DiscoverSection.LATEST) "latest" else "popular"
+                                targetSources.mapNotNull { cache["${it.id}_${keySuffix}_$page"] }
+                            }
+                            val maxLen = lists.maxOfOrNull { it.size } ?: 0
+                            for (i in 0 until maxLen) {
+                                for (list in lists) {
+                                    if (i < list.size) {
+                                        val manga = list[i]
+                                        val normalized = manga.title.trim().lowercase()
+                                        if (seenTitles.add(normalized)) {
+                                            result.add(manga)
+                                        }
                                     }
                                 }
                             }
                         }
                         result
+                    }
+
+                    // Reset isLoadingMore when new data arrives
+                    LaunchedEffect(displayedManga.size) {
+                        isLoadingMore = false
+                    }
+
+                    // Infinite scroll: detect when near bottom and auto-load next page
+                    val shouldLoadMore by remember {
+                        derivedStateOf {
+                            val layoutInfo = gridState.layoutInfo
+                            val totalItems = layoutInfo.totalItemsCount
+                            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                            totalItems > 0 && lastVisibleItem >= totalItems - 6
+                        }
+                    }
+                    LaunchedEffect(shouldLoadMore) {
+                        if (shouldLoadMore && !isLoadingMore && displayedManga.isNotEmpty()) {
+                            isLoadingMore = true
+                            maxLoadedPage++
+                        }
                     }
 
                     val featuredManga = remember(trendingAggregated, adultTrendingAggregated, isAdultSelected) {
@@ -346,13 +371,15 @@ object DiscoverTab : Tab {
                                     onSelectSection = { section ->
                                         if (selectedSection != section) {
                                             selectedSection = section
-                                            currentPage = 1
+                                            maxLoadedPage = 1
+                                            isLoadingMore = false
                                             scope.launch { gridState.animateScrollToItem(0) }
                                         }
                                     },
                                     onToggleAdult = {
                                         isAdultSelected = !isAdultSelected
-                                        currentPage = 1
+                                        maxLoadedPage = 1
+                                        isLoadingMore = false
                                         scope.launch { gridState.animateScrollToItem(0) }
                                     },
                                 )
@@ -375,13 +402,8 @@ object DiscoverTab : Tab {
                                 }
                             } else if (displayedManga.isEmpty()) {
                                 val isLoadingTarget = targetSources.any { source ->
-                                    if (currentPage == 1) {
-                                        val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
-                                        !cache.containsKey(source.id)
-                                    } else {
-                                        val keySuffix = if (selectedSection == DiscoverSection.LATEST) "latest" else "popular"
-                                        !viewModel.pageCache.containsKey("${source.id}_${keySuffix}_$currentPage")
-                                    }
+                                    val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
+                                    !cache.containsKey(source.id)
                                 }
                                 if (isLoadingTarget) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -420,23 +442,20 @@ object DiscoverTab : Tab {
                                 }
                             }
 
-                            // 5. Pagination Controls (< Prev  Page X  Next >)
-                            if (displayedManga.isNotEmpty() || currentPage > 1) {
+                            // 5. Loading indicator for infinite scroll
+                            if (isLoadingMore) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
-                                    DiscoverPaginationControls(
-                                        currentPage = currentPage,
-                                        hasNext = displayedManga.isNotEmpty(),
-                                        onPrev = {
-                                            if (currentPage > 1) {
-                                                currentPage--
-                                                scope.launch { gridState.animateScrollToItem(0) }
-                                            }
-                                        },
-                                        onNext = {
-                                            currentPage++
-                                            scope.launch { gridState.animateScrollToItem(0) }
-                                        },
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 24.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(28.dp),
+                                            strokeWidth = 2.5.dp,
+                                        )
+                                    }
                                 }
                             }
 
@@ -624,69 +643,6 @@ private fun DiscoverSectionHeader(
     }
 }
 
-@Composable
-private fun DiscoverPaginationControls(
-    currentPage: Int,
-    hasNext: Boolean,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 18.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OutlinedButton(
-            onClick = onPrev,
-            enabled = currentPage > 1,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-            ),
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
-                contentDescription = "Previous Page",
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Prev", fontWeight = FontWeight.Medium)
-        }
-
-        Spacer(modifier = Modifier.width(20.dp))
-
-        Text(
-            text = "Page $currentPage",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        Spacer(modifier = Modifier.width(20.dp))
-
-        OutlinedButton(
-            onClick = onNext,
-            enabled = hasNext,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-            ),
-        ) {
-            Text("Next", fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = "Next Page",
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
 
 @Composable
 private fun AdultEmptyStateCard(
