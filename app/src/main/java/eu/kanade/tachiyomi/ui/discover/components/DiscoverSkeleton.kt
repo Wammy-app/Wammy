@@ -87,7 +87,6 @@ fun HeroFeaturedCardSkeleton(
             .fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),

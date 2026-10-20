@@ -199,8 +199,7 @@ fun HeroFeaturedCard(
         }
     }
 
-    val gradientEndY = with(density) { 200.dp.toPx() }
-    val borderEndY = with(density) { 110.dp.toPx() }
+    val gradientEndY = with(density) { 180.dp.toPx() }
 
     Surface(
         modifier = modifier
@@ -212,31 +211,16 @@ fun HeroFeaturedCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                // Subtle ambient cover tint that smoothly blends with the background
+                // Very subtle ambient wash that seamlessly blends with the dark background without any harshness
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            activeColor.copy(alpha = 0.07f),
-                            activeColor.copy(alpha = 0.02f),
+                            activeColor.copy(alpha = 0.04f),
                             Color.Transparent,
                         ),
                         startY = 0f,
                         endY = gradientEndY,
                     ),
-                )
-                // Refined, subtle outline so the card boundary can be clearly seen without being bold
-                .border(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            activeColor.copy(alpha = 0.20f),
-                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
-                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.06f),
-                        ),
-                        startY = 0f,
-                        endY = borderEndY,
-                    ),
-                    shape = RoundedCornerShape(20.dp),
                 ),
         ) {
             Column(
