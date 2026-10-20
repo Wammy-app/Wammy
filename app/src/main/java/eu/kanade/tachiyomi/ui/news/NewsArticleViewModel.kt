@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import mihon.core.viewmodel.StateViewModel
 
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+
 data class NewsArticleState(
     val isLoading: Boolean = true,
     val article: NewsArticle? = null,
@@ -16,7 +19,7 @@ data class NewsArticleState(
 
 class NewsArticleViewModel(
     val item: NewsItem,
-    private val repository: NewsRepository = NewsRepository(),
+    private val repository: NewsRepository = Injekt.get(),
 ) : StateViewModel<NewsArticleState>(
     NewsArticleState(
         article = NewsArticle(

@@ -24,9 +24,17 @@ data class NewsState(
 )
 
 class NewsViewModel(
-    private val repository: NewsRepository = NewsRepository(),
+    private val repository: NewsRepository = Injekt.get(),
     private val context: Application = Injekt.get(),
-) : StateViewModel<NewsState>(NewsState()) {
+) : StateViewModel<NewsState>(
+    run {
+        val cached = repository.getCachedNews()
+        NewsState(
+            items = cached,
+            isLoading = cached.isEmpty(),
+        )
+    },
+) {
 
     init {
         loadNews(forceRefresh = false)

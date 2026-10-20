@@ -26,11 +26,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import eu.kanade.tachiyomi.data.news.model.NewsItem
 
 @Composable
@@ -65,7 +68,10 @@ fun NewsCard(
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 ) {
                     AsyncImage(
-                        model = coverUrl,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(coverUrl)
+                            .crossfade(true)
+                            .build(),
                         contentDescription = item.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier

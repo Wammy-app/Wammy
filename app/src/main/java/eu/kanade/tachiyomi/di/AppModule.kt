@@ -148,6 +148,7 @@ class AppModule(val app: Application) : InjektModule {
         }
         addSingletonFactory { eu.kanade.tachiyomi.data.sync.DriveSyncManager(app, get()) }
         addSingletonFactory { eu.kanade.tachiyomi.data.sync.FirestoreUserRepository() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.news.NewsRepository(app) }
 
         addSingletonFactory { ChapterCache(app, get()) }
         addSingletonFactory { CoverCache(app) }

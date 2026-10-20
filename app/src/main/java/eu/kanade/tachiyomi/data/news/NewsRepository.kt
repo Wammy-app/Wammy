@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.data.news
 
+import android.app.Application
+import android.content.Context
 import android.util.Log
 import eu.kanade.tachiyomi.data.news.model.NewsArticle
 import eu.kanade.tachiyomi.data.news.model.NewsFeedResponse
@@ -9,8 +11,10 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.interceptor.rateLimitExempt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -18,68 +22,137 @@ import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.net.URL
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class NewsRepository(
+    private val context: Context = Injekt.get<Application>(),
     private val client: OkHttpClient = Injekt.get<NetworkHelper>().client.rateLimitExempt(),
 ) {
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = false }
 
-    // Fast client for aggregator to avoid blocking UI when free-tier Render is cold-starting
-    private val fastClient: OkHttpClient = client.newBuilder()
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(4, TimeUnit.SECONDS)
+    // Aggregator client with 8s timeout to handle Render cold-starts gracefully
+    private val aggregatorClient: OkHttpClient = client.newBuilder()
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
-    // Dedicated client for RSS fallback with a reasonable 10s timeout
+    // Dedicated client for RSS fallback and quick metadata scraping
     private val rssClient: OkHttpClient = client.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(6, TimeUnit.SECONDS)
+        .readTimeout(6, TimeUnit.SECONDS)
         .build()
 
-    // In-memory cache for feed (15 min freshness)
-    private var cachedNewsFeed: List<NewsItem>? = null
-    private var feedLastFetched: Long = 0L
-    private val feedTtlMillis = TimeUnit.MINUTES.toMillis(15)
-
-    // In-memory cache for full articles (60 min freshness)
-    private val articleCache = mutableMapOf<String, Pair<NewsArticle, Long>>()
-    private val articleTtlMillis = TimeUnit.MINUTES.toMillis(60)
+    private val diskCacheFile by lazy {
+        File(context.cacheDir, CACHE_FILE_NAME)
+    }
 
     companion object {
         private const val TAG = "NewsRepository"
         private const val AGGREGATOR_BASE = "https://yomite-parsers.onrender.com"
         private const val ANIME_CORNER_FEED = "https://animecorner.me/feed/"
         private const val ANN_FEED = "https://www.animenewsnetwork.com/news/rss.xml?ann-edition=us"
+        private const val CACHE_FILE_NAME = "news_feed_cache_v2.json"
+
+        // In-memory cache for feed (15 min freshness), shared across all NewsRepository instances
+        @Volatile
+        private var cachedNewsFeed: List<NewsItem>? = null
+        @Volatile
+        private var feedLastFetched: Long = 0L
+        private val feedTtlMillis = TimeUnit.MINUTES.toMillis(15)
+
+        // In-memory cache for full articles (60 min freshness)
+        private val articleCache = ConcurrentHashMap<String, Pair<NewsArticle, Long>>()
+        private val articleTtlMillis = TimeUnit.MINUTES.toMillis(60)
+    }
+
+    fun getCachedNews(): List<NewsItem> {
+        val mem = cachedNewsFeed
+        if (!mem.isNullOrEmpty()) {
+            return mem
+        }
+        val disk = readDiskCache()
+        if (disk.isNotEmpty()) {
+            cachedNewsFeed = disk
+            return disk
+        }
+        return emptyList()
+    }
+
+    private fun readDiskCache(): List<NewsItem> {
+        return try {
+            if (diskCacheFile.exists()) {
+                val content = diskCacheFile.readText()
+                if (content.isNotBlank()) {
+                    val parsed = json.decodeFromString<List<NewsItem>>(content)
+                    if (parsed.isNotEmpty()) {
+                        feedLastFetched = diskCacheFile.lastModified()
+                        return parsed
+                    }
+                }
+            }
+            emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error reading news disk cache: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private fun saveToDiskCache(items: List<NewsItem>) {
+        if (items.isEmpty()) return
+        try {
+            val jsonString = json.encodeToString(items)
+            val tempFile = File(context.cacheDir, "$CACHE_FILE_NAME.tmp")
+            tempFile.writeText(jsonString)
+            if (tempFile.exists()) {
+                tempFile.renameTo(diskCacheFile)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed writing news disk cache: ${e.message}")
+        }
     }
 
     suspend fun getNews(forceRefresh: Boolean = false): Result<List<NewsItem>> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        if (forceRefresh) {
-            cachedNewsFeed = null
-        } else if (cachedNewsFeed != null && (now - feedLastFetched) < feedTtlMillis) {
-            return@withContext Result.success(cachedNewsFeed!!)
+        val cached = getCachedNews()
+
+        if (!forceRefresh && cached.isNotEmpty() && (now - feedLastFetched) < feedTtlMillis) {
+            return@withContext Result.success(cached)
         }
 
-        // 1. Try remote aggregator API with fastClient (fail fast within 3s if sleeping)
+        // Cache map to preserve existing imageUrls so photos are NEVER lost
+        val knownImages = (cached + readDiskCache())
+            .associate { it.url to it.imageUrl }
+            .filterValues { !it.isNullOrBlank() }
+
+        // 1. Try remote aggregator API with 8s timeout (gives waking Render servers time to respond)
         try {
             val request = Request.Builder()
                 .url("$AGGREGATOR_BASE/api/news")
                 .header("User-Agent", "Wammy/1.0")
                 .build()
 
-            fastClient.newCall(request).execute().use { response ->
+            aggregatorClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
                     val bodyString = response.body.string()
                     val parsed = json.decodeFromString<NewsFeedResponse>(bodyString)
                     if (parsed.items.isNotEmpty()) {
-                        cachedNewsFeed = parsed.items
+                        // Merge with known images if any item in parsed is missing imageUrl
+                        val finalItems = parsed.items.map { item ->
+                            if (item.imageUrl.isNullOrBlank() && knownImages.containsKey(item.url)) {
+                                item.copy(imageUrl = knownImages[item.url])
+                            } else {
+                                item
+                            }
+                        }
+                        cachedNewsFeed = finalItems
                         feedLastFetched = now
-                        return@withContext Result.success(parsed.items)
+                        saveToDiskCache(finalItems)
+                        return@withContext Result.success(finalItems)
                     }
                 }
             }
@@ -87,12 +160,13 @@ class NewsRepository(
             Log.w(TAG, "Aggregator news API unreachable/timed out, falling back to direct RSS: ${e.message}")
         }
 
-        // 2. Direct RSS Fallback (Anime Corner & Anime News Network) in parallel
+        // 2. Direct RSS Fallback with concurrent image extraction
         try {
-            val directItems = fetchDirectRssFeeds()
+            val directItems = fetchDirectRssFeeds(knownImages)
             if (directItems.isNotEmpty()) {
                 cachedNewsFeed = directItems
                 feedLastFetched = now
+                saveToDiskCache(directItems)
                 return@withContext Result.success(directItems)
             }
         } catch (e: Exception) {
@@ -100,8 +174,8 @@ class NewsRepository(
         }
 
         // 3. Fallback to stale cache if present
-        cachedNewsFeed?.let {
-            return@withContext Result.success(it)
+        if (cached.isNotEmpty()) {
+            return@withContext Result.success(cached)
         }
 
         Result.failure(Exception("Unable to load anime news. Please check your internet connection."))
@@ -171,12 +245,61 @@ class NewsRepository(
         Result.failure(Exception("Unable to load full article content."))
     }
 
-    private suspend fun fetchDirectRssFeeds(): List<NewsItem> = coroutineScope {
+    private suspend fun fetchDirectRssFeeds(knownImages: Map<String, String?>): List<NewsItem> = coroutineScope {
         val acDeferred = async(Dispatchers.IO) { fetchAnimeCornerRss() }
         val annDeferred = async(Dispatchers.IO) { fetchAnnRss() }
-        val acItems = acDeferred.await()
-        val annItems = annDeferred.await()
-        (acItems + annItems).sortedByDescending { it.publishedAt }
+        val rawItems = (acDeferred.await() + annDeferred.await()).sortedByDescending { it.publishedAt }
+
+        // Enrich items with imageUrl so fallback NEVER shows blank missing photos
+        val enriched = rawItems.mapIndexed { index, item ->
+            async(Dispatchers.IO) {
+                val cachedImg = knownImages[item.url]
+                if (!cachedImg.isNullOrBlank()) {
+                    item.copy(imageUrl = cachedImg)
+                } else if (!item.imageUrl.isNullOrBlank()) {
+                    item
+                } else if (index < 12) {
+                    val og = extractOgImageFast(item.url)
+                    if (!og.isNullOrBlank()) {
+                        item.copy(imageUrl = og)
+                    } else {
+                        item
+                    }
+                } else {
+                    item
+                }
+            }
+        }.awaitAll()
+
+        enriched
+    }
+
+    private fun extractOgImageFast(url: String): String? {
+        return try {
+            val req = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .build()
+            rssClient.newCall(req).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val inputStream = response.body.byteStream()
+                val buffer = ByteArray(49152) // 48 KB is plenty for <head>
+                var totalRead = 0
+                while (totalRead < buffer.size) {
+                    val read = inputStream.read(buffer, totalRead, buffer.size - totalRead)
+                    if (read == -1) break
+                    totalRead += read
+                }
+                val headHtml = String(buffer, 0, totalRead, Charsets.UTF_8)
+                val doc = Jsoup.parse(headHtml, url)
+                val og = doc.selectFirst("meta[property=og:image]")?.attr("content")
+                    ?: doc.selectFirst("meta[name=twitter:image]")?.attr("content")
+                    ?: doc.selectFirst("link[rel=image_src]")?.attr("href")
+                og?.takeIf { it.isNotBlank() && it.startsWith("http") }?.let { cleanWordPressResizes(it) }
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun fetchAnimeCornerRss(): List<NewsItem> {
@@ -196,6 +319,8 @@ class NewsRepository(
                         val desc = item.selectFirst("description")?.text()
                             ?.replace(Regex("<!\\[CDATA\\[|\\]\\]>"), "")
                             ?.trim().orEmpty()
+                        val mediaThumb = item.selectFirst("media|thumbnail, media|content, enclosure[type^=image]")?.attr("url")
+                            ?.takeIf { it.isNotBlank() }
 
                         if (link.isNotBlank()) {
                             results.add(
@@ -205,6 +330,7 @@ class NewsRepository(
                                     summary = desc,
                                     publishedAt = parseRssDateToIso(pubDate),
                                     url = link,
+                                    imageUrl = mediaThumb,
                                     source = "Anime Corner",
                                 )
                             )
@@ -234,6 +360,8 @@ class NewsRepository(
                         val pubDate = item.selectFirst("pubDate")?.text()?.trim()
                             ?: item.selectFirst("dc|date")?.text()?.trim().orEmpty()
                         val desc = item.selectFirst("description")?.text()?.trim().orEmpty()
+                        val mediaThumb = item.selectFirst("media|thumbnail, media|content, enclosure[type^=image]")?.attr("url")
+                            ?.takeIf { it.isNotBlank() }
 
                         if (link.isNotBlank()) {
                             results.add(
@@ -243,6 +371,7 @@ class NewsRepository(
                                     summary = desc,
                                     publishedAt = parseRssDateToIso(pubDate),
                                     url = link,
+                                    imageUrl = mediaThumb,
                                     source = "Anime News Network",
                                 )
                             )
@@ -391,7 +520,6 @@ class NewsRepository(
     private fun parseRssDateToIso(dateStr: String): String {
         if (dateStr.isBlank()) return Date().toString()
         try {
-            // E.g. "Wed, 14 Oct 2026 11:47:28 +0000"
             val rfc822 = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", Locale.US)
             val parsed = rfc822.parse(dateStr)
             if (parsed != null) {
