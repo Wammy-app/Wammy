@@ -192,9 +192,24 @@ fun HeroFeaturedCard(
     LaunchedEffect(pagerState, items.size) {
         while (true) {
             delay(5000)
-            if (items.size > 1) {
-                val nextPage = (pagerState.currentPage + 1) % items.size
-                pagerState.animateScrollToPage(nextPage, animationSpec = tween(800))
+            if (items.size > 1 && !pagerState.isScrollInProgress) {
+                try {
+                    val nextPage = (pagerState.currentPage + 1) % items.size
+                    pagerState.animateScrollToPage(nextPage, animationSpec = tween(800))
+                } catch (_: Exception) {
+                    // Ignored on interruption
+                }
+            }
+        }
+    }
+
+    // Auto-snap safeguard: if scrolling was interrupted midway, snap immediately to the settled page
+    LaunchedEffect(pagerState.isScrollInProgress) {
+        if (!pagerState.isScrollInProgress && kotlin.math.abs(pagerState.currentPageOffsetFraction) > 0.001f) {
+            try {
+                pagerState.animateScrollToPage(pagerState.settledPage)
+            } catch (_: Exception) {
+                pagerState.scrollToPage(pagerState.settledPage)
             }
         }
     }
