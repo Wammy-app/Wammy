@@ -5,7 +5,7 @@
 <h1 align="center">Wammy</h1>
 
 <p align="center">
-  A modern, open-source manga, manhwa, and light novel reader for Android with a clean Material 3 design. Supports Mihon and LNReader extensions.
+  A modern, high-performance, open-source manga, manhwa, and light novel reader for Android with a clean Material 3 design. Built with Jetpack Compose, featuring native built-in sources, Mihon APK extensions, and LNReader plugin support.
 </p>
 
 <p align="center">
@@ -36,109 +36,126 @@
 
 ## About
 
-Wammy is a free and open-source manga, manhwa, and light novel reader for Android that brings comics and novels together into a single, fast, and customizable interface.
+Wammy is a free and open-source Android application that unifies manga, manhwa, manhua, and light novels into a single, blazing-fast, and customizable reading experience. Built from the ground up with Jetpack Compose and modern Android architecture.
 
-Please give the repo a star if you like the project. It helps more people find it.
+If you enjoy using Wammy, please consider starring the repository — it helps more readers discover the project!
+
+---
 
 ## Screenshots
 
 <p align="center">
-  <img src=".github/images/home.jpg" alt="Wammy home screen" width="23%" />
-  <img src=".github/images/library.jpg" alt="Wammy library screen" width="23%" />
-  <img src=".github/images/details.jpg" alt="Wammy manga details screen" width="23%" />
-  <img src=".github/images/profile.jpg" alt="Wammy profile screen" width="23%" />
+  <img src=".github/images/home.jpg" alt="Wammy Home & Discover Screen" width="23%" />
+  <img src=".github/images/library.jpg" alt="Wammy Library Grid" width="23%" />
+  <img src=".github/images/details.jpg" alt="Wammy Manga Details Screen" width="23%" />
+  <img src=".github/images/profile.jpg" alt="Wammy Profile Screen" width="23%" />
 </p>
 
 <p align="center">
-  <sub>Home & Recommendations | Library Grid | Manga Details & Suggestions | User Profile & Favorites</sub>
+  <sub><b>Home & Discover</b> (Hero Featured Carousel & Badges) | <b>Library</b> (Comfortable/Compact Grid) | <b>Details & Suggestions</b> | <b>User Profile & Cloud Sync</b></sub>
 </p>
+
+---
 
 ## Highlights
 
-- Unified library supporting both manga and light novels side-by-side with unread badges, custom categories, and filtering.
-- Multi-source extension ecosystem supporting APK extensions, sandboxed in-app extensions, and LNReader JS plugins.
-- Google Drive cloud sync and local backup/restore to keep your library, history, categories, and settings synced across devices.
-- Custom user profiles with cloud-synced Top 5 favorite manga and light novels.
-- Built-in Text-to-Speech (TTS) support and customizable typography for light novel reading.
-- Automatic reading progress tracking with AniList, MyAnimeList, Kitsu, and more.
-- Free and open-source under the Apache License 2.0.
+- **⚡ Blazing Fast Cold Start**: Non-blocking migration, deferred warmup, and phased rendering deliver startup speeds under ~1.0–1.5s in release mode.
+- **🎨 Modern Material 3 UI**: Dynamic cover-colored ambient hero cards ("Popular New Titles" carousel with auto-snap safeguards), theme-adaptive navigation, and pure dark/OLED mode.
+- **⭐ Live Ratings & View Badges**: Star ratings and view counts rendered directly on manga cards across browse catalogs, search, and library grids.
+- **📚 Unified Manga & Novel Library**: Read manga and light novels side-by-side with unread chapter badges, reading status, and custom category management.
+- **🔌 Built-In Native Sources**: Core sources (MangaDex, Webtoons, ComicK, Mangakakalot, Atsumaru, ManhuaPlus, WeebCentral, Aster Scans, and more) work right out of the box with zero APK installation required.
+- **🧩 Universal Extension Support**: Install external APK extensions, silent sandboxed extensions, and LNReader JavaScript novel plugins.
+- **📂 Streamlined Browse Tab**: Logically reordered tabs (Manga Sources, Novel Sources, Manga Extensions, Novel Extensions, Manga Migrate, Novel Migrate) with zero-lag pre-warmed navigation.
+- **☁️ Cloud Sync & Backups**: Sync your reading progress, library, categories, and custom Top 5 favorites via Google Drive, with full local backup/restore support.
+- **🗣️ Advanced Novel Reader**: Customizable typography, background themes, line spacing, margins, and built-in Text-to-Speech (TTS) narration.
+- **📊 Tracker Integrations**: Two-way synchronization with AniList, MyAnimeList, Kitsu, Shikimori, Bangumi, and MangaUpdates.
 
-<details>
-<summary><strong>Features</strong></summary>
-
-- Unified manga, webtoon, and light novel reading experience with configurable viewer modes (Left-to-Right, Right-to-Left, Vertical, and Webtoon Strip).
-- Advanced novel reader with custom fonts, text sizing, margins, background themes, and Text-to-Speech (TTS) playback.
-- Sandboxed extension mode allowing extensions to be installed and updated silently inside the app without system install prompts.
-- Dedicated Discover feed aggregating trending and latest updates across your installed sources.
-- Google Drive cloud backup and automatic periodic synchronization.
-- Local backup and restore support for safeguarding or migrating your library.
-- Offline reading with background download queue management for both manga chapters and novel volumes.
-- Two-way tracker integration with AniList, MyAnimeList, Kitsu, Shikimori, Bangumi, and MangaUpdates.
-- Dynamic Material 3 theming with pure dark/OLED mode support.
-- App lock with biometric authentication and incognito reading mode.
-
-</details>
-
-## Star History
-
-<a href="https://www.star-history.com/#kainotch/Wammy&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=kainotch/Wammy&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=kainotch/Wammy&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=kainotch/Wammy&type=Date" />
- </picture>
-</a>
-
-## Install
-
-1. Open the [Official Download Page](https://kainotch.github.io/WammyWeb/download/) or the [latest GitHub release](https://github.com/kainotch/Wammy/releases/latest).
-2. Download the newest `Wammy` APK.
-3. Install it on a compatible Android device (enable **Install from Unknown Sources** if prompted).
-4. Add your preferred extension repository or sources, then start reading.
+---
 
 ## Building from Source
 
 ### Prerequisites
 
-- Android Studio (Latest Stable)
-- JDK 17+
-- Android SDK API level 35
+- **Android Studio**: Ladybug (2024.2.1) or newer
+- **JDK**: Java 17+ (or Android Studio bundled JBR)
+- **Android SDK**: API level 35
 
 ### Steps
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/kainotch/Wammy.git
 cd Wammy
 
-# Build the debug APK
+# 2. Check out the development branch
+git checkout dev
+
+# 3. Fast Kotlin compilation check
+./gradlew :app:compileDebugKotlin
+
+# 4. Assemble the debug APK
 ./gradlew :app:assembleDebug
 ```
 
-The APK will be generated at `app/build/outputs/apk/debug/app-debug.apk`.
+The compiled APK will be located at `app/build/outputs/apk/debug/app-debug.apk`.
+
+---
+
+## Contributing
+
+We welcome contributions of all shapes and sizes! Whether you want to fix a bug, enhance the UI, add/improve a built-in source, or translate the app, here is how you can get started:
+
+### Where You Can Help
+
+1. **Built-in Sources & Parsers** (`app/.../source/builtin/`):
+   - Add view count and rating parsing for new websites.
+   - Fix broken scrapers or API endpoints when upstream sites change.
+2. **UI & Compose Components** (`presentation/` and `app/.../presentation/`):
+   - Polish animations, transitions, and gesture handling.
+   - Refine Material 3 styling and dark/light theme consistency.
+3. **Novel Reader & Plugins** (`app/.../source/builtin/novel/`):
+   - Enhance the novel reader engine, TTS features, and EPUB/HTML rendering.
+4. **Performance & Optimization**:
+   - Memory profiling, list scrolling smoothness, and image caching improvements.
+5. **Translations (i18n)** (`i18n/` and `i18n-novel/`):
+   - Help localize Wammy into your native language.
+
+### Contribution Workflow
+
+1. **Fork & Branch**:
+   - Fork the repository on GitHub.
+   - Create your feature branch from **`dev`** (`git checkout -b feat/my-new-feature dev`).
+   - > **Note:** Please always branch from and target **`dev`**, as `main` is reserved for stable production releases.
+2. **Make Focused Changes**:
+   - Keep your changes clean, well-scoped, and follow Kotlin coding conventions.
+   - Preserve existing docstrings, licenses, and architecture patterns.
+3. **Verify Locally**:
+   - Ensure the project compiles cleanly before submitting:
+     ```bash
+     ./gradlew :app:compileDebugKotlin
+     ./gradlew :app:assembleDebug
+     ```
+4. **Commit & Pull Request**:
+   - Commit with descriptive commit messages (e.g., `feat(source): add views parsing to Webtoons` or `fix(discover): prevent hero carousel freeze`).
+   - Push to your fork and open a Pull Request targeting **`dev`**.
+   - Include a clear description of your changes, along with screenshots or GIFs for any UI modifications.
+
+Got questions or want to discuss a large feature before building? Join our [Discord community](https://discord.com/invite/qybFSATs7Q) — we're happy to chat and help!
+
+---
 
 ## FAQ
 
 ### Does Wammy include built-in manga or novels?
-> No. Wammy does not include built-in content. Sources are provided through external extensions, JS plugins, or repositories added by users.
+> Wammy includes native scraper engines for popular community-curated online sources out of the box (zero APK downloads required), as well as support for third-party extensions and plugins. Wammy does not host, store, or own any copyrighted media files.
 
 ### Is Wammy free?
-> Yes. Wammy is completely free and open-source under the Apache License 2.0.
+> Yes. Wammy is 100% free and open-source under the Apache License 2.0, with no paid paywalls or intrusive advertisements.
 
 ### How does Cloud Sync work?
-> You can sign in with your Google account to back up and synchronize your library, reading progress, categories, and tracker bindings to your private Google Drive AppData folder.
+> Sign in with your Google account to back up and synchronize your library, reading progress, categories, and tracker bindings directly to your personal Google Drive AppData folder.
 
-### Can I contribute?
-> Yes. Pull requests for bug fixes, improvements, and new features are welcome.
-
-## Contribute
-
-1. Fork the repository.
-2. Create a focused branch for your change.
-3. Build locally with `./gradlew :app:assembleDebug`.
-4. Open a Pull Request with a clear explanation of what changed.
-
-For full documentation, extension guides, and FAQs, visit the [Official Website](https://kainotch.github.io/WammyWeb/).
+---
 
 ## License
 
@@ -158,6 +175,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
+---
+
 ## Disclaimer
 
-The developer(s) of this application do not have any affiliation with the content providers available. Content is provided by external libraries or extensions added or imported by users; the application itself does not host or include any built-in content.
+The developer(s) of this application have no affiliation with any external content providers. Content is provided by third-party online websites, libraries, or extensions added by users; the application itself does not host or distribute any copyright content.
