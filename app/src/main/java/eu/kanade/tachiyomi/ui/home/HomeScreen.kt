@@ -109,7 +109,6 @@ object HomeScreen : Screen() {
         LibraryTab,
         HistoryTab,
         BrowseTab,
-        NewsTab,
         MoreTab,
     )
 
@@ -118,7 +117,6 @@ object HomeScreen : Screen() {
         NovelsTab,
         HistoryTab,
         BrowseTab,
-        NewsTab,
         MoreTab,
     )
 
@@ -350,7 +348,10 @@ object HomeScreen : Screen() {
                                 }
                                 BrowseTab
                             }
-                            Tab.News -> NewsTab
+                            Tab.News -> {
+                                navigator.push(eu.kanade.presentation.news.NewsScreen())
+                                tabNavigator.current
+                            }
                             is Tab.More -> MoreTab
                         }
 

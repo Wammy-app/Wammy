@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Newspaper
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
@@ -356,7 +357,7 @@ object DiscoverTab : Tab {
                                 }
                             }
 
-                            // 2. Filter Buttons Row for Default Sources (Latest Updates, Popular — NO Adult)
+                            // 2. Filter Buttons Row for Default Sources (Latest Updates, Popular, News — NO Adult)
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 DiscoverFilterButtonRow(
                                     selectedSection = defaultSection,
@@ -370,6 +371,9 @@ object DiscoverTab : Tab {
                                         }
                                     },
                                     onToggleAdult = {},
+                                    onNewsClick = {
+                                        navigator.push(eu.kanade.presentation.news.NewsScreen())
+                                    },
                                 )
                             }
 
@@ -589,6 +593,7 @@ private fun DiscoverFilterButtonRow(
     onSelectSection: (DiscoverSection) -> Unit,
     onToggleAdult: () -> Unit,
     modifier: Modifier = Modifier,
+    onNewsClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -613,7 +618,17 @@ private fun DiscoverFilterButtonRow(
             onClick = { onSelectSection(DiscoverSection.POPULAR) },
         )
 
-        // 3. Adult Button (only visible if user has an extension that shows adult manga)
+        // 3. News Button (on default source row right next to Popular)
+        if (onNewsClick != null) {
+            FilterPillButton(
+                selected = false,
+                text = "News",
+                icon = Icons.Outlined.Newspaper,
+                onClick = onNewsClick,
+            )
+        }
+
+        // 4. Adult Button (only visible in extension section if user has adult extensions)
         if (showAdultOption) {
             AdultFilterButton(
                 isActive = isAdultSelected,
