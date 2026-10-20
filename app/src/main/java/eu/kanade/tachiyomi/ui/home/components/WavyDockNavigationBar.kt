@@ -99,7 +99,7 @@ fun WavyDockNavigationBar(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 8.dp, end = 8.dp, bottom = 6.dp),
+            .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -113,7 +113,7 @@ fun WavyDockNavigationBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .height(60.dp)
                     .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -147,14 +147,14 @@ fun WavyDockNavigationBar(
             Spacer(modifier = Modifier.width(6.dp))
             Surface(
                 modifier = Modifier
-                    .size(50.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .size(60.dp)
+                    .clip(RoundedCornerShape(18.dp))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = androidx.compose.material3.ripple(),
                         onClick = onReadingClick,
                     ),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = selectedContainer,
                 contentColor = selectedContent,
                 shadowElevation = 4.dp,
@@ -166,7 +166,7 @@ fun WavyDockNavigationBar(
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.MenuBook,
                         contentDescription = "Resume Reading",
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(26.dp),
                         tint = selectedContent,
                     )
                 }
@@ -199,7 +199,7 @@ private fun RowScope.FloatingNavItem(
     Box(
         modifier = Modifier
             .weight(animatedWeight)
-            .height(50.dp)
+            .height(60.dp)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -214,9 +214,9 @@ private fun RowScope.FloatingNavItem(
     ) {
         Box(
             modifier = Modifier
-                .height(38.dp)
+                .height(44.dp)
                 .background(color = itemBackgroundColor, shape = CircleShape)
-                .padding(horizontal = if (isSelected) 8.dp else 2.dp),
+                .padding(horizontal = if (isSelected) 10.dp else 4.dp),
             contentAlignment = Alignment.Center,
         ) {
             Row(
@@ -251,12 +251,12 @@ private fun RowScope.FloatingNavItem(
                     Text(
                         text = title,
                         color = itemContentColor,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 4.dp),
+                        modifier = Modifier.padding(start = 5.dp),
                     )
                 }
             }
@@ -284,7 +284,7 @@ private fun TabIcon(
     }
 
     val iconComposable: @Composable () -> Unit = {
-        val iconSize = if (tab is MoreTab) 24.dp else 22.dp
+        val iconSize = 24.dp
         if (filledIcon != null && outlinedIcon != null) {
             val vector = if (isSelected) filledIcon else outlinedIcon
             Icon(
