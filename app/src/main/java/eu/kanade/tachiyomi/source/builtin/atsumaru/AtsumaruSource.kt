@@ -6,6 +6,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.parseHumanCount
+import eu.kanade.tachiyomi.source.model.rating
+import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.HttpSource
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -277,6 +280,20 @@ class AtsumaruSource(
             "hiatus" -> SManga.ON_HIATUS
             "canceled", "cancelled" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
+        }
+
+        val mbRating = item.optDouble("mbRating", 0.0).takeIf { it > 0.0 }
+            ?: item.optDouble("rating", 0.0).takeIf { it > 0.0 }
+            ?: item.optDouble("score", 0.0).takeIf { it > 0.0 }
+        if (mbRating != null && mbRating > 0.0) {
+            manga.rating = mbRating
+        }
+
+        val rawViews = item.opt("views")
+        if (rawViews is Number) {
+            manga.views = rawViews.toLong()
+        } else if (rawViews is String && rawViews.isNotBlank()) {
+            parseHumanCount(rawViews)?.let { manga.views = it }
         }
 
         return manga

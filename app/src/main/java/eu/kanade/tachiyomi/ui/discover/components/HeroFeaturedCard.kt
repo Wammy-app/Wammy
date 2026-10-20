@@ -62,11 +62,13 @@ import eu.kanade.tachiyomi.util.system.getBitmapOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import eu.kanade.presentation.library.components.RatingBadge
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.manga.model.asMangaCover
+import tachiyomi.domain.manga.model.effectiveRating
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -396,6 +398,16 @@ fun HeroFeaturedCard(
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop,
                             )
+
+                            val rating = manga.effectiveRating
+                            if (rating != null && rating > 0.0) {
+                                RatingBadge(
+                                    rating = rating,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(5.dp),
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.width(12.dp))

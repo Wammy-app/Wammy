@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.discover
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.JsonObject
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.viewModelScope
 import eu.kanade.domain.base.BasePreferences
@@ -20,12 +21,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import mihon.core.viewmodel.StateViewModel
+import mihon.domain.manga.model.toDomainManga
 import eu.kanade.domain.manga.model.copyFrom
 import eu.kanade.domain.manga.model.toSManga
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.interactor.GetMangaByUrlAndSourceId
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.model.rating
 import tachiyomi.domain.source.service.SourceManager
 import eu.kanade.domain.source.model.isAdultSource
 import uy.kohesive.injekt.Injekt
@@ -67,6 +70,18 @@ class DiscoverViewModel(
     private val sessionLatestFetched = mutableSetOf<Long>()
 
     init {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val flag = java.io.File(context.cacheDir, "discover_cache_v2.flag")
+                if (!flag.exists()) {
+                    context.cacheDir.listFiles { _, name ->
+                        name.startsWith("popular_manga_") || name.startsWith("latest_manga_")
+                    }?.forEach { it.delete() }
+                    flag.createNewFile()
+                }
+            } catch (_: Exception) {}
+        }
+
         viewModelScope.launch {
             combine(
                 getHistory.subscribeGrouped(""),
@@ -185,16 +200,25 @@ class DiscoverViewModel(
                 try {
                     val cachedList = json.decodeFromString<List<Manga>>(cacheFile.readText())
                     if (cachedList.isNotEmpty()) {
-                        val enrichedList = cachedList.map { m ->
-                            if (m.author.isNullOrBlank()) {
+                        if (cachedList.all { it.memo.isEmpty() }) {
+                            cacheFile.delete()
+                        } else {
+                            val enrichedList = cachedList.map { m ->
                                 val local = getMangaByUrlAndSourceId.await(m.url, m.source)
-                                if (local != null && !local.author.isNullOrBlank()) {
-                                    m.copy(author = local.author, artist = local.artist, genre = local.genre)
+                                if (local != null) {
+                                    m.copy(
+                                        author = m.author?.takeIf { it.isNotBlank() } ?: local.author,
+                                        artist = m.artist?.takeIf { it.isNotBlank() } ?: local.artist,
+                                        description = m.description?.takeIf { it.isNotBlank() } ?: local.description,
+                                        genre = m.genre?.takeIf { it.isNotEmpty() } ?: local.genre,
+                                        thumbnailUrl = m.thumbnailUrl?.takeIf { it.isNotBlank() } ?: local.thumbnailUrl,
+                                        memo = if (local.memo.isNotEmpty()) JsonObject(local.memo + m.memo) else m.memo,
+                                    )
                                 } else m
-                            } else m
+                            }
+                            popularCache[source.id] = enrichedList
+                            returnList = enrichedList
                         }
-                        popularCache[source.id] = enrichedList
-                        returnList = enrichedList
                     }
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e) { "Failed to read popular cache" }
@@ -213,19 +237,20 @@ class DiscoverViewModel(
             try {
                 val page = source.getPopularManga(1)
                 val newList = page.mangas.map { sManga ->
+                    val domainManga = sManga.toDomainManga(source.id, source.isNovelSource())
                     val local = getMangaByUrlAndSourceId.await(sManga.url, source.id)
-                    Manga.create().copy(
-                        source = source.id,
-                        url = sManga.url,
-                        title = sManga.title,
-                        author = sManga.author ?: local?.author,
-                        artist = sManga.artist ?: local?.artist,
-                        description = sManga.description ?: local?.description,
-                        genre = sManga.getGenres() ?: local?.genre,
-                        thumbnailUrl = sManga.thumbnail_url ?: local?.thumbnailUrl,
-                        initialized = sManga.initialized,
-                        isNovel = source.isNovelSource()
-                    )
+                    if (local != null) {
+                        domainManga.copy(
+                            author = domainManga.author?.takeIf { it.isNotBlank() } ?: local.author,
+                            artist = domainManga.artist?.takeIf { it.isNotBlank() } ?: local.artist,
+                            description = domainManga.description?.takeIf { it.isNotBlank() } ?: local.description,
+                            genre = domainManga.genre?.takeIf { it.isNotEmpty() } ?: local.genre,
+                            thumbnailUrl = domainManga.thumbnailUrl?.takeIf { it.isNotBlank() } ?: local.thumbnailUrl,
+                            memo = if (local.memo.isNotEmpty()) JsonObject(local.memo + domainManga.memo) else domainManga.memo,
+                        )
+                    } else {
+                        domainManga
+                    }
                 }
                 popularCache[source.id] = newList
                 cacheFile.writeText(json.encodeToString(newList))
@@ -253,16 +278,25 @@ class DiscoverViewModel(
                 try {
                     val cachedList = json.decodeFromString<List<Manga>>(cacheFile.readText())
                     if (cachedList.isNotEmpty()) {
-                        val enrichedList = cachedList.map { m ->
-                            if (m.author.isNullOrBlank()) {
+                        if (cachedList.all { it.memo.isEmpty() }) {
+                            cacheFile.delete()
+                        } else {
+                            val enrichedList = cachedList.map { m ->
                                 val local = getMangaByUrlAndSourceId.await(m.url, m.source)
-                                if (local != null && !local.author.isNullOrBlank()) {
-                                    m.copy(author = local.author, artist = local.artist, genre = local.genre)
+                                if (local != null) {
+                                    m.copy(
+                                        author = m.author?.takeIf { it.isNotBlank() } ?: local.author,
+                                        artist = m.artist?.takeIf { it.isNotBlank() } ?: local.artist,
+                                        description = m.description?.takeIf { it.isNotBlank() } ?: local.description,
+                                        genre = m.genre?.takeIf { it.isNotEmpty() } ?: local.genre,
+                                        thumbnailUrl = m.thumbnailUrl?.takeIf { it.isNotBlank() } ?: local.thumbnailUrl,
+                                        memo = if (local.memo.isNotEmpty()) JsonObject(local.memo + m.memo) else m.memo,
+                                    )
                                 } else m
-                            } else m
+                            }
+                            latestCache[source.id] = enrichedList
+                            returnList = enrichedList
                         }
-                        latestCache[source.id] = enrichedList
-                        returnList = enrichedList
                     }
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e) { "Failed to read latest cache" }
@@ -279,19 +313,20 @@ class DiscoverViewModel(
             try {
                 val page = source.getLatestUpdates(1)
                 val newList = page.mangas.map { sManga ->
+                    val domainManga = sManga.toDomainManga(source.id, source.isNovelSource())
                     val local = getMangaByUrlAndSourceId.await(sManga.url, source.id)
-                    Manga.create().copy(
-                        source = source.id,
-                        url = sManga.url,
-                        title = sManga.title,
-                        author = sManga.author ?: local?.author,
-                        artist = sManga.artist ?: local?.artist,
-                        description = sManga.description ?: local?.description,
-                        genre = sManga.getGenres() ?: local?.genre,
-                        thumbnailUrl = sManga.thumbnail_url ?: local?.thumbnailUrl,
-                        initialized = sManga.initialized,
-                        isNovel = source.isNovelSource()
-                    )
+                    if (local != null) {
+                        domainManga.copy(
+                            author = domainManga.author?.takeIf { it.isNotBlank() } ?: local.author,
+                            artist = domainManga.artist?.takeIf { it.isNotBlank() } ?: local.artist,
+                            description = domainManga.description?.takeIf { it.isNotBlank() } ?: local.description,
+                            genre = domainManga.genre?.takeIf { it.isNotEmpty() } ?: local.genre,
+                            thumbnailUrl = domainManga.thumbnailUrl?.takeIf { it.isNotBlank() } ?: local.thumbnailUrl,
+                            memo = if (local.memo.isNotEmpty()) JsonObject(local.memo + domainManga.memo) else domainManga.memo,
+                        )
+                    } else {
+                        domainManga
+                    }
                 }
                 latestCache[source.id] = newList
                 cacheFile.writeText(json.encodeToString(newList))
@@ -322,19 +357,20 @@ class DiscoverViewModel(
                                     source.getPopularManga(page)
                                 }
                                 mangasPage.mangas.map { sManga ->
+                                    val domainManga = sManga.toDomainManga(source.id, source.isNovelSource())
                                     val local = getMangaByUrlAndSourceId.await(sManga.url, source.id)
-                                    Manga.create().copy(
-                                        source = source.id,
-                                        url = sManga.url,
-                                        title = sManga.title,
-                                        author = sManga.author ?: local?.author,
-                                        artist = sManga.artist ?: local?.artist,
-                                        description = sManga.description ?: local?.description,
-                                        genre = sManga.getGenres() ?: local?.genre,
-                                        thumbnailUrl = sManga.thumbnail_url ?: local?.thumbnailUrl,
-                                        initialized = sManga.initialized,
-                                        isNovel = source.isNovelSource()
-                                    )
+                                    if (local != null) {
+                                        domainManga.copy(
+                                            author = domainManga.author?.takeIf { it.isNotBlank() } ?: local.author,
+                                            artist = domainManga.artist?.takeIf { it.isNotBlank() } ?: local.artist,
+                                            description = domainManga.description?.takeIf { it.isNotBlank() } ?: local.description,
+                                            genre = domainManga.genre?.takeIf { it.isNotEmpty() } ?: local.genre,
+                                            thumbnailUrl = domainManga.thumbnailUrl?.takeIf { it.isNotBlank() } ?: local.thumbnailUrl,
+                                            memo = if (local.memo.isNotEmpty()) JsonObject(local.memo + domainManga.memo) else domainManga.memo,
+                                        )
+                                    } else {
+                                        domainManga
+                                    }
                                 }
                             } catch (e: Exception) {
                                 logcat(LogPriority.WARN, e) { "Failed to load page $page for ${source.name}" }
@@ -353,10 +389,10 @@ class DiscoverViewModel(
     fun fetchFeaturedDetails(items: List<Manga>) {
         viewModelScope.launch(Dispatchers.IO) {
             items.take(5).forEach { manga ->
-                if (manga.author.isNullOrBlank() && featuredDetailsFetched.add("${manga.source}_${manga.url}")) {
+                if ((manga.author.isNullOrBlank() || manga.rating == null) && featuredDetailsFetched.add("${manga.source}_${manga.url}")) {
                     try {
                         val local = getMangaByUrlAndSourceId.await(manga.url, manga.source)
-                        if (local != null && !local.author.isNullOrBlank()) {
+                        if (local != null && !local.author.isNullOrBlank() && local.rating != null) {
                             updateCachedManga(manga.source, local)
                         } else {
                             val source = sourceManager.get(manga.source) as? CatalogueSource

@@ -10,6 +10,7 @@ import tachiyomi.core.metadata.comicinfo.ComicInfo
 import tachiyomi.core.metadata.comicinfo.ComicInfoPublishingStatus
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
+import kotlinx.serialization.json.JsonObject
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -74,7 +75,9 @@ fun Manga.copyFrom(other: SManga): Manga {
         updateStrategy = other.update_strategy,
         initialized = other.initialized && initialized,
         alternativeTitles = newAltTitles,
-        memo = other.memo,
+        memo = if (other.memo.isNotEmpty()) {
+            if (memo.isNotEmpty()) JsonObject(memo + other.memo) else other.memo
+        } else memo,
     )
 }
 

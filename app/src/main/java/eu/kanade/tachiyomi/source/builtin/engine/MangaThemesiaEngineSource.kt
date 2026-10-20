@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.parseHumanCount
 import eu.kanade.tachiyomi.source.model.rating
 import eu.kanade.tachiyomi.source.model.views
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
@@ -74,10 +75,16 @@ open class MangaThemesiaEngineSource(
         manga.setUrlWithoutDomain(link?.attr("abs:href") ?: "")
         manga.thumbnail_url = extractImageUrl(img)
 
-        val scoreText = element.select(".rating .num, .numscore, .score").text().trim()
-        val rawScore = scoreText.toDoubleOrNull()
+        val scoreText = element.select(".rating .num, .numscore, .score, [itemprop='ratingValue'], .rating-prc, .rating").text().trim()
+        val numMatch = Regex("""\b(\d+(?:\.\d+)?)\b""").find(scoreText)?.value
+        val rawScore = numMatch?.toDoubleOrNull()
         if (rawScore != null && rawScore > 0.0) {
             manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+
+        val viewsText = element.select(".view, .views, .post-views, .ts-views-count").text().trim()
+        if (viewsText.isNotBlank()) {
+            parseHumanCount(viewsText)?.let { manga.views = it }
         }
 
         return manga
@@ -152,10 +159,16 @@ open class MangaThemesiaEngineSource(
         val img = document.select("img[alt=poster], .infomanga > div[itemprop=image] img, .thumb img, .animefull .bigcontent img").first()
         manga.thumbnail_url = extractImageUrl(img)
 
-        val scoreText = document.select(".rating .num, .numscore, .score, [itemprop='ratingValue']").text().trim()
-        val rawScore = scoreText.toDoubleOrNull()
+        val scoreText = document.select(".rating .num, .numscore, .score, [itemprop='ratingValue'], .rating-prc, .rating").text().trim()
+        val numMatch = Regex("""\b(\d+(?:\.\d+)?)\b""").find(scoreText)?.value
+        val rawScore = numMatch?.toDoubleOrNull()
         if (rawScore != null && rawScore > 0.0) {
             manga.rating = if (rawScore <= 5.0) rawScore * 2.0 else rawScore
+        }
+
+        val viewsText = document.select(".ts-views-count, .views, .post-views, td:contains(Views) + td, tr:contains(Views) td, span:contains(Views)").text().trim()
+        if (viewsText.isNotBlank()) {
+            parseHumanCount(viewsText)?.let { manga.views = it }
         }
 
         manga.initialized = true

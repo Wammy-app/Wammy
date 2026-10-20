@@ -7,18 +7,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import eu.kanade.presentation.library.components.RatingBadge
+import eu.kanade.presentation.library.components.formatViewsCount
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.asMangaCover
+import tachiyomi.domain.manga.model.effectiveRating
+import tachiyomi.domain.manga.model.effectiveViews
 
 @Composable
 fun HomeMediaSection(
@@ -125,15 +132,29 @@ private fun HomeMediaCard(
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick),
     ) {
-        AsyncImage(
-            model = manga.asMangaCover(),
-            contentDescription = manga.title,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(10.dp)),
-            contentScale = ContentScale.Crop,
-        )
+        ) {
+            AsyncImage(
+                model = manga.asMangaCover(),
+                contentDescription = manga.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+
+            val rating = manga.effectiveRating
+            if (rating != null && rating > 0.0) {
+                RatingBadge(
+                    rating = rating,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(5.dp),
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(6.dp))
 
@@ -145,5 +166,28 @@ private fun HomeMediaCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+
+        val views = manga.effectiveViews
+        if (views != null && views > 0) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Visibility,
+                    contentDescription = "Views",
+                    tint = Color(0xFFFFA000),
+                    modifier = Modifier.size(11.dp),
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = formatViewsCount(views),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
     }
 }

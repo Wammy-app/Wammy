@@ -29,3 +29,22 @@ var SManga.views: Long?
         }
         memo = JsonObject(map)
     }
+
+var SManga.viewsString: String?
+    get() = views?.toString()
+    set(value) {
+        views = if (value.isNullOrBlank()) null else parseHumanCount(value)
+    }
+
+fun parseHumanCount(raw: String): Long? {
+    val clean = raw.trim().replace(",", "")
+    val multiplier = when {
+        clean.endsWith("b", ignoreCase = true) -> 1_000_000_000.0
+        clean.endsWith("m", ignoreCase = true) -> 1_000_000.0
+        clean.endsWith("k", ignoreCase = true) -> 1_000.0
+        else -> 1.0
+    }
+    val numStr = clean.trimEnd('k', 'K', 'm', 'M', 'b', 'B').trim()
+    val num = numStr.toDoubleOrNull() ?: return null
+    return (num * multiplier).toLong()
+}

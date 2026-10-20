@@ -10,7 +10,13 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,23 +24,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import eu.kanade.presentation.library.components.RatingBadge
+import eu.kanade.presentation.library.components.formatViewsCount
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.asMangaCover
+import tachiyomi.domain.manga.model.effectiveRating
+import tachiyomi.domain.manga.model.effectiveViews
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * 3-Column Discover Manga Card with 100% real, authentic data:
- * - Real cover art from the extension (aspect ratio 2:3, clean rounded corners)
- * - Real manga title with uniform 2-line height alignment
- * - Real author on the left (if available) and real source name on the right
+ * 3-Column Discover Manga Card:
+ * - Cover art with bottom-left star rating pill
+ * - Manga title with 2-line height alignment
+ * - Subtitle row: author on the left, and amber eye icon with numeric views on the right
  */
 @Composable
 fun DiscoverMangaCard(
@@ -57,7 +68,7 @@ fun DiscoverMangaCard(
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick),
     ) {
-        // Clean Cover Poster (100% Real Artwork)
+        // Cover Poster with Rating Pill
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -70,11 +81,21 @@ fun DiscoverMangaCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
+
+            val rating = manga.effectiveRating
+            if (rating != null && rating > 0.0) {
+                RatingBadge(
+                    rating = rating,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(5.dp),
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Real Manga Title: uniform 2 lines across all 3 columns
+        // Manga Title: uniform 2 lines across all 3 columns
         Text(
             text = manga.title,
             style = MaterialTheme.typography.labelLarge,
@@ -89,16 +110,19 @@ fun DiscoverMangaCard(
 
         Spacer(modifier = Modifier.height(2.dp))
 
-        // Bottom metadata row: 100% real author and source name
+        // Bottom metadata row: author / source on left, eye icon + views on right
         val authorText = manga.author?.trim()?.takeIf { it.isNotBlank() }
+        val views = manga.effectiveViews
+        val leftText = authorText ?: sourceName.takeIf { it.isNotBlank() }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (authorText != null) {
+            if (leftText != null) {
                 Text(
-                    text = authorText,
+                    text = leftText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -106,26 +130,39 @@ fun DiscoverMangaCard(
                     fontSize = 11.sp,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                if (sourceName.isNotBlank()) {
-                    Spacer(modifier = Modifier.weight(0.1f, fill = false))
+            } else {
+                Spacer(modifier = Modifier.weight(1f, fill = false))
+            }
+
+            if (views != null && views > 0) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 4.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Visibility,
+                        contentDescription = null,
+                        tint = Color(0xFFFFA000),
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Spacer(modifier = Modifier.width(2.5.dp))
                     Text(
-                        text = sourceName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
+                        text = formatViewsCount(views),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
                     )
                 }
-            } else if (sourceName.isNotBlank()) {
+            } else if (authorText != null && sourceName.isNotBlank()) {
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = sourceName,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
                 )
             }

@@ -39,7 +39,7 @@ val Manga.effectiveViews: Long?
         return null
     }
 
-private fun parseHumanCount(raw: String): Long? {
+fun parseHumanCount(raw: String): Long? {
     val clean = raw.trim().replace(",", "")
     val multiplier = when {
         clean.endsWith("b", ignoreCase = true) -> 1_000_000_000.0
