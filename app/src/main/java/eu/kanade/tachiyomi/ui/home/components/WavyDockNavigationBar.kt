@@ -70,9 +70,7 @@ import eu.kanade.tachiyomi.ui.more.MoreTab
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.outlined.Newspaper
 import androidx.compose.ui.draw.clip
-import eu.kanade.tachiyomi.ui.news.NewsTab
 
 @Composable
 fun WavyDockNavigationBar(
@@ -295,7 +293,6 @@ private fun TabIcon(
             is DiscoverTab -> Pair(Icons.Filled.Home, Icons.Outlined.Home)
             is HistoryTab -> Pair(Icons.Filled.History, Icons.Outlined.History)
             is BrowseTab -> Pair(Icons.Filled.Explore, Icons.Outlined.Explore)
-            is NewsTab -> Pair(Icons.Outlined.Newspaper, Icons.Outlined.Newspaper)
             is MoreTab -> Pair(Icons.Filled.MoreHoriz, Icons.Filled.MoreHoriz)
             else -> Pair(null, null)
         }
