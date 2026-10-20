@@ -1,4 +1,4 @@
-﻿package eu.kanade.tachiyomi.ui.browse.migration.sources
+package eu.kanade.tachiyomi.ui.browse.migration.sources
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -22,7 +22,6 @@ fun Screen.migrateSourceTab(): TabContent {
     val uriHandler = LocalUriHandler.current
     val navigator = LocalNavigator.currentOrThrow
     val viewModel = viewModel<MigrateSourceViewModel>()
-    val state by viewModel.state.collectAsState()
 
     return TabContent(
         titleRes = MR.strings.label_migration,
@@ -36,6 +35,7 @@ fun Screen.migrateSourceTab(): TabContent {
             ),
         ),
         content = { contentPadding, _ ->
+            val state by viewModel.state.collectAsState()
             MigrateSourceScreen(
                 state = state,
                 contentPadding = contentPadding,
@@ -48,4 +48,3 @@ fun Screen.migrateSourceTab(): TabContent {
         },
     )
 }
-

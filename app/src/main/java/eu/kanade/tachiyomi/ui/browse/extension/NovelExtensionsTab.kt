@@ -21,6 +21,8 @@ import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.ui.browse.extension.details.ExtensionDetailsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.isPackageInstalled
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.novel.TDMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -32,18 +34,25 @@ fun novelExtensionsTab(
     val navigator = LocalNavigator.currentOrThrow
     val context = LocalContext.current
 
-    val state by extensionsViewModel.state.collectAsState()
+    val updates by remember(extensionsViewModel) {
+        extensionsViewModel.state.map { it.updates }.distinctUntilChanged()
+    }.collectAsState(initial = extensionsViewModel.state.value.updates)
+
+    val nsfwOnly by remember(extensionsViewModel) {
+        extensionsViewModel.state.map { it.nsfwOnly }.distinctUntilChanged()
+    }.collectAsState(initial = extensionsViewModel.state.value.nsfwOnly)
+
     var privateExtensionToUninstall by remember { mutableStateOf<Extension?>(null) }
 
     return TabContent(
         titleRes = TDMR.strings.label_novel_extensions,
-        badgeNumber = state.updates.takeIf { it > 0 },
+        badgeNumber = updates.takeIf { it > 0 },
         searchEnabled = true,
         actions = listOf(
             AppBar.Action(
                 title = "18+",
                 icon = Icons.Outlined._18UpRating,
-                iconTint = if (state.nsfwOnly) androidx.compose.material3.MaterialTheme.colorScheme.error else null,
+                iconTint = if (nsfwOnly) androidx.compose.material3.MaterialTheme.colorScheme.error else null,
                 onClick = { extensionsViewModel.toggleNsfwOnly() },
             ),
             AppBar.OverflowAction(
@@ -56,6 +65,7 @@ fun novelExtensionsTab(
             ),
         ),
         content = { contentPadding, _ ->
+            val state by extensionsViewModel.state.collectAsState()
             ExtensionScreen(
                 state = state,
                 contentPadding = contentPadding,

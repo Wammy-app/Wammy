@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -22,6 +23,8 @@ import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceViewModel
 import eu.kanade.tachiyomi.ui.browse.source.feed.SourceFeedScreen
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import tachiyomi.domain.source.model.Pin
 import tachiyomi.i18n.MR
@@ -32,7 +35,9 @@ import tachiyomi.presentation.core.i18n.stringResource
 fun Screen.sourcesTab(): TabContent {
     val navigator = LocalNavigator.currentOrThrow
     val viewModel = viewModel<SourcesViewModel>()
-    val state by viewModel.state.collectAsState()
+    val nsfwOnly by remember(viewModel) {
+        viewModel.state.map { it.nsfwOnly }.distinctUntilChanged()
+    }.collectAsState(initial = viewModel.state.value.nsfwOnly)
 
     return TabContent(
         titleRes = TDMR.strings.label_manga_sources,
@@ -50,11 +55,12 @@ fun Screen.sourcesTab(): TabContent {
             AppBar.Action(
                 title = "18+",
                 icon = Icons.Outlined._18UpRating,
-                iconTint = if (state.nsfwOnly) androidx.compose.material3.MaterialTheme.colorScheme.error else null,
+                iconTint = if (nsfwOnly) androidx.compose.material3.MaterialTheme.colorScheme.error else null,
                 onClick = { viewModel.toggleNsfwOnly() },
             ),
         ),
         content = { contentPadding, snackbarHostState ->
+            val state by viewModel.state.collectAsState()
             SourcesScreen(
                 state = state,
                 contentPadding = contentPadding,
@@ -121,5 +127,3 @@ fun Screen.sourcesTab(): TabContent {
         },
     )
 }
-
-

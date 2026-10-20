@@ -16,6 +16,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -39,6 +41,13 @@ fun TabbedScreen(
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val visitedPages = remember { mutableStateListOf<Int>().apply { add(state.currentPage) } }
+    LaunchedEffect(state.currentPage) {
+        if (state.currentPage !in visitedPages) {
+            visitedPages.add(state.currentPage)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -73,11 +82,7 @@ fun TabbedScreen(
                             onClick = {
                                 if (state.currentPage != index) {
                                     scope.launch {
-                                        if (kotlin.math.abs(state.currentPage - index) > 1) {
-                                            state.scrollToPage(index)
-                                        } else {
-                                            state.animateScrollToPage(index)
-                                        }
+                                        state.scrollToPage(index)
                                     }
                                 }
                             },
@@ -105,13 +110,12 @@ fun TabbedScreen(
             verticalAlignment = Alignment.Top,
             beyondViewportPageCount = 1,
         ) { page ->
-            if (page !in ((state.currentPage - 1)..(state.currentPage + 1))) {
-                return@HorizontalPager
+            if (page in visitedPages) {
+                tabs[page].content(
+                    PaddingValues(bottom = contentPadding.calculateBottomPadding() + 84.dp),
+                    snackbarHostState,
+                )
             }
-            tabs[page].content(
-                PaddingValues(bottom = contentPadding.calculateBottomPadding() + 84.dp),
-                snackbarHostState,
-            )
         }
     }
 }
