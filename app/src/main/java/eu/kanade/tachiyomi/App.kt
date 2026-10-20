@@ -71,8 +71,6 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.widget.WidgetManager
 import wammy.telemetry.TelemetryConfig
-import eu.kanade.tachiyomi.network.challenge.BossChallengeCoordinator
-import eu.kanade.tachiyomi.ui.base.activity.ForegroundActivityHolder
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -126,16 +124,6 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         Injekt.importModule(PreferenceModule(this))
         Injekt.importModule(AppModule(this))
         Injekt.importModule(DomainModule())
-
-        registerActivityLifecycleCallbacks(ForegroundActivityHolder.instance)
-
-        val networkHelper = Injekt.get<NetworkHelper>()
-        BossChallengeCoordinator.initialize(
-            context = this,
-            foregroundActivityHolder = ForegroundActivityHolder.instance,
-            cookieJar = networkHelper.cookieJar,
-            defaultUserAgentProvider = networkHelper::defaultUserAgentProvider,
-        )
 
         // Asynchronously init expensive components for a faster cold start. Must run after all
         // modules are imported
