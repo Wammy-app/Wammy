@@ -43,6 +43,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -141,19 +143,19 @@ object HomeScreen : Screen() {
         val currentScreen = navigator.lastItem
         LaunchedEffect(user, currentScreen) {
             val uid = user?.uid
-            if (uid != null) {
-                basePreferences.hasCompletedInitialLogin.set(true)
-            }
             if (uid != null && currentScreen is HomeScreen) {
                 // Keep background periodic backup active
                 eu.kanade.tachiyomi.data.sync.DriveSyncWorker.schedulePeriodicBackup(context)
 
-                val hasProfile = repo.hasProfile(uid)
-                if (hasProfile == false) {
-                    navigator.push(UsernamePickerScreen())
-                } else if (hasProfile == null) {
-                    android.util.Log.w("HomeScreen", "Could not verify profile (network error), will retry")
-                    android.widget.Toast.makeText(context, "Could not verify profile with server. Check internet connection.", android.widget.Toast.LENGTH_SHORT).show()
+                if (!basePreferences.hasCompletedInitialLogin.get()) {
+                    val hasProfile = withIOContext { repo.hasProfile(uid) }
+                    if (hasProfile == false) {
+                        navigator.push(UsernamePickerScreen())
+                    } else if (hasProfile == true) {
+                        basePreferences.hasCompletedInitialLogin.set(true)
+                    } else {
+                        android.util.Log.w("HomeScreen", "Could not verify profile (network error), will retry")
+                    }
                 }
             }
         }
@@ -161,6 +163,12 @@ object HomeScreen : Screen() {
         val isJoined by libraryPreferences.joinedLibrary.collectAsState()
         val hideMangaUi by basePreferences.hideMangaUi.collectAsState()
         val tabs = if (isJoined || hideMangaUi) JOINED_TABS else TABS
+
+        var contentReady by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            contentReady = true
+        }
+
         TabNavigator(
             tab = eu.kanade.tachiyomi.ui.discover.DiscoverTab,
             key = TabNavigatorKey,
@@ -185,16 +193,18 @@ object HomeScreen : Screen() {
                                 .padding(contentPadding)
                                 .consumeWindowInsets(contentPadding),
                         ) {
-                            AnimatedContent(
-                                targetState = tabNavigator.current,
-                                transitionSpec = {
-                                    materialFadeThroughIn(initialScale = 1f, durationMillis = TabFadeDuration) togetherWith
-                                        materialFadeThroughOut(durationMillis = TabFadeDuration)
-                                },
-                                label = "tabContent",
-                            ) {
-                                tabNavigator.saveableState(key = "currentTab", it) {
-                                    it.Content()
+                            if (contentReady) {
+                                AnimatedContent(
+                                    targetState = tabNavigator.current,
+                                    transitionSpec = {
+                                        materialFadeThroughIn(initialScale = 1f, durationMillis = TabFadeDuration) togetherWith
+                                            materialFadeThroughOut(durationMillis = TabFadeDuration)
+                                    },
+                                    label = "tabContent",
+                                ) {
+                                    tabNavigator.saveableState(key = "currentTab", it) {
+                                        it.Content()
+                                    }
                                 }
                             }
                         }

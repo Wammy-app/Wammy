@@ -129,7 +129,7 @@ object DiscoverTab : Tab {
             (context as? eu.kanade.tachiyomi.ui.main.MainActivity)?.ready = true
         }
 
-        val authManager: AuthManager = Injekt.get()
+        val authManager: AuthManager = remember { Injekt.get() }
         val user by authManager.currentUser.collectAsState()
 
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }

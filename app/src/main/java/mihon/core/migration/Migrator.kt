@@ -38,4 +38,16 @@ object Migrator {
     fun awaitAndRelease(): Boolean = runBlocking {
         await().also { release() }
     }
+
+    fun awaitAndReleaseNonBlocking(): Boolean {
+        val deferred = result
+        if (deferred == null || deferred.isCompleted) {
+            val value = deferred?.getCompleted() ?: false
+            release()
+            return value
+        }
+        return runBlocking {
+            await().also { release() }
+        }
+    }
 }

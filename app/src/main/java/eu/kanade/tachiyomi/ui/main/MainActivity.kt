@@ -169,7 +169,7 @@ class MainActivity : BaseActivity() {
             }
         }
 
-        Migrator.awaitAndRelease()
+        Migrator.awaitAndReleaseNonBlocking()
 
         // Only block duplicate launcher entries. External open/share intents may arrive in a
         // non-root task and still need to be handled by this activity.
@@ -316,6 +316,19 @@ class MainActivity : BaseActivity() {
         if (isLaunch && libraryPreferences.autoClearChapterCache.get()) {
             lifecycleScope.launchIO {
                 chapterCache.clear()
+            }
+        }
+
+        window.decorView.post {
+            lifecycleScope.launchIO {
+                try {
+                    uy.kohesive.injekt.Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>()
+                    uy.kohesive.injekt.Injekt.get<tachiyomi.domain.source.service.SourceManager>()
+                    uy.kohesive.injekt.Injekt.get<tachiyomi.data.Database>()
+                    uy.kohesive.injekt.Injekt.get<eu.kanade.tachiyomi.data.download.DownloadManager>()
+                } catch (e: Throwable) {
+                    logcat(LogPriority.ERROR, e) { "Failed to warm up background components" }
+                }
             }
         }
     }

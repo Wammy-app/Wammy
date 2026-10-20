@@ -107,35 +107,15 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             true
         }
 
-        // Warm up the WebView default user agent on the main (UI) thread before any source loads.
-        // Some extensions call WebSettings.getDefaultUserAgent() while constructing their sources on
-        // a background thread. Off the UI thread that call must wait for the UI thread to run
-        // Chromium startup; if the UI thread is simultaneously blocked building the source graph
-        // (Injekt lazy lock), the two deadlock and freeze the splash. Caching the UA here makes the
-        // later background calls return instantly without needing the UI thread.
-        if (isMainProcess) {
-            try {
-                WebSettings.getDefaultUserAgent(this)
-            } catch (e: Throwable) {
-                logcat(LogPriority.ERROR, e) { "Failed to warm up WebView user agent" }
-            }
-        }
+        // Pre-populate WebViewUtil with cached User-Agent to avoid blocking cold startup
+        val perfPrefs = getSharedPreferences("app_perf_cache", Context.MODE_PRIVATE)
+        val defaultUa = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36"
+        val cachedUa = perfPrefs.getString("cached_webview_ua", defaultUa) ?: defaultUa
+        WebViewUtil.setCachedUserAgent(cachedUa)
 
         Injekt.importModule(PreferenceModule(this))
         Injekt.importModule(AppModule(this))
         Injekt.importModule(DomainModule())
-
-        // Asynchronously init expensive components for a faster cold start. Must run after all
-        // modules are imported
-        Injekt.get<CoroutineScope>().launchIO {
-            Injekt.get<NetworkHelper>()
-
-            Injekt.get<SourceManager>()
-
-            Injekt.get<Database>()
-
-            Injekt.get<DownloadManager>()
-        }
 
         setupNotificationChannels()
 

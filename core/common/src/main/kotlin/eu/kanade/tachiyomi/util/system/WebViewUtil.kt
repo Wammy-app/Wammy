@@ -34,6 +34,12 @@ object WebViewUtil {
     @Volatile
     private var cachedInferredUserAgent: String? = null
 
+    fun setCachedUserAgent(userAgent: String) {
+        if (userAgent.isNotBlank()) {
+            cachedInferredUserAgent = userAgent
+        }
+    }
+
     fun getInferredUserAgent(context: Context): String {
         cachedInferredUserAgent?.let { return it }
         val raw = try {
