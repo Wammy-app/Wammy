@@ -23,6 +23,8 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Star
@@ -86,6 +88,8 @@ enum class DiscoverSection {
     POPULAR,
 }
 
+private const val PAGE_SIZE = 12
+
 object DiscoverTab : Tab {
 
     override val options: cafe.adriel.voyager.navigator.tab.TabOptions
@@ -126,8 +130,7 @@ object DiscoverTab : Tab {
 
         var selectedSection by rememberSaveable { mutableStateOf(DiscoverSection.LATEST) }
         var isAdultSelected by rememberSaveable { mutableStateOf(false) }
-        var maxLoadedPage by rememberSaveable { mutableIntStateOf(1) }
-        var isLoadingMore by remember { mutableStateOf(false) }
+        var currentPage by rememberSaveable { mutableIntStateOf(1) }
         val gridState = rememberLazyGridState()
 
         Scaffold(
@@ -240,20 +243,9 @@ object DiscoverTab : Tab {
                         if (selectedSection == DiscoverSection.LATEST) s.filter { it.supportsLatest } else s
                     }
 
-                    LaunchedEffect(maxLoadedPage, selectedSection, isAdultSelected, targetSources) {
-                        if (maxLoadedPage > 1) {
-                            viewModel.loadSourcesForPage(
-                                sources = targetSources,
-                                page = maxLoadedPage,
-                                isLatest = (selectedSection == DiscoverSection.LATEST),
-                            )
-                        }
-                    }
-
-                    val displayedManga = remember(
+                    val allAvailableManga = remember(
                         selectedSection,
                         isAdultSelected,
-                        maxLoadedPage,
                         viewModel.popularCache.toMap(),
                         viewModel.latestCache.toMap(),
                         viewModel.pageCache.toMap(),
@@ -261,18 +253,32 @@ object DiscoverTab : Tab {
                     ) {
                         val result = mutableListOf<Manga>()
                         val seenTitles = mutableSetOf<String>()
-                        for (page in 1..maxLoadedPage) {
-                            val lists = if (page == 1) {
-                                val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
-                                targetSources.mapNotNull { cache[it.id] }
-                            } else {
-                                val cache = viewModel.pageCache
-                                val keySuffix = if (selectedSection == DiscoverSection.LATEST) "latest" else "popular"
-                                targetSources.mapNotNull { cache["${it.id}_${keySuffix}_$page"] }
+
+                        // Page 1
+                        val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
+                        val lists1 = targetSources.mapNotNull { cache[it.id] }
+                        val maxLen1 = lists1.maxOfOrNull { it.size } ?: 0
+                        for (i in 0 until maxLen1) {
+                            for (list in lists1) {
+                                if (i < list.size) {
+                                    val manga = list[i]
+                                    val normalized = manga.title.trim().lowercase()
+                                    if (seenTitles.add(normalized)) {
+                                        result.add(manga)
+                                    }
+                                }
                             }
-                            val maxLen = lists.maxOfOrNull { it.size } ?: 0
-                            for (i in 0 until maxLen) {
-                                for (list in lists) {
+                        }
+
+                        // Pages 2, 3...
+                        val keySuffix = if (selectedSection == DiscoverSection.LATEST) "latest" else "popular"
+                        var p = 2
+                        while (true) {
+                            val listsP = targetSources.mapNotNull { viewModel.pageCache["${it.id}_${keySuffix}_$p"] }
+                            if (listsP.isEmpty()) break
+                            val maxLenP = listsP.maxOfOrNull { it.size } ?: 0
+                            for (i in 0 until maxLenP) {
+                                for (list in listsP) {
                                     if (i < list.size) {
                                         val manga = list[i]
                                         val normalized = manga.title.trim().lowercase()
@@ -282,28 +288,26 @@ object DiscoverTab : Tab {
                                     }
                                 }
                             }
+                            p++
                         }
                         result
                     }
 
-                    // Reset isLoadingMore when new data arrives
-                    LaunchedEffect(displayedManga.size) {
-                        isLoadingMore = false
-                    }
+                    val totalAvailable = allAvailableManga.size
+                    val totalPages = maxOf(1, (totalAvailable + PAGE_SIZE - 1) / PAGE_SIZE)
+                    val safePage = currentPage.coerceIn(1, totalPages)
+                    val startIndex = (safePage - 1) * PAGE_SIZE
+                    val displayedManga = allAvailableManga.drop(startIndex).take(PAGE_SIZE)
 
-                    // Infinite scroll: detect when near bottom and auto-load next page
-                    val shouldLoadMore by remember {
-                        derivedStateOf {
-                            val layoutInfo = gridState.layoutInfo
-                            val totalItems = layoutInfo.totalItemsCount
-                            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                            totalItems > 0 && lastVisibleItem >= totalItems - 6
-                        }
-                    }
-                    LaunchedEffect(shouldLoadMore) {
-                        if (shouldLoadMore && !isLoadingMore && displayedManga.isNotEmpty()) {
-                            isLoadingMore = true
-                            maxLoadedPage++
+                    // Prefetch next source page when approaching the end of available items
+                    val nextSourcePage = (totalAvailable / 20) + 2
+                    LaunchedEffect(safePage, targetSources, totalAvailable) {
+                        if (safePage * PAGE_SIZE >= totalAvailable - (PAGE_SIZE * 2) && targetSources.isNotEmpty()) {
+                            viewModel.loadSourcesForPage(
+                                sources = targetSources,
+                                page = nextSourcePage,
+                                isLatest = (selectedSection == DiscoverSection.LATEST),
+                            )
                         }
                     }
 
@@ -371,15 +375,13 @@ object DiscoverTab : Tab {
                                     onSelectSection = { section ->
                                         if (selectedSection != section) {
                                             selectedSection = section
-                                            maxLoadedPage = 1
-                                            isLoadingMore = false
+                                            currentPage = 1
                                             scope.launch { gridState.animateScrollToItem(0) }
                                         }
                                     },
                                     onToggleAdult = {
                                         isAdultSelected = !isAdultSelected
-                                        maxLoadedPage = 1
-                                        isLoadingMore = false
+                                        currentPage = 1
                                         scope.launch { gridState.animateScrollToItem(0) }
                                     },
                                 )
@@ -442,20 +444,33 @@ object DiscoverTab : Tab {
                                 }
                             }
 
-                            // 5. Loading indicator for infinite scroll
-                            if (isLoadingMore) {
+                            // 5. Pagination Controls (< Prev  Page X of Y  Next >)
+                            if (displayedManga.isNotEmpty()) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 24.dp),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(28.dp),
-                                            strokeWidth = 2.5.dp,
-                                        )
-                                    }
+                                    DiscoverPaginationControls(
+                                        currentPage = safePage,
+                                        totalPages = totalPages,
+                                        onPrev = {
+                                            if (safePage > 1) {
+                                                currentPage = safePage - 1
+                                                scope.launch { gridState.animateScrollToItem(0) }
+                                            }
+                                        },
+                                        onNext = {
+                                            if (safePage < totalPages) {
+                                                currentPage = safePage + 1
+                                                scope.launch { gridState.animateScrollToItem(0) }
+                                            } else {
+                                                viewModel.loadSourcesForPage(
+                                                    sources = targetSources,
+                                                    page = nextSourcePage,
+                                                    isLatest = (selectedSection == DiscoverSection.LATEST),
+                                                )
+                                                currentPage = safePage + 1
+                                                scope.launch { gridState.animateScrollToItem(0) }
+                                            }
+                                        },
+                                    )
                                 }
                             }
 
@@ -640,6 +655,107 @@ private fun DiscoverSectionHeader(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
         )
+    }
+}
+
+@Composable
+private fun DiscoverPaginationControls(
+    currentPage: Int,
+    totalPages: Int,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val buttonShape = RoundedCornerShape(8.dp)
+    val buttonBg = MaterialTheme.colorScheme.surfaceContainerHigh
+    val prevEnabled = currentPage > 1
+    val nextEnabled = currentPage < totalPages || totalPages <= 1
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Prev button
+        Surface(
+            modifier = Modifier
+                .clip(buttonShape)
+                .clickable(enabled = prevEnabled, onClick = onPrev),
+            shape = buttonShape,
+            color = if (prevEnabled) buttonBg else buttonBg.copy(alpha = 0.35f),
+            border = BorderStroke(
+                1.dp,
+                if (prevEnabled) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f) else Color.Transparent,
+            ),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+                    contentDescription = "Previous Page",
+                    modifier = Modifier.size(18.dp),
+                    tint = if (prevEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                )
+                Text(
+                    text = "Prev",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = if (prevEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(18.dp))
+
+        // Page Indicator: Page X of Y
+        Text(
+            text = "Page $currentPage of $totalPages",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        Spacer(modifier = Modifier.width(18.dp))
+
+        // Next button
+        Surface(
+            modifier = Modifier
+                .clip(buttonShape)
+                .clickable(enabled = nextEnabled, onClick = onNext),
+            shape = buttonShape,
+            color = if (nextEnabled) buttonBg else buttonBg.copy(alpha = 0.35f),
+            border = BorderStroke(
+                1.dp,
+                if (nextEnabled) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f) else Color.Transparent,
+            ),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "Next",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = if (nextEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = "Next Page",
+                    modifier = Modifier.size(18.dp),
+                    tint = if (nextEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                )
+            }
+        }
     }
 }
 
