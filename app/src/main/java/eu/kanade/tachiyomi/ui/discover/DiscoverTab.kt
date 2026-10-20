@@ -67,6 +67,8 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.data.auth.AuthManager
+import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.builtin.BuiltinSourceManager
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.discover.components.DiscoverMangaCard
 import eu.kanade.tachiyomi.ui.discover.components.DiscoverSkeletonScreen
@@ -130,7 +132,8 @@ object DiscoverTab : Tab {
 
         var selectedSection by rememberSaveable { mutableStateOf(DiscoverSection.LATEST) }
         var isAdultSelected by rememberSaveable { mutableStateOf(false) }
-        var currentPage by rememberSaveable { mutableIntStateOf(1) }
+        var defaultPage by rememberSaveable { mutableIntStateOf(1) }
+        var extensionPage by rememberSaveable { mutableIntStateOf(1) }
         val gridState = rememberLazyGridState()
 
         Scaffold(
@@ -243,20 +246,20 @@ object DiscoverTab : Tab {
                         if (selectedSection == DiscoverSection.LATEST) s.filter { it.supportsLatest } else s
                     }
 
-                    val allAvailableManga = remember(
-                        selectedSection,
-                        isAdultSelected,
-                        viewModel.popularCache.toMap(),
-                        viewModel.latestCache.toMap(),
-                        viewModel.pageCache.toMap(),
-                        targetSources,
-                    ) {
+                    val builtinSources = remember(targetSources) {
+                        targetSources.filter { BuiltinSourceManager.isBuiltin(it.id) }
+                    }
+
+                    val extensionSources = remember(targetSources) {
+                        targetSources.filter { !BuiltinSourceManager.isBuiltin(it.id) }
+                    }
+
+                    fun extractMangaFromSources(sources: List<CatalogueSource>): List<Manga> {
                         val result = mutableListOf<Manga>()
                         val seenTitles = mutableSetOf<String>()
 
-                        // Page 1
                         val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
-                        val lists1 = targetSources.mapNotNull { cache[it.id] }
+                        val lists1 = sources.mapNotNull { cache[it.id] }
                         val maxLen1 = lists1.maxOfOrNull { it.size } ?: 0
                         for (i in 0 until maxLen1) {
                             for (list in lists1) {
@@ -270,11 +273,10 @@ object DiscoverTab : Tab {
                             }
                         }
 
-                        // Pages 2, 3...
                         val keySuffix = if (selectedSection == DiscoverSection.LATEST) "latest" else "popular"
                         var p = 2
                         while (true) {
-                            val listsP = targetSources.mapNotNull { viewModel.pageCache["${it.id}_${keySuffix}_$p"] }
+                            val listsP = sources.mapNotNull { viewModel.pageCache["${it.id}_${keySuffix}_$p"] }
                             if (listsP.isEmpty()) break
                             val maxLenP = listsP.maxOfOrNull { it.size } ?: 0
                             for (i in 0 until maxLenP) {
@@ -290,22 +292,61 @@ object DiscoverTab : Tab {
                             }
                             p++
                         }
-                        result
+                        return result
                     }
 
-                    val totalAvailable = allAvailableManga.size
-                    val totalPages = maxOf(1, (totalAvailable + PAGE_SIZE - 1) / PAGE_SIZE)
-                    val safePage = currentPage.coerceIn(1, totalPages)
-                    val startIndex = (safePage - 1) * PAGE_SIZE
-                    val displayedManga = allAvailableManga.drop(startIndex).take(PAGE_SIZE)
+                    val allBuiltinManga = remember(
+                        selectedSection,
+                        isAdultSelected,
+                        viewModel.popularCache.toMap(),
+                        viewModel.latestCache.toMap(),
+                        viewModel.pageCache.toMap(),
+                        builtinSources,
+                    ) {
+                        extractMangaFromSources(builtinSources)
+                    }
+
+                    val allExtensionManga = remember(
+                        selectedSection,
+                        isAdultSelected,
+                        viewModel.popularCache.toMap(),
+                        viewModel.latestCache.toMap(),
+                        viewModel.pageCache.toMap(),
+                        extensionSources,
+                    ) {
+                        extractMangaFromSources(extensionSources)
+                    }
+
+                    val totalBuiltin = allBuiltinManga.size
+                    val totalBuiltinPages = maxOf(1, (totalBuiltin + PAGE_SIZE - 1) / PAGE_SIZE)
+                    val safeBuiltinPage = defaultPage.coerceIn(1, totalBuiltinPages)
+                    val startBuiltinIndex = (safeBuiltinPage - 1) * PAGE_SIZE
+                    val displayedBuiltinManga = allBuiltinManga.drop(startBuiltinIndex).take(PAGE_SIZE)
+
+                    val totalExtension = allExtensionManga.size
+                    val totalExtensionPages = maxOf(1, (totalExtension + PAGE_SIZE - 1) / PAGE_SIZE)
+                    val safeExtensionPage = extensionPage.coerceIn(1, totalExtensionPages)
+                    val startExtensionIndex = (safeExtensionPage - 1) * PAGE_SIZE
+                    val displayedExtensionManga = allExtensionManga.drop(startExtensionIndex).take(PAGE_SIZE)
 
                     // Prefetch next source page when approaching the end of available items
-                    val nextSourcePage = (totalAvailable / 20) + 2
-                    LaunchedEffect(safePage, targetSources, totalAvailable) {
-                        if (safePage * PAGE_SIZE >= totalAvailable - (PAGE_SIZE * 2) && targetSources.isNotEmpty()) {
+                    val nextBuiltinSourcePage = (totalBuiltin / 20) + 2
+                    LaunchedEffect(safeBuiltinPage, builtinSources, totalBuiltin) {
+                        if (safeBuiltinPage * PAGE_SIZE >= totalBuiltin - (PAGE_SIZE * 2) && builtinSources.isNotEmpty()) {
                             viewModel.loadSourcesForPage(
-                                sources = targetSources,
-                                page = nextSourcePage,
+                                sources = builtinSources,
+                                page = nextBuiltinSourcePage,
+                                isLatest = (selectedSection == DiscoverSection.LATEST),
+                            )
+                        }
+                    }
+
+                    val nextExtensionSourcePage = (totalExtension / 20) + 2
+                    LaunchedEffect(safeExtensionPage, extensionSources, totalExtension) {
+                        if (safeExtensionPage * PAGE_SIZE >= totalExtension - (PAGE_SIZE * 2) && extensionSources.isNotEmpty()) {
+                            viewModel.loadSourcesForPage(
+                                sources = extensionSources,
+                                page = nextExtensionSourcePage,
                                 isLatest = (selectedSection == DiscoverSection.LATEST),
                             )
                         }
@@ -375,13 +416,15 @@ object DiscoverTab : Tab {
                                     onSelectSection = { section ->
                                         if (selectedSection != section) {
                                             selectedSection = section
-                                            currentPage = 1
+                                            defaultPage = 1
+                                            extensionPage = 1
                                             scope.launch { gridState.animateScrollToItem(0) }
                                         }
                                     },
                                     onToggleAdult = {
                                         isAdultSelected = !isAdultSelected
-                                        currentPage = 1
+                                        defaultPage = 1
+                                        extensionPage = 1
                                         scope.launch { gridState.animateScrollToItem(0) }
                                     },
                                 )
@@ -395,15 +438,15 @@ object DiscoverTab : Tab {
                                 )
                             }
 
-                            // 4. Manga Cards or Empty State or Skeleton
+                            // 4. Built-in Manga Cards or Empty State or Skeleton
                             if (isAdultSelected && animatedState.adultSources.isEmpty()) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
                                     AdultEmptyStateCard(
                                         onBrowseExtensions = { tabNavigator.current = BrowseTab }
                                     )
                                 }
-                            } else if (displayedManga.isEmpty()) {
-                                val isLoadingTarget = targetSources.any { source ->
+                            } else if (displayedBuiltinManga.isEmpty()) {
+                                val isLoadingTarget = builtinSources.any { source ->
                                     val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
                                     !cache.containsKey(source.id)
                                 }
@@ -429,8 +472,8 @@ object DiscoverTab : Tab {
                                 }
                             } else {
                                 items(
-                                    items = displayedManga,
-                                    key = { "${it.source}_${it.url}" },
+                                    items = displayedBuiltinManga,
+                                    key = { "builtin_${it.source}_${it.url}" },
                                 ) { manga ->
                                     DiscoverMangaCard(
                                         manga = manga,
@@ -444,29 +487,29 @@ object DiscoverTab : Tab {
                                 }
                             }
 
-                            // 5. Pagination Controls (< Prev  Page X of Y  Next >)
-                            if (displayedManga.isNotEmpty()) {
+                            // 5. Built-in Pagination Controls (< Prev  Page X of Y  Next >)
+                            if (displayedBuiltinManga.isNotEmpty()) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
                                     DiscoverPaginationControls(
-                                        currentPage = safePage,
-                                        totalPages = totalPages,
+                                        currentPage = safeBuiltinPage,
+                                        totalPages = totalBuiltinPages,
                                         onPrev = {
-                                            if (safePage > 1) {
-                                                currentPage = safePage - 1
+                                            if (safeBuiltinPage > 1) {
+                                                defaultPage = safeBuiltinPage - 1
                                                 scope.launch { gridState.animateScrollToItem(0) }
                                             }
                                         },
                                         onNext = {
-                                            if (safePage < totalPages) {
-                                                currentPage = safePage + 1
+                                            if (safeBuiltinPage < totalBuiltinPages) {
+                                                defaultPage = safeBuiltinPage + 1
                                                 scope.launch { gridState.animateScrollToItem(0) }
                                             } else {
                                                 viewModel.loadSourcesForPage(
-                                                    sources = targetSources,
-                                                    page = nextSourcePage,
+                                                    sources = builtinSources,
+                                                    page = nextBuiltinSourcePage,
                                                     isLatest = (selectedSection == DiscoverSection.LATEST),
                                                 )
-                                                currentPage = safePage + 1
+                                                defaultPage = safeBuiltinPage + 1
                                                 scope.launch { gridState.animateScrollToItem(0) }
                                             }
                                         },
@@ -474,7 +517,90 @@ object DiscoverTab : Tab {
                                 }
                             }
 
-                            // 6. Bottom clearance spacer
+                            // 6. Extension Section (Separate Section Below — only when extensions installed)
+                            if (extensionSources.isNotEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Spacer(modifier = Modifier.height(18.dp))
+                                }
+
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    ExtensionSectionHeader(
+                                        selectedSection = selectedSection,
+                                        isAdultSelected = isAdultSelected,
+                                    )
+                                }
+
+                                if (displayedExtensionManga.isEmpty()) {
+                                    val isLoadingExt = extensionSources.any { source ->
+                                        val cache = if (selectedSection == DiscoverSection.LATEST) viewModel.latestCache else viewModel.popularCache
+                                        !cache.containsKey(source.id)
+                                    }
+                                    if (isLoadingExt) {
+                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                            FeedGridSkeleton(shimmerBrush = shimmerBrush)
+                                        }
+                                    } else {
+                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 30.dp),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Text(
+                                                    text = "No titles from extensions.",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    items(
+                                        items = displayedExtensionManga,
+                                        key = { "ext_${it.source}_${it.url}" },
+                                    ) { manga ->
+                                        DiscoverMangaCard(
+                                            manga = manga,
+                                            onClick = {
+                                                scope.launch {
+                                                    val localManga = viewModel.getNetworkToLocalManga(manga)
+                                                    navigator.push(MangaScreen(localManga.id))
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
+
+                                // Extension Pagination Controls (< Prev  Page X of Y  Next >)
+                                if (displayedExtensionManga.isNotEmpty()) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        DiscoverPaginationControls(
+                                            currentPage = safeExtensionPage,
+                                            totalPages = totalExtensionPages,
+                                            onPrev = {
+                                                if (safeExtensionPage > 1) {
+                                                    extensionPage = safeExtensionPage - 1
+                                                }
+                                            },
+                                            onNext = {
+                                                if (safeExtensionPage < totalExtensionPages) {
+                                                    extensionPage = safeExtensionPage + 1
+                                                } else {
+                                                    viewModel.loadSourcesForPage(
+                                                        sources = extensionSources,
+                                                        page = nextExtensionSourcePage,
+                                                        isLatest = (selectedSection == DiscoverSection.LATEST),
+                                                    )
+                                                    extensionPage = safeExtensionPage + 1
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+
+                            // 7. Bottom clearance spacer
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 Spacer(modifier = Modifier.height(96.dp))
                             }
@@ -648,6 +774,34 @@ private fun DiscoverSectionHeader(
             selectedSection == DiscoverSection.LATEST -> "Latest Updates"
             isAdultSelected -> "18+ Popular Titles"
             else -> "Popular Titles"
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun ExtensionSectionHeader(
+    selectedSection: DiscoverSection,
+    isAdultSelected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        val title = when {
+            selectedSection == DiscoverSection.LATEST && isAdultSelected -> "18+ From Extensions"
+            selectedSection == DiscoverSection.LATEST -> "Latest From Extensions"
+            isAdultSelected -> "18+ Extension Titles"
+            else -> "Popular From Extensions"
         }
         Text(
             text = title,
