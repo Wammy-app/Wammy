@@ -59,16 +59,16 @@ If you enjoy using Wammy, please consider starring the repository — it helps m
 
 ## Highlights
 
-- **⚡ Blazing Fast Cold Start**: Non-blocking migration, deferred warmup, and phased rendering deliver startup speeds under ~1.0–1.5s in release mode.
-- **🎨 Modern Material 3 UI**: Dynamic cover-colored ambient hero cards ("Popular New Titles" carousel with auto-snap safeguards), theme-adaptive navigation, and pure dark/OLED mode.
-- **⭐ Live Ratings & View Badges**: Star ratings and view counts rendered directly on manga cards across browse catalogs, search, and library grids.
-- **📚 Unified Manga & Novel Library**: Read manga and light novels side-by-side with unread chapter badges, reading status, and custom category management.
-- **🔌 Built-In Native Sources**: Core sources (MangaDex, Webtoons, ComicK, Mangakakalot, Atsumaru, ManhuaPlus, WeebCentral, Aster Scans, and more) work right out of the box with zero APK installation required.
-- **🧩 Universal Extension Support**: Install external APK extensions, silent sandboxed extensions, and LNReader JavaScript novel plugins.
-- **📂 Streamlined Browse Tab**: Logically reordered tabs (Manga Sources, Novel Sources, Manga Extensions, Novel Extensions, Manga Migrate, Novel Migrate) with zero-lag pre-warmed navigation.
-- **☁️ Cloud Sync & Backups**: Sync your reading progress, library, categories, and custom Top 5 favorites via Google Drive, with full local backup/restore support.
-- **🗣️ Advanced Novel Reader**: Customizable typography, background themes, line spacing, margins, and built-in Text-to-Speech (TTS) narration.
-- **📊 Tracker Integrations**: Two-way synchronization with AniList, MyAnimeList, Kitsu, Shikimori, Bangumi, and MangaUpdates.
+- **Fast Cold Start**: Non-blocking migration, deferred warmup, and phased rendering deliver startup speeds under ~1.0-1.5s in release mode.
+- **Modern Material 3 UI**: Dynamic cover-colored ambient hero cards ("Popular New Titles" carousel with auto-snap safeguards), theme-adaptive navigation, and pure dark/OLED mode.
+- **Live Ratings & View Badges**: Star ratings and view counts rendered directly on manga cards across browse catalogs, search, and library grids.
+- **Unified Manga & Novel Library**: Read manga and light novels side-by-side with unread chapter badges, reading status, and custom category management.
+- **Built-In Native Sources**: Core sources (MangaDex, Webtoons, ComicK, Mangakakalot, Atsumaru, ManhuaPlus, WeebCentral, Aster Scans, and more) work right out of the box with zero APK installation required.
+- **Universal Extension Support**: Install external APK extensions, silent sandboxed extensions, and LNReader JavaScript novel plugins.
+- **Streamlined Browse Tab**: Logically reordered tabs (Manga Sources, Novel Sources, Manga Extensions, Novel Extensions, Manga Migrate, Novel Migrate) with zero-lag pre-warmed navigation.
+- **Cloud Sync & Backups**: Sync your reading progress, library, categories, and custom Top 5 favorites via Google Drive, with full local backup/restore support.
+- **Advanced Novel Reader**: Customizable typography, background themes, line spacing, margins, and built-in Text-to-Speech (TTS) narration.
+- **Tracker Integrations**: Two-way synchronization with AniList, MyAnimeList, Kitsu, Shikimori, Bangumi, and MangaUpdates.
 
 ---
 
