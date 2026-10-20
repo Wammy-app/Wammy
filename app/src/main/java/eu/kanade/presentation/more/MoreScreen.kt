@@ -1,5 +1,6 @@
 package eu.kanade.presentation.more
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,9 +21,12 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,8 +37,11 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.google.firebase.auth.FirebaseUser
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -90,10 +97,31 @@ fun MoreScreen(
     onClickSupport: () -> Unit,
     onClickAbout: () -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val uriHandler = LocalUriHandler.current
     val uiPreferences = remember { Injekt.get<UiPreferences>() }
     val fabSizeDp by uiPreferences.fabSizeDp.collectAsState()
     var showSandboxDialog by remember { mutableStateOf(false) }
+
+    val authManager = remember { Injekt.get<eu.kanade.tachiyomi.data.auth.AuthManager>() }
+    val user: FirebaseUser? by authManager.currentUser.collectAsState()
+    val userPrefs = remember { context.getSharedPreferences("user_profile_cache", android.content.Context.MODE_PRIVATE) }
+    var username by remember {
+        mutableStateOf<String?>(userPrefs.getString("cached_username", null) ?: user?.displayName)
+    }
+
+    LaunchedEffect(user?.uid) {
+        val uid = user?.uid
+        if (uid != null) {
+            val repo = eu.kanade.tachiyomi.data.sync.FirestoreUserRepository()
+            val cloudUser = tachiyomi.core.common.util.lang.withIOContext { repo.getUser(uid) }
+            val fetchedName: String? = cloudUser?.username?.takeIf { it.isNotBlank() } ?: user?.displayName?.takeIf { it.isNotBlank() }
+            if (fetchedName != null) {
+                username = fetchedName
+                userPrefs.edit().putString("cached_username", fetchedName).apply()
+            }
+        }
+    }
 
     Scaffold { contentPadding ->
         ScrollbarLazyColumn(contentPadding = contentPadding + PaddingValues(bottom = 84.dp)) {
@@ -101,6 +129,10 @@ fun MoreScreen(
                 LogoHeader(
                     iconPadding = PaddingValues(top = 20.dp, bottom = 8.dp),
                 )
+            }
+
+            item {
+                ShareCommunityCard(username = username)
             }
 
             // Mode Group
@@ -498,6 +530,85 @@ fun SettingItem(
             if (trailing != null) {
                 Spacer(Modifier.width(12.dp))
                 trailing()
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShareCommunityCard(
+    username: String?,
+    modifier: Modifier = Modifier,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val name = username?.takeIf { it.isNotBlank() } ?: "reader"
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        ) {
+            val annotatedText = buildAnnotatedString {
+                append("hey ")
+                pushStyle(
+                    SpanStyle(
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                )
+                append("@$name")
+                pop()
+                append(", ngl it takes a lot of effort on my end to make regular updates. how about a small act of kindness and share this with others so it keeps me motivated to keep building.")
+            }
+
+            Text(
+                text = annotatedText,
+                fontSize = 12.5.sp,
+                lineHeight = 17.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Button(
+                onClick = {
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(
+                            Intent.EXTRA_TEXT,
+                            "Check out Wammy - the ultimate Manga & Light Novel reader! https://kainotch.github.io/WammyWeb/",
+                        )
+                    }
+                    val shareIntent = Intent.createChooser(sendIntent, "Share Wammy")
+                    context.startActivity(shareIntent)
+                },
+                modifier = Modifier.align(Alignment.End),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Share,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(5.dp))
+                Text(
+                    text = "Share",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }
