@@ -61,6 +61,24 @@ fun DiscoverMangaCard(
             ""
         }
     }
+    val cover = remember(manga.id, manga.thumbnailUrl, manga.coverLastModified) {
+        manga.asMangaCover()
+    }
+    val rating = remember(manga.id, manga.memo, manga.description) {
+        manga.effectiveRating
+    }
+    val views = remember(manga.id, manga.memo, manga.description) {
+        manga.effectiveViews
+    }
+    val authorText = remember(manga.author) {
+        manga.author?.trim()?.takeIf { it.isNotBlank() }
+    }
+    val leftText = remember(authorText, sourceName) {
+        authorText ?: sourceName.takeIf { it.isNotBlank() }
+    }
+    val formattedViews = remember(views) {
+        views?.takeIf { it > 0 }?.let { formatViewsCount(it) }
+    }
 
     Column(
         modifier = modifier
@@ -76,13 +94,12 @@ fun DiscoverMangaCard(
                 .clip(RoundedCornerShape(10.dp)),
         ) {
             AsyncImage(
-                model = manga.asMangaCover(),
+                model = cover,
                 contentDescription = manga.title,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
 
-            val rating = manga.effectiveRating
             if (rating != null && rating > 0.0) {
                 RatingBadge(
                     rating = rating,
@@ -111,10 +128,6 @@ fun DiscoverMangaCard(
         Spacer(modifier = Modifier.height(2.dp))
 
         // Bottom metadata row: author / source on left, eye icon + views on right
-        val authorText = manga.author?.trim()?.takeIf { it.isNotBlank() }
-        val views = manga.effectiveViews
-        val leftText = authorText ?: sourceName.takeIf { it.isNotBlank() }
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -134,7 +147,7 @@ fun DiscoverMangaCard(
                 Spacer(modifier = Modifier.weight(1f, fill = false))
             }
 
-            if (views != null && views > 0) {
+            if (formattedViews != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(start = 4.dp),
@@ -147,7 +160,7 @@ fun DiscoverMangaCard(
                     )
                     Spacer(modifier = Modifier.width(2.5.dp))
                     Text(
-                        text = formatViewsCount(views),
+                        text = formattedViews,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

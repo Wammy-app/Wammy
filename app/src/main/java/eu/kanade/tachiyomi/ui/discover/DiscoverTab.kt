@@ -135,7 +135,7 @@ object DiscoverTab : Tab {
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
         val updatesCount by libraryPreferences.newUpdatesCount.collectAsState()
 
-        val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+        val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
         var defaultSection by rememberSaveable { mutableStateOf(DiscoverSection.LATEST) }
         var defaultPage by rememberSaveable { mutableIntStateOf(1) }
@@ -173,11 +173,13 @@ object DiscoverTab : Tab {
                 if (animatedState.isLoading) {
                     DiscoverSkeletonScreen()
                 } else {
+                    val cacheRevision = viewModel.cacheRevision
+
                     val builtinRegularSources = remember(animatedState.regularSources) {
                         animatedState.regularSources.filter { BuiltinSourceManager.isBuiltin(it.id) }
                     }
 
-                    val trendingAggregated = remember(viewModel.popularCache.toMap(), builtinRegularSources) {
+                    val trendingAggregated = remember(cacheRevision, builtinRegularSources) {
                         val result = mutableListOf<Manga>()
                         val seenTitles = mutableSetOf<String>()
                         val lists = builtinRegularSources.mapNotNull { viewModel.popularCache[it.id] }
@@ -268,9 +270,7 @@ object DiscoverTab : Tab {
 
                     val allBuiltinManga = remember(
                         defaultSection,
-                        viewModel.popularCache.toMap(),
-                        viewModel.latestCache.toMap(),
-                        viewModel.pageCache.toMap(),
+                        cacheRevision,
                         builtinSources,
                     ) {
                         extractMangaFromSources(builtinSources, defaultSection == DiscoverSection.LATEST)
@@ -279,9 +279,7 @@ object DiscoverTab : Tab {
                     val allExtensionManga = remember(
                         extensionSection,
                         extensionIsAdult,
-                        viewModel.popularCache.toMap(),
-                        viewModel.latestCache.toMap(),
-                        viewModel.pageCache.toMap(),
+                        cacheRevision,
                         activeExtensionSources,
                     ) {
                         extractMangaFromSources(activeExtensionSources, extensionSection == DiscoverSection.LATEST)
@@ -322,9 +320,15 @@ object DiscoverTab : Tab {
                         }
                     }
 
-                    val allCachesLoaded = animatedState.sources.all { viewModel.popularCache.containsKey(it.id) }
-                    val hasNoMangaAtAll = allCachesLoaded && viewModel.popularCache.values.all { it.isEmpty() }
-                    val hasAnyContent = trendingAggregated.isNotEmpty() || allBuiltinManga.isNotEmpty() || allExtensionManga.isNotEmpty()
+                    val allCachesLoaded = remember(cacheRevision, animatedState.sources) {
+                        animatedState.sources.all { viewModel.popularCache.containsKey(it.id) }
+                    }
+                    val hasNoMangaAtAll = remember(allCachesLoaded, cacheRevision) {
+                        allCachesLoaded && viewModel.popularCache.values.all { it.isEmpty() }
+                    }
+                    val hasAnyContent = remember(trendingAggregated, allBuiltinManga, allExtensionManga) {
+                        trendingAggregated.isNotEmpty() || allBuiltinManga.isNotEmpty() || allExtensionManga.isNotEmpty()
+                    }
 
                     if (animatedState.sources.isEmpty() || hasNoMangaAtAll) {
                         EmptyDiscoverScreen(
@@ -345,7 +349,7 @@ object DiscoverTab : Tab {
                         ) {
                             // 1. Hero Featured Card at Top
                             if (featuredManga.isNotEmpty()) {
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                item(key = "hero_featured", span = { GridItemSpan(maxLineSpan) }, contentType = "hero") {
                                     HeroFeaturedCard(
                                         items = featuredManga,
                                         onClick = { manga ->
@@ -357,13 +361,13 @@ object DiscoverTab : Tab {
                                     )
                                 }
                             } else if (builtinSources.isNotEmpty() && !builtinSources.all { viewModel.popularCache.containsKey(it.id) }) {
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                item(key = "hero_skeleton", span = { GridItemSpan(maxLineSpan) }, contentType = "hero_skeleton") {
                                     HeroFeaturedCardSkeleton(shimmerBrush = shimmerBrush)
                                 }
                             }
 
                             // 2. Filter Buttons Row for Default Sources (Latest Updates, Popular, News — NO Adult)
-                            item(span = { GridItemSpan(maxLineSpan) }) {
+                            item(key = "default_filters", span = { GridItemSpan(maxLineSpan) }, contentType = "filters") {
                                 DiscoverFilterButtonRow(
                                     selectedSection = defaultSection,
                                     isAdultSelected = false,
@@ -383,7 +387,7 @@ object DiscoverTab : Tab {
                             }
 
                             // 3. Default Section Title Header (e.g. "Latest Updates" or "Popular Titles")
-                            item(span = { GridItemSpan(maxLineSpan) }) {
+                            item(key = "default_header", span = { GridItemSpan(maxLineSpan) }, contentType = "header") {
                                 DiscoverSectionHeader(
                                     selectedSection = defaultSection,
                                     isAdultSelected = false,
@@ -397,11 +401,11 @@ object DiscoverTab : Tab {
                                     !cache.containsKey(source.id)
                                 }
                                 if (isLoadingTarget) {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                    item(key = "builtin_skeleton", span = { GridItemSpan(maxLineSpan) }, contentType = "skeleton") {
                                         FeedGridSkeleton(shimmerBrush = shimmerBrush)
                                     }
                                 } else {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                    item(key = "builtin_empty", span = { GridItemSpan(maxLineSpan) }, contentType = "empty") {
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -420,6 +424,7 @@ object DiscoverTab : Tab {
                                 items(
                                     items = displayedBuiltinManga,
                                     key = { "builtin_${it.source}_${it.url}" },
+                                    contentType = { "manga_card" },
                                 ) { manga ->
                                     DiscoverMangaCard(
                                         manga = manga,
@@ -435,7 +440,7 @@ object DiscoverTab : Tab {
 
                             // 5. Built-in Pagination Controls (< Prev  Page X of Y  Next >)
                             if (displayedBuiltinManga.isNotEmpty()) {
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                item(key = "builtin_pagination", span = { GridItemSpan(maxLineSpan) }, contentType = "pagination") {
                                     DiscoverPaginationControls(
                                         currentPage = safeBuiltinPage,
                                         totalPages = totalBuiltinPages,
@@ -465,23 +470,23 @@ object DiscoverTab : Tab {
 
                             // 6. Extension Section (Separate Section Below — only when extensions installed)
                             if (hasAnyExtensionSources) {
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                item(key = "ext_spacer_top", span = { GridItemSpan(maxLineSpan) }, contentType = "spacer") {
                                     Spacer(modifier = Modifier.height(20.dp))
                                 }
 
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                item(key = "ext_divider", span = { GridItemSpan(maxLineSpan) }, contentType = "divider") {
                                     HorizontalDivider(
                                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
                                         thickness = 1.dp,
                                     )
                                 }
 
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                item(key = "ext_spacer_mid", span = { GridItemSpan(maxLineSpan) }, contentType = "spacer") {
                                     Spacer(modifier = Modifier.height(14.dp))
                                 }
 
                                 // Extension Filter Buttons Row (Latest Updates, Popular, Adult)
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                item(key = "ext_filters", span = { GridItemSpan(maxLineSpan) }, contentType = "filters") {
                                     DiscoverFilterButtonRow(
                                         selectedSection = extensionSection,
                                         isAdultSelected = extensionIsAdult,
@@ -501,7 +506,7 @@ object DiscoverTab : Tab {
                                 }
 
                                 // Extension Section Header (e.g. "Latest From Extensions", "18+ From Extensions")
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                item(key = "ext_header", span = { GridItemSpan(maxLineSpan) }, contentType = "header") {
                                     ExtensionSectionHeader(
                                         selectedSection = extensionSection,
                                         isAdultSelected = extensionIsAdult,
@@ -514,11 +519,11 @@ object DiscoverTab : Tab {
                                         !cache.containsKey(source.id)
                                     }
                                     if (isLoadingExt) {
-                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                        item(key = "ext_skeleton", span = { GridItemSpan(maxLineSpan) }, contentType = "skeleton") {
                                             FeedGridSkeleton(shimmerBrush = shimmerBrush)
                                         }
                                     } else {
-                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                        item(key = "ext_empty", span = { GridItemSpan(maxLineSpan) }, contentType = "empty") {
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -537,6 +542,7 @@ object DiscoverTab : Tab {
                                     items(
                                         items = displayedExtensionManga,
                                         key = { "ext_${it.source}_${it.url}" },
+                                        contentType = { "manga_card" },
                                     ) { manga ->
                                         DiscoverMangaCard(
                                             manga = manga,
@@ -552,7 +558,7 @@ object DiscoverTab : Tab {
 
                                 // Extension Pagination Controls (< Prev  Page X of Y  Next >)
                                 if (displayedExtensionManga.isNotEmpty()) {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                    item(key = "ext_pagination", span = { GridItemSpan(maxLineSpan) }, contentType = "pagination") {
                                         DiscoverPaginationControls(
                                             currentPage = safeExtensionPage,
                                             totalPages = totalExtensionPages,
@@ -579,7 +585,7 @@ object DiscoverTab : Tab {
                             }
 
                             // 7. Bottom clearance spacer
-                            item(span = { GridItemSpan(maxLineSpan) }) {
+                            item(key = "bottom_clearance", span = { GridItemSpan(maxLineSpan) }, contentType = "spacer") {
                                 Spacer(modifier = Modifier.height(96.dp))
                             }
                         }

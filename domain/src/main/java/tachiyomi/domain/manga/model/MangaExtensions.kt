@@ -4,6 +4,10 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 
+private val RATING_10_REGEX = Regex("""(?:Rating|Score|★)\s*:?\s*(\d+(?:\.\d+)?)\s*(?:/\s*10)?""", RegexOption.IGNORE_CASE)
+private val RATING_5_REGEX = Regex("""(?:Rating|Score|★)\s*:?\s*(\d+(?:\.\d+)?)\s*/\s*5""", RegexOption.IGNORE_CASE)
+private val VIEWS_REGEX = Regex("""(?:Views|Reads|Follows)\s*:?\s*([\d,.]+\s*[kmb]?)""", RegexOption.IGNORE_CASE)
+
 val Manga.rating: Double?
     get() = (memo["rating"] as? JsonPrimitive)?.doubleOrNull
         ?: (memo["score"] as? JsonPrimitive)?.doubleOrNull
@@ -15,12 +19,12 @@ val Manga.effectiveRating: Double?
     get() {
         rating?.let { return it }
         val desc = description ?: return null
-        val match10 = Regex("""(?:Rating|Score|★)\s*:?\s*(\d+(?:\.\d+)?)\s*(?:/\s*10)?""", RegexOption.IGNORE_CASE).find(desc)
+        val match10 = RATING_10_REGEX.find(desc)
         if (match10 != null) {
             val num = match10.groupValues[1].toDoubleOrNull()
             if (num != null && num in 1.0..10.0) return num
         }
-        val match5 = Regex("""(?:Rating|Score|★)\s*:?\s*(\d+(?:\.\d+)?)\s*/\s*5""", RegexOption.IGNORE_CASE).find(desc)
+        val match5 = RATING_5_REGEX.find(desc)
         if (match5 != null) {
             val num = match5.groupValues[1].toDoubleOrNull()
             if (num != null && num in 1.0..5.0) return num * 2.0
@@ -32,7 +36,7 @@ val Manga.effectiveViews: Long?
     get() {
         views?.let { return it }
         val desc = description ?: return null
-        val match = Regex("""(?:Views|Reads|Follows)\s*:?\s*([\d,.]+\s*[kmb]?)""", RegexOption.IGNORE_CASE).find(desc)
+        val match = VIEWS_REGEX.find(desc)
         if (match != null) {
             return parseHumanCount(match.groupValues[1])
         }

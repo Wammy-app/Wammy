@@ -4,6 +4,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.JsonObject
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.jsplugin.JsPluginManager
@@ -62,6 +65,19 @@ class DiscoverViewModel(
     val popularCache = mutableStateMapOf<Long, List<Manga>>()
     val latestCache = mutableStateMapOf<Long, List<Manga>>()
     val pageCache = mutableStateMapOf<String, List<Manga>>()
+    
+    var cacheRevision by mutableIntStateOf(0)
+        private set
+
+    fun notifyCacheUpdated() {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            cacheRevision++
+        } else {
+            viewModelScope.launch(Dispatchers.Main.immediate) {
+                cacheRevision++
+            }
+        }
+    }
     
     val recentlyRead = MutableStateFlow<List<tachiyomi.domain.history.model.HistoryWithRelations>>(emptyList())
     
@@ -217,6 +233,7 @@ class DiscoverViewModel(
                                 } else m
                             }
                             popularCache[source.id] = enrichedList
+                            notifyCacheUpdated()
                             returnList = enrichedList
                         }
                     }
@@ -253,12 +270,14 @@ class DiscoverViewModel(
                     }
                 }
                 popularCache[source.id] = newList
+                notifyCacheUpdated()
                 cacheFile.writeText(json.encodeToString(newList))
                 return@withContext newList
             } catch (e: Exception) {
                 logcat(LogPriority.ERROR, e) { "Failed to load popular manga for source ${source.name}" }
                 if (!popularCache.containsKey(source.id)) {
                     popularCache[source.id] = emptyList()
+                    notifyCacheUpdated()
                 }
                 return@withContext returnList
             }
@@ -269,6 +288,7 @@ class DiscoverViewModel(
         return withContext(Dispatchers.IO) {
             if (!source.supportsLatest) {
                 latestCache[source.id] = emptyList()
+                notifyCacheUpdated()
                 return@withContext emptyList()
             }
             val cacheFile = java.io.File(context.cacheDir, "latest_manga_${source.id}.json")
@@ -295,6 +315,7 @@ class DiscoverViewModel(
                                 } else m
                             }
                             latestCache[source.id] = enrichedList
+                            notifyCacheUpdated()
                             returnList = enrichedList
                         }
                     }
@@ -329,12 +350,14 @@ class DiscoverViewModel(
                     }
                 }
                 latestCache[source.id] = newList
+                notifyCacheUpdated()
                 cacheFile.writeText(json.encodeToString(newList))
                 return@withContext newList
             } catch (e: Exception) {
                 logcat(LogPriority.ERROR, e) { "Failed to load latest manga for source ${source.name}" }
                 if (!latestCache.containsKey(source.id)) {
                     latestCache[source.id] = emptyList()
+                    notifyCacheUpdated()
                 }
                 return@withContext returnList
             }
@@ -378,6 +401,7 @@ class DiscoverViewModel(
                             }
                         }
                         pageCache[key] = list
+                        notifyCacheUpdated()
                     }
                 }
             }
@@ -418,6 +442,7 @@ class DiscoverViewModel(
             if (idx != -1) {
                 currentList[idx] = updated
                 popularCache[sourceId] = currentList
+                notifyCacheUpdated()
             }
         }
     }

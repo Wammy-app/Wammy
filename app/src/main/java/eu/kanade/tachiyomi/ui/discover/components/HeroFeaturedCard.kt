@@ -317,7 +317,12 @@ fun HeroFeaturedCard(
                     beyondViewportPageCount = 1,
                 ) { page ->
                     val manga = items[page]
-                    val coverData = manga.asMangaCover()
+                    val coverData = remember(manga.id, manga.thumbnailUrl, manga.coverLastModified) {
+                        manga.asMangaCover()
+                    }
+                    val rating = remember(manga.id, manga.memo, manga.description) {
+                        manga.effectiveRating
+                    }
                     val rawAuthor = manga.author?.takeIf { it.isNotBlank() } ?: manga.artist?.takeIf { it.isNotBlank() }
                     val authorText = rawAuthor?.let { if (it.startsWith("by ", ignoreCase = true)) it else "by $it" } ?: ""
                     val genres = manga.genre?.take(3) ?: emptyList()
@@ -366,16 +371,18 @@ fun HeroFeaturedCard(
                                 model = coverData,
                                 contentDescription = manga.title,
                                 onSuccess = { successState ->
-                                    val drawable = successState.result.image.asDrawable(context.resources)
-                                    val rawBitmap = (drawable as? BitmapDrawable)?.bitmap
-                                        ?: drawable.getBitmapOrNull()
-                                        ?: drawable.toBitmap()
-                                    val softwareBitmap = rawBitmap.toSoftwareBitmap()
-                                    Palette.from(softwareBitmap).maximumColorCount(24).generate { palette ->
-                                        val color = extractMangaCoverColor(palette)
-                                        if (color != null) {
-                                            dominantColorMap[manga.url] = color
-                                            MangaCover.vibrantCoverColorMap[manga.id] = color.toArgb()
+                                    if (!dominantColorMap.containsKey(manga.url) && !MangaCover.vibrantCoverColorMap.containsKey(manga.id)) {
+                                        val drawable = successState.result.image.asDrawable(context.resources)
+                                        val rawBitmap = (drawable as? BitmapDrawable)?.bitmap
+                                            ?: drawable.getBitmapOrNull()
+                                            ?: drawable.toBitmap()
+                                        val softwareBitmap = rawBitmap.toSoftwareBitmap()
+                                        Palette.from(softwareBitmap).maximumColorCount(24).generate { palette ->
+                                            val color = extractMangaCoverColor(palette)
+                                            if (color != null) {
+                                                dominantColorMap[manga.url] = color
+                                                MangaCover.vibrantCoverColorMap[manga.id] = color.toArgb()
+                                            }
                                         }
                                     }
                                 },
@@ -383,7 +390,6 @@ fun HeroFeaturedCard(
                                 contentScale = ContentScale.Crop,
                             )
 
-                            val rating = manga.effectiveRating
                             if (rating != null && rating > 0.0) {
                                 RatingBadge(
                                     rating = rating,
