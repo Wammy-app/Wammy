@@ -205,38 +205,38 @@ fun HeroFeaturedCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp)),
-        shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            .clip(RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                // Color INSIDE the card matching the banner, fading down to surfaceContainer
+                // Subtle ambient cover tint that smoothly blends with the background
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            activeColor.copy(alpha = 0.28f), // Color inside banner at top
-                            activeColor.copy(alpha = 0.08f),
-                            Color.Transparent,               // Blends into base surfaceContainer
+                            activeColor.copy(alpha = 0.07f),
+                            activeColor.copy(alpha = 0.02f),
+                            Color.Transparent,
                         ),
                         startY = 0f,
                         endY = gradientEndY,
                     ),
                 )
-                // Border visible at top with banner color, completely invisible at bottom, NO outside glow
+                // Refined, subtle outline so the card boundary can be clearly seen without being bold
                 .border(
                     width = 1.dp,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            activeColor.copy(alpha = 0.45f), // Hairline border visible at top
-                            activeColor.copy(alpha = 0.12f),
-                            Color.Transparent,               // Fades out completely, no border at bottom
+                            activeColor.copy(alpha = 0.20f),
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.06f),
                         ),
                         startY = 0f,
                         endY = borderEndY,
                     ),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(20.dp),
                 ),
         ) {
             Column(
