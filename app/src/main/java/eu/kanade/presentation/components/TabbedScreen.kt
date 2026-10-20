@@ -70,7 +70,17 @@ fun TabbedScreen(
                         val selected = state.currentPage == index
                         Tab(
                             selected = selected,
-                            onClick = { scope.launch { state.animateScrollToPage(index) } },
+                            onClick = {
+                                if (state.currentPage != index) {
+                                    scope.launch {
+                                        if (kotlin.math.abs(state.currentPage - index) > 1) {
+                                            state.scrollToPage(index)
+                                        } else {
+                                            state.animateScrollToPage(index)
+                                        }
+                                    }
+                                }
+                            },
                             selectedContentColor = MaterialTheme.colorScheme.primary,
                             unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             text = {
@@ -93,7 +103,11 @@ fun TabbedScreen(
                 ),
             state = state,
             verticalAlignment = Alignment.Top,
+            beyondViewportPageCount = 1,
         ) { page ->
+            if (page !in ((state.currentPage - 1)..(state.currentPage + 1))) {
+                return@HorizontalPager
+            }
             tabs[page].content(
                 PaddingValues(bottom = contentPadding.calculateBottomPadding() + 84.dp),
                 snackbarHostState,

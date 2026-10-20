@@ -86,17 +86,17 @@ data object BrowseTab : Tab {
             )
         } else {
             listOf(
-                novelSourcesTab(),
                 sourcesTab(),
-                novelExtensionsTab(novelExtensionsViewModel),
+                novelSourcesTab(),
                 extensionsTab(extensionsViewModel),
-                novelMigrateSourceTab(),
+                novelExtensionsTab(novelExtensionsViewModel),
                 migrateSourceTab(),
+                novelMigrateSourceTab(),
             )
         }
 
-        val novelExtensionsTabIndex = if (hideMangaBrowseTabs) 1 else 2
-        val mangaExtensionsTabIndex = if (hideMangaBrowseTabs) null else 3
+        val novelExtensionsTabIndex = if (hideMangaBrowseTabs) 1 else 3
+        val mangaExtensionsTabIndex = if (hideMangaBrowseTabs) null else 2
 
         val state = rememberPagerState { tabs.size }
 
@@ -119,7 +119,7 @@ data object BrowseTab : Tab {
         LaunchedEffect(Unit) {
             switchToExtensionTabChannel.receiveAsFlow()
                 .collectLatest {
-                    state.scrollToPage(if (hideMangaBrowseTabs) novelExtensionsTabIndex else 3)
+                    state.scrollToPage(if (hideMangaBrowseTabs) novelExtensionsTabIndex else 2)
                 }
         }
 
