@@ -63,7 +63,9 @@ jobs:
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
       - name: Build release APK(s) (unsigned)
-        run: ./gradlew assembleNightly -Penable-updater
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleNightly -Penable-updater
 
       - name: Run unit tests
         id: unit_tests
