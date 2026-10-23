@@ -23,7 +23,6 @@ fun Screen.novelMigrateSourceTab(): TabContent {
     val uriHandler = LocalUriHandler.current
     val navigator = LocalNavigator.currentOrThrow
     val screenModel = viewModel<NovelMigrateSourceViewModel>()
-    val state by screenModel.state.collectAsState()
 
     return TabContent(
         titleRes = TDMR.strings.label_novel_migration,
@@ -37,6 +36,7 @@ fun Screen.novelMigrateSourceTab(): TabContent {
             ),
         ),
         content = { contentPadding, _ ->
+            val state by screenModel.state.collectAsState()
             MigrateSourceScreen(
                 state = MigrateSourceViewModel.State(
                     isLoading = state.isLoading,
@@ -54,4 +54,3 @@ fun Screen.novelMigrateSourceTab(): TabContent {
         },
     )
 }
-

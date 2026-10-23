@@ -32,6 +32,8 @@ import eu.kanade.tachiyomi.ui.main.MainActivity
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -73,10 +75,14 @@ data object BrowseTab : Tab {
 
         // Hoisted for extensions tab's search bar
         val extensionsViewModel = viewModel<ExtensionsViewModel>()
-        val extensionsState by extensionsViewModel.state.collectAsState()
+        val mangaSearchQuery by remember(extensionsViewModel) {
+            extensionsViewModel.state.map { it.searchQuery }.distinctUntilChanged()
+        }.collectAsState(initial = null)
 
         val novelExtensionsViewModel = viewModel<NovelExtensionsViewModel>()
-        val novelExtensionsState by novelExtensionsViewModel.state.collectAsState()
+        val novelSearchQuery by remember(novelExtensionsViewModel) {
+            novelExtensionsViewModel.state.map { it.searchQuery }.distinctUntilChanged()
+        }.collectAsState(initial = null)
 
         val tabs = if (hideMangaBrowseTabs) {
             listOf(
@@ -105,8 +111,8 @@ data object BrowseTab : Tab {
             tabs = tabs,
             state = state,
             searchQuery = when (state.currentPage) {
-                novelExtensionsTabIndex -> novelExtensionsState.searchQuery
-                mangaExtensionsTabIndex -> extensionsState.searchQuery
+                novelExtensionsTabIndex -> novelSearchQuery
+                mangaExtensionsTabIndex -> mangaSearchQuery
                 else -> null
             },
             onChangeSearchQuery = { query ->
