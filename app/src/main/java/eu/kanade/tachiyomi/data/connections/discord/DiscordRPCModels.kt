@@ -16,7 +16,7 @@ internal const val RICH_PRESENCE_APPLICATION_ID = "1551895517397516318"
 val DOWNLOAD_BUTTON_LABEL_RES = MR.strings.discord_download_button
 const val DOWNLOAD_BUTTON_URL = "https://kainotch.github.io/WammyWeb/download/"
 const val DISCORD_BUTTON_LABEL = "Discord"
-const val DISCORD_BUTTON_URL = "https://discord.gg/9tD8mvhH"
+const val DISCORD_BUTTON_URL = "https://discord.gg/qybFSATs7Q"
 
 @Serializable
 data class Activity(
