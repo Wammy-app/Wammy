@@ -1,4 +1,4 @@
-﻿package eu.kanade.presentation.more.onboarding
+package eu.kanade.presentation.more.onboarding
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
@@ -62,7 +62,7 @@ fun OnboardingOverlay(
         )
     }
     val isLastStep = currentStep == steps.lastIndex
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     if (currentStep == 0) {
         ModalBottomSheet(
