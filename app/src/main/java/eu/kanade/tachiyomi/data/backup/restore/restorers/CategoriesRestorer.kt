@@ -44,15 +44,18 @@ class CategoriesRestorer(
                         .let { id -> it.toCategory(id).copy(order = order) }
                 }
 
-            // Pass 2: Re-link parent-child relationships using parentName
+            // Pass 2: Re-link parent-child relationships using parentName or parentId
             val allCurrentCategories = getCategories.await()
             backupCategories.forEach { backupCat ->
-                val parentName = backupCat.parentName
-                if (parentName != null) {
-                    val parent = allCurrentCategories.firstOrNull { it.name == parentName }
-                    val child = allCurrentCategories.firstOrNull { it.name == backupCat.name && it.contentType == backupCat.contentType }
-                    if (parent != null && child != null && parent.id != child.id) {
-                        database.categoriesQueries.updateParent(parentId = parent.id, categoryId = child.id)
+                val child = allCurrentCategories.firstOrNull { it.name == backupCat.name && it.contentType == backupCat.contentType }
+                if (child != null) {
+                    if (backupCat.parentId == Category.UNCATEGORIZED_ID || backupCat.parentName == "") {
+                        database.categoriesQueries.updateParent(parentId = Category.UNCATEGORIZED_ID, categoryId = child.id)
+                    } else if (!backupCat.parentName.isNullOrBlank()) {
+                        val parent = allCurrentCategories.firstOrNull { it.name == backupCat.parentName && !it.isSystemCategory }
+                        if (parent != null && parent.id != child.id) {
+                            database.categoriesQueries.updateParent(parentId = parent.id, categoryId = child.id)
+                        }
                     }
                 }
             }

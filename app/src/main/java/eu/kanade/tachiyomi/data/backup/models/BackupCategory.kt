@@ -34,6 +34,10 @@ val backupCategoryMapper: (Category, List<Category>) -> BackupCategory = { categ
         flags = category.flags,
         contentType = category.contentType,
         parentId = category.parentId,
-        parentName = category.parentId?.let { pid -> allCategories.find { it.id == pid }?.name },
+        parentName = when (category.parentId) {
+            null -> null
+            Category.UNCATEGORIZED_ID -> ""
+            else -> allCategories.find { it.id == category.parentId }?.name
+        },
     )
 }
