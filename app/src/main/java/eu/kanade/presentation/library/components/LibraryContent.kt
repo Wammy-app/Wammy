@@ -101,17 +101,6 @@ fun LibraryContent(
                     }
                 },
             )
-
-            if (activeCategory != null) {
-                SubCategoryChipRow(
-                    subcategories = activeSubcategories,
-                    selectedSubCategoryId = selectedSubCategoryId,
-                    getItemCountForCategory = getItemCountForCategory,
-                    parentTotalCount = getItemCountForCategory(activeCategory),
-                    onSelectSubCategory = { selectedSubCategoryId = it },
-                    onCreateSubCategory = { onCreateSubCategory(activeCategory) },
-                )
-            }
         }
 
         PullRefresh(
@@ -163,6 +152,22 @@ fun LibraryContent(
                 onLoadMore = onLoadMore,
                 getLoadMoreKey = getLoadMoreKey,
                 isCategoryLoading = isCategoryLoading,
+                header = { category ->
+                    if (showPageTabs && (topLevelCategories.size > 1 || !topLevelCategories.first().isSystemCategory)) {
+                        val pageSubcategories = remember(categories, category) {
+                            categories.filter { it.parentId == category.id }
+                        }
+                        SubCategoryChipRow(
+                            subcategories = pageSubcategories,
+                            selectedSubCategoryId = if (category.id == activeCategory?.id) selectedSubCategoryId else null,
+                            getItemCountForCategory = getItemCountForCategory,
+                            parentTotalCount = getItemCountForCategory(category),
+                            onSelectSubCategory = { selectedSubCategoryId = it },
+                            onCreateSubCategory = { onCreateSubCategory(category) },
+                            modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
+                        )
+                    }
+                },
             )
         }
 

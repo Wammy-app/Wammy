@@ -52,6 +52,7 @@ fun LibraryPager(
     onLoadMore: (Category) -> Unit = {},
     getLoadMoreKey: (Category) -> Long = { 0 },
     isCategoryLoading: (Category) -> Boolean = { false },
+    header: @Composable (Category) -> Unit = {},
 ) {
     HorizontalPager(
         modifier = Modifier.fillMaxSize(),
@@ -64,6 +65,7 @@ fun LibraryPager(
         }
         val category = getCategoryForPage(page)
         val items = getItemsForCategory(category)
+        val categoryHeader: (@Composable () -> Unit) = { header(category) }
 
         if (paginationEnabled) {
             LaunchedEffect(category.id) { onCategoryFirstVisible(category) }
@@ -85,6 +87,7 @@ fun LibraryPager(
                     hasActiveFilters = hasActiveFilters,
                     contentPadding = contentPadding,
                     onGlobalSearchClicked = onGlobalSearchClicked,
+                    header = categoryHeader,
                 )
             }
             return@HorizontalPager
@@ -125,6 +128,7 @@ fun LibraryPager(
                     showUrl = showUrlInList,
                     onLoadMore = onLoadMoreForCategory,
                     loadMoreKey = loadMoreKey,
+                    header = categoryHeader,
                 )
             }
             LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
@@ -141,6 +145,7 @@ fun LibraryPager(
                     onGlobalSearchClicked = onGlobalSearchClicked,
                     onLoadMore = onLoadMoreForCategory,
                     loadMoreKey = loadMoreKey,
+                    header = categoryHeader,
                 )
             }
             LibraryDisplayMode.ComfortableGrid -> {
@@ -157,6 +162,7 @@ fun LibraryPager(
                     titleMaxLines = titleMaxLines,
                     onLoadMore = onLoadMoreForCategory,
                     loadMoreKey = loadMoreKey,
+                    header = categoryHeader,
                 )
             }
         }
@@ -169,6 +175,7 @@ private fun LibraryPagerEmptyScreen(
     hasActiveFilters: Boolean,
     contentPadding: PaddingValues,
     onGlobalSearchClicked: () -> Unit,
+    header: (@Composable () -> Unit)? = null,
 ) {
     val msg = when {
         !searchQuery.isNullOrEmpty() -> MR.strings.no_results_found
@@ -182,6 +189,10 @@ private fun LibraryPagerEmptyScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
+        if (header != null) {
+            header()
+        }
+
         if (!searchQuery.isNullOrEmpty()) {
             GlobalSearchItem(
                 modifier = Modifier

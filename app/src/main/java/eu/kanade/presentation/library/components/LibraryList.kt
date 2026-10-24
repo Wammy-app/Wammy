@@ -25,11 +25,18 @@ internal fun LibraryList(
     showUrl: Boolean = false,
     onLoadMore: (() -> Unit)? = null,
     loadMoreKey: Long = 0,
+    header: (@Composable () -> Unit)? = null,
 ) {
     FastScrollLazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding + PaddingValues(vertical = 8.dp),
     ) {
+        if (header != null) {
+            item(contentType = "library_header") {
+                header()
+            }
+        }
+
         item {
             if (!searchQuery.isNullOrEmpty()) {
                 GlobalSearchItem(
@@ -72,7 +79,6 @@ internal fun LibraryList(
                 } else {
                     null
                 },
-                url = libraryItem.fullUrl,
                 showUrl = showUrl,
             )
         }
