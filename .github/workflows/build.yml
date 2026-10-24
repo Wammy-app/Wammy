@@ -35,7 +35,7 @@ jobs:
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
 
       - name: Count Commits
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'kainotch/Wammy'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Wammy-app/Wammy'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -46,7 +46,7 @@ jobs:
           echo "COMMIT_COUNT=$commit_count" >> $GITHUB_ENV
 
       - name: Verify Commit Count
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'kainotch/Wammy'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Wammy-app/Wammy'
         run: |
           set -e
 
@@ -82,7 +82,7 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest
 
       - name: Sign APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'kainotch/Wammy'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Wammy-app/Wammy'
         uses: r0adkll/sign-android-release@f30bdd30588842ac76044ecdbd4b6d0e3e813478
         with:
           releaseDirectory: app/build/outputs/apk/nightly
@@ -94,7 +94,7 @@ jobs:
           BUILD_TOOLS_VERSION: '35.0.1'
 
       - name: Clean up build artifacts
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'kainotch/Wammy'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Wammy-app/Wammy'
         run: |
           set -e
 
@@ -106,7 +106,7 @@ jobs:
 
 
       - name: Upload signed APKs
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'kainotch/Wammy'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Wammy-app/Wammy'
         uses: actions/upload-artifact@v5
         with:
           name: signed-apks-${{ github.sha }}
@@ -114,10 +114,10 @@ jobs:
 
 
       - name: Create release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'kainotch/Wammy'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Wammy-app/Wammy'
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
-          repository: kainotch/Wammy-nightly
+          repository: Wammy-app/Wammy-nightly
           tag_name: r${{ env.COMMIT_COUNT }}
           name: Wammy Nightly r${{ env.COMMIT_COUNT }}
           body: |
@@ -138,12 +138,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Prune old releases
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'kainotch/Wammy'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Wammy-app/Wammy'
         uses: dev-drprasad/delete-older-releases@dfbe6be2a006e9475dfcbe5b8d201f1824c2a9fe # v0.3.4
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
-          repo: kainotch/Wammy-nightly
+          repo: Wammy-app/Wammy-nightly
           keep_latest: 28
           delete_tags: true
 

@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   get_tag:
-    if: github.repository == 'kainotch/Wammy'
+    if: github.repository == 'Wammy-app/Wammy'
     name: Extract tag name
     runs-on: 'ubuntu-24.04'
     outputs:
@@ -22,7 +22,7 @@ jobs:
         run: echo "tag=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
 
   build:
-    if: github.repository == 'kainotch/Wammy'
+    if: github.repository == 'Wammy-app/Wammy'
     name: Build
     runs-on: 'ubuntu-24.04'
     needs: get_tag
@@ -78,7 +78,7 @@ jobs:
             wammy-x86_64-${{ needs.get_tag.outputs.tag }}.apk
 
   build_foss:
-    if: github.repository == 'kainotch/Wammy'
+    if: github.repository == 'Wammy-app/Wammy'
     name: Build (FOSS)
     runs-on: ubuntu-24.04
     needs: get_tag
@@ -125,7 +125,7 @@ jobs:
           path: wammy-${{ needs.get_tag.outputs.tag }}-foss.apk
 
   release:
-    if: github.repository == 'kainotch/Wammy'
+    if: github.repository == 'Wammy-app/Wammy'
     name: Create GitHub Release
     runs-on: ubuntu-24.04
     needs: [get_tag, build, build_foss]
@@ -152,7 +152,7 @@ jobs:
           tag_name: ${{ needs.get_tag.outputs.tag }}
           name: Wammy ${{ needs.get_tag.outputs.tag }}
           body: |
-            Check out the [past release notes](https://github.com/kainotch/Wammy/releases) if you’re upgrading from an earlier version.
+            Check out the [past release notes](https://github.com/Wammy-app/Wammy/releases) if you’re upgrading from an earlier version.
 
             <!-->
 

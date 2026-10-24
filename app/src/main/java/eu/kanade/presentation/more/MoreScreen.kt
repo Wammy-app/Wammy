@@ -393,7 +393,7 @@ fun MoreScreen(
             // GitHub Star Footer Callout
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-                val gitHubUrl = "https://github.com/kainotch/Wammy"
+                val gitHubUrl = "https://github.com/Wammy-app/Wammy"
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
