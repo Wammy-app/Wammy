@@ -296,7 +296,7 @@ class ReaderViewModel @JvmOverloads constructor(
 
     private val pendingTranslationAheadChapterIds = mutableSetOf<Long>()
 
-    private val incognitoMode: Boolean by lazy { getIncognitoState.await(manga?.source) }
+    val incognitoMode: Boolean by lazy { getIncognitoState.await(manga?.source) }
     private val downloadAheadAmount = downloadPreferences.autoDownloadWhileReading.get()
 
     /** Serializes novel progress saves to prevent concurrent saves racing each other. */

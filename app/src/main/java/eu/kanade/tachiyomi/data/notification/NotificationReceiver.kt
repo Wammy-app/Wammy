@@ -75,6 +75,7 @@ class NotificationReceiver : BroadcastReceiver() {
                     "application/x-protobuf+gzip",
                 )
             ACTION_CANCEL_RESTORE -> cancelRestore(context)
+            ACTION_STOP_DISCORD_RPC -> stopDiscordRPC(context)
             // Cancel library update and dismiss notification
             ACTION_CANCEL_LIBRARY_UPDATE -> cancelLibraryUpdate(context)
             // Cancel mass import
@@ -178,6 +179,12 @@ class NotificationReceiver : BroadcastReceiver() {
      *
      * @param context context of application
      */
+    private fun stopDiscordRPC(context: Context) {
+        val serviceIntent = Intent(context, eu.kanade.tachiyomi.data.connections.discord.DiscordRPCService::class.java)
+        context.stopService(serviceIntent)
+        dismissNotification(context, Notifications.ID_DISCORD_RPC)
+    }
+
     private fun cancelRestore(context: Context) {
         BackupRestoreJob.stop(context)
     }
@@ -297,6 +304,7 @@ class NotificationReceiver : BroadcastReceiver() {
         private const val ACTION_SHARE_BACKUP = "$ID.$NAME.SEND_BACKUP"
 
         private const val ACTION_CANCEL_RESTORE = "$ID.$NAME.CANCEL_RESTORE"
+private const val ACTION_STOP_DISCORD_RPC = "$ID.$NAME.STOP_DISCORD_RPC"
 
         private const val ACTION_CANCEL_LIBRARY_UPDATE = "$ID.$NAME.CANCEL_LIBRARY_UPDATE"
 
@@ -769,6 +777,18 @@ class NotificationReceiver : BroadcastReceiver() {
          * @param notificationId id of notification
          * @return [PendingIntent]
          */
+        internal fun stopDiscordRPCService(context: Context): PendingIntent {
+            val intent = Intent(context, NotificationReceiver::class.java).apply {
+                action = ACTION_STOP_DISCORD_RPC
+            }
+            return PendingIntent.getBroadcast(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
         internal fun cancelRestorePendingBroadcast(context: Context, notificationId: Int): PendingIntent {
             val intent = Intent(context, NotificationReceiver::class.java).apply {
                 action = ACTION_CANCEL_RESTORE

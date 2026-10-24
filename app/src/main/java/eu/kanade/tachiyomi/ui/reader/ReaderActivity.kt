@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.ui.reader
 
+import eu.kanade.domain.connections.service.ConnectionsPreferences
+import eu.kanade.tachiyomi.data.connections.discord.DiscordRPCService
+import eu.kanade.tachiyomi.data.connections.discord.ReaderData
+
 import android.annotation.SuppressLint
 import android.app.assist.AssistContent
 import android.content.BroadcastReceiver
@@ -703,6 +707,7 @@ class ReaderActivity : BaseActivity() {
             stopBackgroundTtsIfRunning()
         }
 
+        updateDiscordRPC(exitingReader = true)
         super.onPause()
     }
 
@@ -712,6 +717,7 @@ class ReaderActivity : BaseActivity() {
      */
     override fun onResume() {
         super.onResume()
+        updateDiscordRPC(exitingReader = false)
         eu.kanade.tachiyomi.data.sync.DriveSyncWorker.isReaderActive = true
         lifecycleScope.launch { viewModel.restartReadTimerSynced() }
         setMenuVisibility(viewModel.state.value.menuVisible)
@@ -1677,6 +1683,8 @@ class ReaderActivity : BaseActivity() {
                 assistUrl = url
             }
         }
+
+        updateDiscordRPC(exitingReader = false)
     }
 
     /**
@@ -2332,4 +2340,43 @@ class ReaderActivity : BaseActivity() {
             binding.viewerContainer.setLayerType(LAYER_TYPE_HARDWARE, paint)
         }
     }
+    private fun updateDiscordRPC(exitingReader: Boolean) {
+        val connectionsPreferences = uy.kohesive.injekt.Injekt.get<ConnectionsPreferences>()
+        if (!connectionsPreferences.enableDiscordRPC().get()) return
+
+        DiscordRPCService.discordScope.launchIO {
+            try {
+                if (!exitingReader) {
+                    val manga = viewModel.manga ?: return@launchIO
+                    val chapter = viewModel.state.value.currentChapter?.chapter ?: return@launchIO
+                    val viewer = viewModel.state.value.viewer
+                    val isNovel = viewer is NovelViewer || viewer is NovelWebViewViewer
+
+                    DiscordRPCService.setReaderActivity(
+                        context = this@ReaderActivity,
+                        readerData = ReaderData(
+                            incognitoMode = viewModel.incognitoMode,
+                            mangaId = manga.id,
+                            mangaTitle = manga.title,
+                            thumbnailUrl = manga.thumbnailUrl,
+                            chapterNumber = if (connectionsPreferences.useChapterTitles().get()) {
+                                chapter.name
+                            } else {
+                                chapter.chapter_number.toString()
+                            },
+                            startTimestamp = System.currentTimeMillis(),
+                        ),
+                        isNovel = isNovel,
+                    )
+                } else {
+                    with(DiscordRPCService) {
+                        setScreen(this@ReaderActivity)
+                    }
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR) { "Error updating Discord RPC: ${e.message}" }
+            }
+        }
+    }
 }
+

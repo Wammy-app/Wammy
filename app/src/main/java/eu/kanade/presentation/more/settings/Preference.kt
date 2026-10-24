@@ -175,6 +175,21 @@ sealed class Preference {
             override val onValueChanged: suspend (value: String) -> Unit = {}
         }
 
+        /**
+         * A [PreferenceItem] for individual connections service.
+         */
+        data class ConnectionPreference(
+            val service: eu.kanade.tachiyomi.data.connections.ConnectionsService,
+            override val title: String,
+            val login: () -> Unit,
+            val openSettings: () -> Unit,
+            override val subtitle: String? = null,
+        ) : PreferenceItem<String, Unit>() {
+            override val enabled: Boolean = true
+            override val icon: ImageVector? = null
+            override val onValueChanged: suspend (newValue: String) -> Unit = {}
+        }
+
         data class InfoPreference(
             override val title: String,
         ) : PreferenceItem<String, Unit>() {

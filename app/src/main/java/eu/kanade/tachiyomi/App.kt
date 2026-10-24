@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi
 
+import eu.kanade.tachiyomi.data.connections.discord.DiscordRPCService
+
 import android.annotation.SuppressLint
 import android.app.Application
 import android.app.PendingIntent
@@ -294,10 +296,12 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
     override fun onStart(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStart()
+        DiscordRPCService.start(applicationContext)
     }
 
     override fun onStop(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStopped()
+        DiscordRPCService.stop(applicationContext)
     }
 
     override fun getPackageName(): String {

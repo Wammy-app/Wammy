@@ -69,6 +69,9 @@ import eu.kanade.tachiyomi.ui.library.NovelsTab
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.more.MoreTab
 import eu.kanade.tachiyomi.ui.updates.UpdatesTab
+import eu.kanade.tachiyomi.data.connections.discord.DiscordRPCService
+import eu.kanade.tachiyomi.data.connections.discord.DiscordScreen
+import tachiyomi.core.common.util.lang.launchIO
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
@@ -173,6 +176,23 @@ object HomeScreen : Screen() {
             tab = eu.kanade.tachiyomi.ui.discover.DiscoverTab,
             key = TabNavigatorKey,
         ) { tabNavigator ->
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val currentTab = tabNavigator.current
+            LaunchedEffect(currentTab) {
+                val screen = when (currentTab) {
+                    is LibraryTab -> DiscordScreen.LIBRARY
+                    is NovelsTab -> DiscordScreen.LIBRARY
+                    is UpdatesTab -> DiscordScreen.UPDATES
+                    is HistoryTab -> DiscordScreen.HISTORY
+                    is BrowseTab -> DiscordScreen.BROWSE
+                    is MoreTab -> DiscordScreen.MORE
+                    else -> DiscordScreen.APP
+                }
+                with(DiscordRPCService) {
+                    discordScope.launchIO { setScreen(context, screen) }
+                }
+            }
+
             // Provide usable navigator to content screen
             CompositionLocalProvider(LocalNavigator provides navigator) {
                 Box(modifier = Modifier.fillMaxSize()) {

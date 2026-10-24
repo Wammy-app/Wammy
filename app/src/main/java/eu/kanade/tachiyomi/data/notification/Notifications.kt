@@ -136,6 +136,12 @@ object Notifications {
     const val ID_MIGRATION_PROGRESS = -1003
     const val ID_MIGRATION_COMPLETE = -1004
 
+    /**
+     * Notification channel and ids used by Discord RPC.
+     */
+    const val CHANNEL_DISCORD_RPC = "discord_rpc_channel"
+    const val ID_DISCORD_RPC = -1701
+
     private val deprecatedChannels = listOf(
         "downloader_channel",
         "downloader_complete_channel",
@@ -257,6 +263,10 @@ object Notifications {
                 buildNotificationChannel(CHANNEL_MIGRATION, IMPORTANCE_LOW) {
                     // Shared by both bulk migrate (MigrationJob) and quick migrate (QuickMigrateJob).
                     setName(context.stringResource(MR.strings.label_migration))
+                    setShowBadge(false)
+                },
+                buildNotificationChannel(CHANNEL_DISCORD_RPC, IMPORTANCE_LOW) {
+                    setName("Discord Rich Presence")
                     setShowBadge(false)
                 },
             ),
