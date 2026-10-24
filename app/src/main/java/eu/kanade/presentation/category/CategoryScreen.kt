@@ -109,9 +109,11 @@ private fun CategoryContent(
             key = { category -> category.key },
         ) { category ->
             ReorderableItem(reorderableState, category.key) {
+                val parentName = category.parentId?.let { pid -> categoriesState.find { it.id == pid }?.name }
                 CategoryListItem(
                     modifier = Modifier.animateItem(),
                     category = category,
+                    parentName = parentName,
                     onRename = { onClickRename(category) },
                     onDelete = { onClickDelete(category) },
                 )

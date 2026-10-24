@@ -18,15 +18,25 @@ class CreateCategoryWithName(
             return sort.type.flag or sort.direction.flag
         }
 
-    suspend fun await(name: String, contentType: Int = Category.CONTENT_TYPE_ALL): Result = withNonCancellableContext {
+    suspend fun await(
+        name: String,
+        contentType: Int = Category.CONTENT_TYPE_ALL,
+        parentId: Long? = null,
+    ): Result = withNonCancellableContext {
         val categories = categoryRepository.getAll()
-        val nextOrder = categories.maxOfOrNull { it.order }?.plus(1) ?: 0
+        val siblings = if (parentId != null) {
+            categories.filter { it.parentId == parentId }
+        } else {
+            categories.filter { it.parentId == null }
+        }
+        val nextOrder = siblings.maxOfOrNull { it.order }?.plus(1) ?: 0
         val newCategory = Category(
             id = 0,
             name = name,
             order = nextOrder,
             flags = initialFlags,
             contentType = contentType,
+            parentId = parentId,
         )
 
         try {

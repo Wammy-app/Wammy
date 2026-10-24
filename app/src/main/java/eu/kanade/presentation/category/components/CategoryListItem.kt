@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
@@ -30,8 +31,12 @@ fun ReorderableCollectionItemScope.CategoryListItem(
     onRename: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    parentName: String? = null,
 ) {
-    ElevatedCard(modifier = modifier) {
+    val isChild = category.parentId != null
+    ElevatedCard(
+        modifier = modifier.padding(start = if (isChild) 24.dp else 0.dp),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -55,14 +60,20 @@ fun ReorderableCollectionItemScope.CategoryListItem(
             ) {
                 Text(
                     text = category.name,
+                    style = if (isChild) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
                 )
                 val contentTypeText = when (category.contentType) {
                     Category.CONTENT_TYPE_MANGA -> stringResource(TDMR.strings.category_content_type_manga)
                     Category.CONTENT_TYPE_NOVEL -> stringResource(TDMR.strings.category_content_type_novel)
                     else -> stringResource(TDMR.strings.category_content_type_all)
                 }
+                val subtitleText = if (isChild && !parentName.isNullOrBlank()) {
+                    "Sub-category of $parentName • $contentTypeText"
+                } else {
+                    contentTypeText
+                }
                 Text(
-                    text = contentTypeText,
+                    text = subtitleText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -14,6 +14,7 @@ import tachiyomi.domain.category.interactor.DeleteCategory
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.RenameCategory
 import tachiyomi.domain.category.interactor.ReorderCategory
+import tachiyomi.domain.category.interactor.SetCategoryParent
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.category.repository.CategoryRepository
 import tachiyomi.domain.manga.interactor.GetLibraryManga
@@ -27,6 +28,7 @@ class CategoryViewModel(
     private val deleteCategory: DeleteCategory = Injekt.get(),
     private val reorderCategory: ReorderCategory = Injekt.get(),
     private val renameCategory: RenameCategory = Injekt.get(),
+    private val setCategoryParent: SetCategoryParent = Injekt.get(),
     private val getLibraryManga: GetLibraryManga = Injekt.get(),
     private val categoryRepository: CategoryRepository = Injekt.get(),
 ) : StateViewModel<CategoryScreenState>(CategoryScreenState.Loading) {
@@ -55,9 +57,9 @@ class CategoryViewModel(
         } catch (_: Exception) {}
     }
 
-    fun createCategory(name: String, contentType: Int = Category.CONTENT_TYPE_ALL) {
+    fun createCategory(name: String, contentType: Int = Category.CONTENT_TYPE_ALL, parentId: Long? = null) {
         viewModelScope.launch {
-            when (createCategoryWithName.await(name, contentType)) {
+            when (createCategoryWithName.await(name, contentType, parentId)) {
                 is CreateCategoryWithName.Result.InternalError -> _events.send(CategoryEvent.InternalError)
                 else -> scheduleDriveSync()
             }
@@ -99,12 +101,27 @@ class CategoryViewModel(
         }
     }
 
-    fun renameCategory(category: Category, name: String) {
+    fun renameCategory(category: Category, name: String, parentId: Long? = category.parentId) {
         viewModelScope.launch {
-            when (renameCategory.await(category, name)) {
-                is RenameCategory.Result.InternalError -> _events.send(CategoryEvent.InternalError)
-                else -> scheduleDriveSync()
+            var failed = false
+            if (category.name != name) {
+                when (renameCategory.await(category, name)) {
+                    is RenameCategory.Result.InternalError -> {
+                        failed = true
+                        _events.send(CategoryEvent.InternalError)
+                    }
+                    else -> {}
+                }
             }
+            if (!failed && category.parentId != parentId) {
+                when (setCategoryParent.await(category.id, parentId)) {
+                    is SetCategoryParent.Result.InternalError -> {
+                        _events.send(CategoryEvent.InternalError)
+                    }
+                    else -> {}
+                }
+            }
+            scheduleDriveSync()
         }
     }
 
@@ -148,8 +165,6 @@ sealed interface CategoryScreenState {
         val categories: List<Category>,
         val dialog: CategoryDialog? = null,
     ) : CategoryScreenState {
-
-        val isEmpty: Boolean
-            get() = categories.isEmpty()
+        val isEmpty: Boolean = categories.isEmpty()
     }
 }

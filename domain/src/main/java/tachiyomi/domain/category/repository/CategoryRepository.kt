@@ -11,6 +11,14 @@ interface CategoryRepository {
 
     fun getAllAsFlow(): Flow<List<Category>>
 
+    suspend fun getSubcategories(parentId: Long): List<Category>
+
+    fun getSubcategoriesAsFlow(parentId: Long): Flow<List<Category>>
+
+    suspend fun getTopLevelCategories(): List<Category>
+
+    fun getTopLevelCategoriesAsFlow(): Flow<List<Category>>
+
     suspend fun getCategoriesByMangaId(mangaId: Long): List<Category>
 
     fun getCategoriesByMangaIdAsFlow(mangaId: Long): Flow<List<Category>>
@@ -33,6 +41,8 @@ interface CategoryRepository {
     suspend fun insert(category: Category)
 
     suspend fun updateName(categoryId: Long, name: String)
+
+    suspend fun updateParent(categoryId: Long, parentId: Long?)
 
     suspend fun updateFlags(categoryId: Long, flags: Long)
 

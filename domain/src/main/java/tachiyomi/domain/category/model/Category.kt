@@ -8,9 +8,11 @@ data class Category(
     val order: Long,
     val flags: Long,
     val contentType: Int = CONTENT_TYPE_ALL, // 0=all, 1=manga, 2=novel
+    val parentId: Long? = null,
 ) : Serializable {
 
     val isSystemCategory: Boolean = id == UNCATEGORIZED_ID
+    val isTopLevel: Boolean = parentId == null
 
     companion object {
         const val UNCATEGORIZED_ID = 0L

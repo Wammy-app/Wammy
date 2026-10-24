@@ -21,6 +21,7 @@ class CategoriesRestorer(
             val dbCategoriesByName = dbCategories.groupBy { it.name }
             var nextOrder = dbCategories.maxOfOrNull { it.order }?.plus(1) ?: 0
 
+            // Pass 1: Insert or match categories (without parent initially to avoid foreign key ordering constraints)
             val categories = backupCategories
                 .sortedBy { it.order }
                 .map {
@@ -31,11 +32,30 @@ class CategoriesRestorer(
                     }
                     if (dbCategory != null) return@map dbCategory
                     val order = nextOrder++
-                    database.categoriesQueries.insert(it.name, order, it.flags, it.contentType.toLong())
+                    database.categoriesQueries.insert(
+                        name = it.name,
+                        order = order,
+                        flags = it.flags,
+                        contentType = it.contentType.toLong(),
+                        parentId = null,
+                    )
                     database.categoriesQueries.selectLastInsertedRowId()
                         .awaitAsOne()
                         .let { id -> it.toCategory(id).copy(order = order) }
                 }
+
+            // Pass 2: Re-link parent-child relationships using parentName
+            val allCurrentCategories = getCategories.await()
+            backupCategories.forEach { backupCat ->
+                val parentName = backupCat.parentName
+                if (parentName != null) {
+                    val parent = allCurrentCategories.firstOrNull { it.name == parentName }
+                    val child = allCurrentCategories.firstOrNull { it.name == backupCat.name && it.contentType == backupCat.contentType }
+                    if (parent != null && child != null && parent.id != child.id) {
+                        database.categoriesQueries.updateParent(parentId = parent.id, categoryId = child.id)
+                    }
+                }
+            }
 
             libraryPreferences.categorizedDisplaySettings.set(
                 (dbCategories + categories)

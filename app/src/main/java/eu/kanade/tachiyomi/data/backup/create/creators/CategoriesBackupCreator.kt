@@ -12,8 +12,8 @@ class CategoriesBackupCreator(
 ) {
 
     suspend operator fun invoke(): List<BackupCategory> {
-        return getCategories.await()
+        val categories = getCategories.await()
             .filterNot(Category::isSystemCategory)
-            .map(backupCategoryMapper)
+        return categories.map { backupCategoryMapper(it, categories) }
     }
 }

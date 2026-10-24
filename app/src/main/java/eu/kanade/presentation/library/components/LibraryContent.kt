@@ -63,19 +63,34 @@ fun LibraryContent(
             end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
         ),
     ) {
-        val pagerState = rememberPagerState(currentPage) { categories.size }
+        val topLevelCategories = remember(categories) {
+            val top = categories.filter { it.isTopLevel }
+            if (top.isEmpty() && categories.isNotEmpty()) categories else top
+        }
+        val safeCurrentPage = currentPage.coerceIn(0, (topLevelCategories.size - 1).coerceAtLeast(0))
+        val pagerState = rememberPagerState(safeCurrentPage) { topLevelCategories.size }
 
         val scope = rememberCoroutineScope()
         var isRefreshing by remember(pagerState.currentPage) { mutableStateOf(false) }
 
-        if (showPageTabs && categories.isNotEmpty() && (categories.size > 1 || !categories.first().isSystemCategory)) {
-            LaunchedEffect(categories) {
-                if (categories.size <= pagerState.currentPage) {
-                    pagerState.scrollToPage(categories.size - 1)
+        val activeCategory = topLevelCategories.getOrNull(pagerState.currentPage)
+        val activeSubcategories = remember(categories, activeCategory) {
+            if (activeCategory != null) {
+                categories.filter { it.parentId == activeCategory.id }
+            } else {
+                emptyList()
+            }
+        }
+        var selectedSubCategoryId by remember(activeCategory?.id) { mutableStateOf<Long?>(null) }
+
+        if (showPageTabs && topLevelCategories.isNotEmpty() && (topLevelCategories.size > 1 || !topLevelCategories.first().isSystemCategory)) {
+            LaunchedEffect(topLevelCategories) {
+                if (topLevelCategories.size <= pagerState.currentPage) {
+                    pagerState.scrollToPage(topLevelCategories.size - 1)
                 }
             }
             LibraryTabs(
-                categories = categories,
+                categories = topLevelCategories,
                 pagerState = pagerState,
                 getItemCountForCategory = getItemCountForCategory,
                 onTabItemClick = {
@@ -84,6 +99,16 @@ fun LibraryContent(
                     }
                 },
             )
+
+            if (activeSubcategories.isNotEmpty()) {
+                SubCategoryChipRow(
+                    subcategories = activeSubcategories,
+                    selectedSubCategoryId = selectedSubCategoryId,
+                    getItemCountForCategory = getItemCountForCategory,
+                    parentTotalCount = if (activeCategory != null) getItemCountForCategory(activeCategory) else null,
+                    onSelectSubCategory = { selectedSubCategoryId = it },
+                )
+            }
         }
 
         PullRefresh(
@@ -107,10 +132,18 @@ fun LibraryContent(
                 selection = selection,
                 searchQuery = searchQuery,
                 onGlobalSearchClicked = onGlobalSearchClicked,
-                getCategoryForPage = { page -> categories[page] },
+                getCategoryForPage = { page -> topLevelCategories[page] },
                 getDisplayMode = getDisplayMode,
                 getColumnsForOrientation = getColumnsForOrientation,
-                getItemsForCategory = getItemsForCategory,
+                getItemsForCategory = { category ->
+                    val items = getItemsForCategory(category)
+                    val subId = selectedSubCategoryId
+                    if (subId != null && category.id == activeCategory?.id) {
+                        items.filter { it.libraryManga.categories.contains(subId) }
+                    } else {
+                        items
+                    }
+                },
                 onClickManga = { category, manga ->
                     if (selection.isNotEmpty()) {
                         onToggleSelection(category, manga)

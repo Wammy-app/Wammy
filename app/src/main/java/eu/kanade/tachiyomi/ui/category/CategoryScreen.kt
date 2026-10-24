@@ -16,6 +16,7 @@ import eu.kanade.presentation.category.components.CategoryRenameDialog
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.collectLatest
+import tachiyomi.domain.category.model.topLevel
 import tachiyomi.presentation.core.screens.LoadingScreen
 
 class CategoryScreen : Screen() {
@@ -47,18 +48,23 @@ class CategoryScreen : Screen() {
         when (val dialog = successState.dialog) {
             null -> {}
             CategoryDialog.Create -> {
+                val parentCandidates = successState.categories.topLevel()
                 CategoryCreateDialog(
                     onDismissRequest = viewModel::dismissDialog,
-                    onCreate = { name, contentType -> viewModel.createCategory(name, contentType) },
+                    onCreate = { name, contentType, parentId -> viewModel.createCategory(name, contentType, parentId) },
                     categories = successState.categories.fastMap { it.name },
+                    parentCategories = parentCandidates,
                 )
             }
             is CategoryDialog.Rename -> {
+                val parentCandidates = successState.categories.filter { it.isTopLevel && it.id != dialog.category.id }
                 CategoryRenameDialog(
                     onDismissRequest = viewModel::dismissDialog,
-                    onRename = { viewModel.renameCategory(dialog.category, it) },
+                    onRename = { newName, newParentId -> viewModel.renameCategory(dialog.category, newName, newParentId) },
                     categories = successState.categories.fastMap { it.name },
                     category = dialog.category.name,
+                    currentParentId = dialog.category.parentId,
+                    parentCategories = parentCandidates,
                 )
             }
             is CategoryDialog.Delete -> {

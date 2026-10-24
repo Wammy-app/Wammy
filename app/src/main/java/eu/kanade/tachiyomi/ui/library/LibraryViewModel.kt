@@ -578,13 +578,26 @@ class LibraryViewModel(
 
         val visibleCategoryById = HashMap<Long, Category>(visibleCategories.size * 2)
         val groupedItems = LinkedHashMap<Category, MutableList<Long>>(visibleCategories.size)
+        val childToParentId = HashMap<Long, Long>()
         for (category in visibleCategories) {
             visibleCategoryById[category.id] = category
             groupedItems[category] = mutableListOf()
+            val parentId = category.parentId
+            if (parentId != null) {
+                childToParentId[category.id] = parentId
+            }
         }
 
         for (item in this) {
+            val processedCategories = mutableSetOf<Long>()
             for (categoryId in item.libraryManga.categories) {
+                processedCategories.add(categoryId)
+                val parentId = childToParentId[categoryId]
+                if (parentId != null) {
+                    processedCategories.add(parentId)
+                }
+            }
+            for (categoryId in processedCategories) {
                 val category = visibleCategoryById[categoryId] ?: continue
                 groupedItems[category]?.add(item.id)
             }

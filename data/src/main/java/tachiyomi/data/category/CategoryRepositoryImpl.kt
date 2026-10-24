@@ -24,6 +24,22 @@ class CategoryRepositoryImpl(
         return database.categoriesQueries.getCategories(::mapCategory).subscribeToList()
     }
 
+    override suspend fun getSubcategories(parentId: Long): List<Category> {
+        return database.categoriesQueries.getSubcategories(parentId, ::mapCategory).awaitAsList()
+    }
+
+    override fun getSubcategoriesAsFlow(parentId: Long): Flow<List<Category>> {
+        return database.categoriesQueries.getSubcategories(parentId, ::mapCategory).subscribeToList()
+    }
+
+    override suspend fun getTopLevelCategories(): List<Category> {
+        return database.categoriesQueries.getTopLevelCategories(::mapCategory).awaitAsList()
+    }
+
+    override fun getTopLevelCategoriesAsFlow(): Flow<List<Category>> {
+        return database.categoriesQueries.getTopLevelCategories(::mapCategory).subscribeToList()
+    }
+
     override suspend fun getCategoriesByMangaId(mangaId: Long): List<Category> {
         return database.categoriesQueries.getCategoriesByMangaId(mangaId, ::mapCategory).awaitAsList()
     }
@@ -37,9 +53,9 @@ class CategoryRepositoryImpl(
 
         val resultMap = mutableMapOf<Long, MutableList<Category>>()
         mangaIds.chunked(500).forEach { chunk ->
-            database.categoriesQueries.getCategoriesByMangaIds(chunk) { mangaId, id, name, order, flags, contentType ->
+            database.categoriesQueries.getCategoriesByMangaIds(chunk) { mangaId, id, name, order, flags, contentType, parentId ->
                 resultMap.getOrPut(mangaId) { mutableListOf() }
-                    .add(mapCategory(id, name, order, flags, contentType))
+                    .add(mapCategory(id, name, order, flags, contentType, parentId))
             }.awaitAsList()
         }
         return resultMap
@@ -68,11 +84,16 @@ class CategoryRepositoryImpl(
             order = category.order,
             flags = category.flags,
             contentType = category.contentType.toLong(),
+            parentId = category.parentId,
         )
     }
 
     override suspend fun updateName(categoryId: Long, name: String) {
         database.categoriesQueries.updateName(name = name, categoryId = categoryId)
+    }
+
+    override suspend fun updateParent(categoryId: Long, parentId: Long?) {
+        database.categoriesQueries.updateParent(parentId = parentId, categoryId = categoryId)
     }
 
     override suspend fun updateFlags(categoryId: Long, flags: Long) {
@@ -103,6 +124,7 @@ class CategoryRepositoryImpl(
         order: Long,
         flags: Long,
         contentType: Long,
+        parentId: Long?,
     ): Category {
         return Category(
             id = id,
@@ -110,6 +132,7 @@ class CategoryRepositoryImpl(
             order = order,
             flags = flags,
             contentType = contentType.toInt(),
+            parentId = parentId,
         )
     }
 }
