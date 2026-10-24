@@ -230,10 +230,28 @@ class DiscordRPCService : Service() {
 
         private const val TAG = "DiscordRPCService"
 
+        private var wammyLogoAsset: String? = null
+
+        private suspend fun getWammyLogoAsset(rpcExternalAsset: RPCExternalAsset?): String? {
+            if (rpcExternalAsset == null) return null
+            wammyLogoAsset?.let { return it }
+            return try {
+                val asset = getDiscordThumbnail(rpcExternalAsset, WAMMY_LOGO_URL, incognito = false)
+                if (asset != null) {
+                    wammyLogoAsset = asset
+                }
+                asset
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR) { "Error fetching Wammy logo asset: ${e.message}" }
+                null
+            }
+        }
+
         internal suspend fun setScreen(
             context: Context,
             discordScreen: DiscordScreen = lastUsedScreen,
             readerData: ReaderData = ReaderData(),
+            smallImageUrl: String? = null,
             sinceTime: Long = since,
         ) {
             rpc ?: return
@@ -244,17 +262,25 @@ class DiscordRPCService : Service() {
             val showProgress = connectionsPreferences.discordShowProgress().get()
             val showTimestamp = connectionsPreferences.discordShowTimestamp().get()
 
-            val (title, state, imageUrl) = when (discordScreen) {
-                DiscordScreen.MANGA, DiscordScreen.NOVEL -> Triple(
-                    readerData.mangaTitle,
-                    readerData.chapterNumber.takeIf { showProgress },
-                    readerData.thumbnailUrl ?: discordScreen.imageUrl,
-                )
-                else -> Triple(
-                    null,
-                    context.stringResource(discordScreen.text),
-                    discordScreen.imageUrl,
-                )
+            val rpcExternalAsset = getRPCExternalAsset()
+            val wammyLogo = getWammyLogoAsset(rpcExternalAsset)
+
+            val isReading = discordScreen == DiscordScreen.MANGA || discordScreen == DiscordScreen.NOVEL
+            val title = if (isReading) readerData.mangaTitle else null
+            val state = if (isReading) {
+                readerData.chapterNumber.takeIf { showProgress }
+            } else {
+                context.stringResource(discordScreen.text)
+            }
+            val largeImage = if (isReading) {
+                readerData.thumbnailUrl ?: wammyLogo
+            } else {
+                wammyLogo
+            }
+            val smallImage = if (isReading) {
+                smallImageUrl ?: wammyLogo.takeIf { readerData.thumbnailUrl != null }
+            } else {
+                null
             }
 
             val timestamps = if (showTimestamp) {
@@ -273,8 +299,10 @@ class DiscordRPCService : Service() {
                 discordScreen = discordScreen,
                 title = title,
                 state = state,
-                imageUrl = imageUrl,
+                largeImageUrl = largeImage,
+                smallImageUrl = smallImage,
                 timestamps = timestamps,
+                sinceTime = sinceTime,
             )
         }
 
@@ -283,7 +311,8 @@ class DiscordRPCService : Service() {
             discordScreen: DiscordScreen,
             title: String? = null,
             state: String?,
-            imageUrl: String,
+            largeImageUrl: String?,
+            smallImageUrl: String?,
             timestamps: Activity.Timestamps?,
             sinceTime: Long = since,
             appName: String = context.stringResource(MR.strings.app_name),
@@ -318,6 +347,13 @@ class DiscordRPCService : Service() {
                 null
             }
 
+            val formattedLarge = largeImageUrl?.let {
+                if (it.startsWith(MP_PREFIX)) it else "$MP_PREFIX$it"
+            }
+            val formattedSmall = smallImageUrl?.let {
+                if (it.startsWith(MP_PREFIX)) it else "$MP_PREFIX$it"
+            }
+
             rpc?.updateRPC(
                 activity = Activity(
                     name = name,
@@ -326,14 +362,14 @@ class DiscordRPCService : Service() {
                     type = ActivityType.WATCHING.value,
                     timestamps = timestamps,
                     assets = Activity.Assets(
-                        largeImage = "$MP_PREFIX$imageUrl",
-                        smallImage = "$MP_PREFIX${DiscordScreen.APP.imageUrl}",
+                        largeImage = formattedLarge,
+                        smallImage = formattedSmall,
                         largeText = context.stringResource(
                             MR.strings.discord_status_description,
                             context.stringResource(discordScreen.details),
                             title ?: context.stringResource(discordScreen.text),
                         ),
-                        smallText = context.stringResource(MR.strings.discord_app_description),
+                        smallText = context.stringResource(MR.strings.discord_app_description).takeIf { formattedSmall != null },
                     ),
                     buttons = buttonLabels.takeIf { it.isNotEmpty() },
                     metadata = metadata,
@@ -368,6 +404,7 @@ class DiscordRPCService : Service() {
                 withIOContext {
                     val rpcExternalAsset = getRPCExternalAsset()
                     val thumbnail = getDiscordThumbnail(rpcExternalAsset, readerData.thumbnailUrl, discordIncognito)
+                    val wammyLogo = if (!discordIncognito) getWammyLogoAsset(rpcExternalAsset) else null
 
                     discordScope.launchIO {
                         setScreen(
@@ -379,6 +416,7 @@ class DiscordRPCService : Service() {
                                 thumbnailUrl = thumbnail,
                                 startTimestamp = startTime,
                             ),
+                            smallImageUrl = wammyLogo,
                         )
                     }
                 }

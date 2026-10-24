@@ -139,30 +139,19 @@ data class ReaderData(
     val startTimestamp: Long? = null,
 )
 
+const val WAMMY_LOGO_URL = "https://raw.githubusercontent.com/kainotch/Wammy/master/.github/assets/logo.png"
+
 enum class DiscordScreen(
     val text: StringResource,
     val details: StringResource,
-    val imageUrl: String,
 ) {
-    APP(MR.strings.app_name, MR.strings.discord_status_using, WAMMY_IMAGE),
-    LIBRARY(MR.strings.label_library, MR.strings.discord_status_browsing, LIBRARY_IMAGE_URL),
-    UPDATES(MR.strings.label_recent_updates, MR.strings.discord_status_scrolling, UPDATES_IMAGE_URL),
-    HISTORY(MR.strings.label_recent_manga, MR.strings.discord_status_scrolling, HISTORY_IMAGE_URL),
-    BROWSE(MR.strings.label_sources, MR.strings.discord_status_browsing, BROWSE_IMAGE_URL),
-    MORE(MR.strings.label_settings, MR.strings.discord_status_messing, MORE_IMAGE_URL),
-    WEBVIEW(MR.strings.action_web_view, MR.strings.discord_status_browsing, WEBVIEW_IMAGE_URL),
-    MANGA(MR.strings.manga, MR.strings.reading, MANGA_IMAGE_URL),
-    NOVEL(MR.strings.duplicate_type_novel, MR.strings.reading, MANGA_IMAGE_URL),
+    APP(MR.strings.app_name, MR.strings.discord_status_using),
+    LIBRARY(MR.strings.label_library, MR.strings.discord_status_browsing),
+    UPDATES(MR.strings.label_recent_updates, MR.strings.discord_status_scrolling),
+    HISTORY(MR.strings.label_recent_manga, MR.strings.discord_status_scrolling),
+    BROWSE(MR.strings.label_sources, MR.strings.discord_status_browsing),
+    MORE(MR.strings.label_settings, MR.strings.discord_status_messing),
+    WEBVIEW(MR.strings.action_web_view, MR.strings.discord_status_browsing),
+    MANGA(MR.strings.manga, MR.strings.reading),
+    NOVEL(MR.strings.duplicate_type_novel, MR.strings.reading),
 }
-
-private const val WAMMY_IMAGE_URL = "emojis/1365538288894738532.webp?quality=lossless"
-private const val WAMMY_PREVIEW_IMAGE_URL = "emojis/1365538288894738532.webp?quality=lossless"
-
-private val WAMMY_IMAGE = if (isPreviewBuildType) WAMMY_PREVIEW_IMAGE_URL else WAMMY_IMAGE_URL
-private const val LIBRARY_IMAGE_URL = "emojis/1365262809050644591.webp?quality=lossless"
-private const val UPDATES_IMAGE_URL = "emojis/1365261957883625492.webp?quality=lossless"
-private const val HISTORY_IMAGE_URL = "emojis/1365262076787949598.webp?quality=lossless"
-private const val BROWSE_IMAGE_URL = "emojis/1365263374992146576.webp?quality=lossless"
-private const val MORE_IMAGE_URL = "emojis/1365261438276599849.webp?quality=lossless"
-private const val WEBVIEW_IMAGE_URL = "emojis/1365262268811579443.webp?quality=lossless"
-private const val MANGA_IMAGE_URL = "emojis/1365263962622529576.webp?quality=lossless"
