@@ -38,6 +38,9 @@ class CategoryViewModel(
 
     init {
         viewModelScope.launch {
+            try {
+                categoryRepository.deleteOrphanSubcategories()
+            } catch (_: Exception) {}
             getCategories.subscribe()
                 .collectLatest { categories ->
                     mutableState.update {
@@ -68,10 +71,17 @@ class CategoryViewModel(
 
     fun deleteCategory(categoryId: Long) {
         viewModelScope.launch {
-            // Get all manga-category pairs to find manga IDs for this category
+            val childCategories = try {
+                categoryRepository.getSubcategories(categoryId)
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val allAffectedIds = listOf(categoryId) + childCategories.map { it.id }
+
+            // Get all manga-category pairs to find manga IDs for this category and subcategories
             val allPairs = categoryRepository.getAllMangaCategoryPairs()
             val mangaIds = allPairs
-                .filter { it.second == categoryId }
+                .filter { it.second in allAffectedIds }
                 .map { it.first }
                 .distinct()
 
@@ -83,7 +93,7 @@ class CategoryViewModel(
                         getLibraryManga.applyCategoryUpdates(
                             mangaIds = mangaIds,
                             addCategories = emptyList(),
-                            removeCategories = listOf(categoryId),
+                            removeCategories = allAffectedIds,
                         )
                     }
                     scheduleDriveSync()
@@ -145,7 +155,7 @@ class CategoryViewModel(
 }
 
 sealed interface CategoryDialog {
-    data object Create : CategoryDialog
+    data class Create(val defaultParentId: Long? = null) : CategoryDialog
     data class Rename(val category: Category) : CategoryDialog
     data class Delete(val category: Category) : CategoryDialog
 }

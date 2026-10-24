@@ -64,6 +64,7 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.category.interactor.CreateCategoryWithName
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
@@ -118,6 +119,7 @@ class LibraryViewModel(
     private val trackerManager: TrackerManager = Injekt.get(),
     private val translatedChapterRepository: TranslatedChapterRepository = Injekt.get(),
     private val mangaRepository: MangaRepository = Injekt.get(),
+    private val createCategoryWithName: CreateCategoryWithName = Injekt.get(),
     private val type: LibraryType = LibraryType.All,
 ) : StateViewModel<LibraryViewModel.State>(State()) {
 
@@ -1506,6 +1508,16 @@ class LibraryViewModel(
             .coercedActiveCategoryIndex
 
         libraryPreferences.lastUsedCategory.set(newIndex)
+    }
+
+    fun createCategory(name: String, contentType: Int = Category.CONTENT_TYPE_ALL, parentId: Long? = null) {
+        viewModelScope.launchIO {
+            createCategoryWithName.await(name, contentType, parentId)
+            try {
+                val context = Injekt.get<android.app.Application>()
+                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+            } catch (_: Exception) {}
+        }
     }
 
     fun openChangeCategoryDialog() {

@@ -51,4 +51,6 @@ interface CategoryRepository {
     suspend fun updateAllOrders(orderedIds: List<Long>)
 
     suspend fun delete(categoryId: Long)
+
+    suspend fun deleteOrphanSubcategories()
 }

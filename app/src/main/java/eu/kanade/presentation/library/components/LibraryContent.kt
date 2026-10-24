@@ -17,6 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.dp
 import eu.kanade.core.preference.PreferenceMutableState
 import eu.kanade.tachiyomi.ui.library.LibraryItem
 import kotlinx.coroutines.delay
@@ -55,10 +56,11 @@ fun LibraryContent(
     onLoadMore: (Category) -> Unit = {},
     getLoadMoreKey: (Category) -> Long = { 0 },
     isCategoryLoading: (Category) -> Boolean = { false },
+    onCreateSubCategory: (Category) -> Unit = {},
 ) {
     Column(
         modifier = Modifier.padding(
-            top = contentPadding.calculateTopPadding(),
+            top = (contentPadding.calculateTopPadding() - 8.dp).coerceAtLeast(0.dp),
             start = contentPadding.calculateStartPadding(LocalLayoutDirection.current),
             end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
         ),
@@ -100,13 +102,14 @@ fun LibraryContent(
                 },
             )
 
-            if (activeSubcategories.isNotEmpty()) {
+            if (activeCategory != null) {
                 SubCategoryChipRow(
                     subcategories = activeSubcategories,
                     selectedSubCategoryId = selectedSubCategoryId,
                     getItemCountForCategory = getItemCountForCategory,
-                    parentTotalCount = if (activeCategory != null) getItemCountForCategory(activeCategory) else null,
+                    parentTotalCount = getItemCountForCategory(activeCategory),
                     onSelectSubCategory = { selectedSubCategoryId = it },
+                    onCreateSubCategory = { onCreateSubCategory(activeCategory) },
                 )
             }
         }

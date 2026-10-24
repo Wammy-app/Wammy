@@ -37,6 +37,7 @@ fun CategoryScreen(
     onClickDelete: (Category) -> Unit,
     onChangeOrder: (Category, Int) -> Unit,
     navigateUp: () -> Unit,
+    onClickAddSubCategory: (Category) -> Unit = {},
 ) {
     val lazyListState = rememberLazyListState()
     Scaffold(
@@ -69,6 +70,7 @@ fun CategoryScreen(
             onClickRename = onClickRename,
             onClickDelete = onClickDelete,
             onChangeOrder = onChangeOrder,
+            onClickAddSubCategory = onClickAddSubCategory,
         )
     }
 }
@@ -81,6 +83,7 @@ private fun CategoryContent(
     onClickRename: (Category) -> Unit,
     onClickDelete: (Category) -> Unit,
     onChangeOrder: (Category, Int) -> Unit,
+    onClickAddSubCategory: (Category) -> Unit,
 ) {
     val categoriesState = remember { categories.toMutableStateList() }
     val reorderableState = rememberReorderableLazyListState(lazyListState, paddingValues) { from, to ->
@@ -109,13 +112,22 @@ private fun CategoryContent(
             key = { category -> category.key },
         ) { category ->
             ReorderableItem(reorderableState, category.key) {
+                val isChild = category.parentId != null
+                val siblings = if (isChild) categoriesState.filter { it.parentId == category.parentId } else emptyList()
+                val isFirstChild = isChild && siblings.firstOrNull()?.id == category.id
+                val isLastChild = isChild && siblings.lastOrNull()?.id == category.id
                 val parentName = category.parentId?.let { pid -> categoriesState.find { it.id == pid }?.name }
+
                 CategoryListItem(
                     modifier = Modifier.animateItem(),
                     category = category,
                     parentName = parentName,
+                    isChild = isChild,
+                    isFirstChild = isFirstChild,
+                    isLastChild = isLastChild,
                     onRename = { onClickRename(category) },
                     onDelete = { onClickDelete(category) },
+                    onAddSubCategory = if (!isChild) { { onClickAddSubCategory(category) } } else null,
                 )
             }
         }

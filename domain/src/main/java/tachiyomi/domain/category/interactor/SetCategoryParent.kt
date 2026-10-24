@@ -3,6 +3,8 @@ package tachiyomi.domain.category.interactor
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.model.toHierarchicalCategoryList
 import tachiyomi.domain.category.repository.CategoryRepository
 
 class SetCategoryParent(
@@ -11,6 +13,12 @@ class SetCategoryParent(
     suspend fun await(categoryId: Long, parentId: Long?) = withNonCancellableContext {
         try {
             categoryRepository.updateParent(categoryId, parentId)
+
+            val all = categoryRepository.getAll()
+                .filterNot(Category::isSystemCategory)
+                .toHierarchicalCategoryList()
+            categoryRepository.updateAllOrders(orderedIds = all.map { it.id })
+
             Result.Success
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)

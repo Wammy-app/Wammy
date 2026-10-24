@@ -52,10 +52,11 @@ fun CategoryCreateDialog(
     onCreate: (String, Int, Long?) -> Unit,
     categories: List<String>,
     parentCategories: List<Category> = emptyList(),
+    defaultParentId: Long? = null,
 ) {
     var name by remember { mutableStateOf("") }
     var contentType by remember { mutableIntStateOf(Category.CONTENT_TYPE_ALL) }
-    var selectedParentId by remember { mutableStateOf<Long?>(null) }
+    var selectedParentId by remember { mutableStateOf<Long?>(defaultParentId) }
     var parentDropdownExpanded by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
@@ -331,6 +332,7 @@ fun CategoryDeleteDialog(
     onDismissRequest: () -> Unit,
     onDelete: () -> Unit,
     category: String,
+    hasSubcategories: Boolean = false,
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
@@ -351,9 +353,13 @@ fun CategoryDeleteDialog(
             Text(text = stringResource(MR.strings.delete_category))
         },
         text = {
-            Text(
-                text = stringResource(MR.strings.delete_category_confirmation, category),
-            )
+            val baseMessage = stringResource(MR.strings.delete_category_confirmation, category)
+            val fullMessage = if (hasSubcategories) {
+                "$baseMessage\n\nAll sub-categories belonging to this category will also be deleted."
+            } else {
+                baseMessage
+            }
+            Text(text = fullMessage)
         },
     )
 }

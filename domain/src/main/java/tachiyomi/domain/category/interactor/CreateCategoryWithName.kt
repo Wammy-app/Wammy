@@ -4,6 +4,7 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.model.toHierarchicalCategoryList
 import tachiyomi.domain.category.repository.CategoryRepository
 import tachiyomi.domain.library.service.LibraryPreferences
 
@@ -24,12 +25,7 @@ class CreateCategoryWithName(
         parentId: Long? = null,
     ): Result = withNonCancellableContext {
         val categories = categoryRepository.getAll()
-        val siblings = if (parentId != null) {
-            categories.filter { it.parentId == parentId }
-        } else {
-            categories.filter { it.parentId == null }
-        }
-        val nextOrder = siblings.maxOfOrNull { it.order }?.plus(1) ?: 0
+        val nextOrder = (categories.maxOfOrNull { it.order } ?: -1) + 1
         val newCategory = Category(
             id = 0,
             name = name,
@@ -41,6 +37,13 @@ class CreateCategoryWithName(
 
         try {
             categoryRepository.insert(newCategory)
+
+            // Re-normalize all categories into hierarchical order sequentially
+            val all = categoryRepository.getAll()
+                .filterNot(Category::isSystemCategory)
+                .toHierarchicalCategoryList()
+            categoryRepository.updateAllOrders(orderedIds = all.map { it.id })
+
             Result.Success
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)

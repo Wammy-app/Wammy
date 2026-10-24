@@ -38,22 +38,24 @@ class CategoryScreen : Screen() {
 
         CategoryScreen(
             state = successState,
-            onClickCreate = { viewModel.showDialog(CategoryDialog.Create) },
+            onClickCreate = { viewModel.showDialog(CategoryDialog.Create()) },
             onClickRename = { viewModel.showDialog(CategoryDialog.Rename(it)) },
             onClickDelete = { viewModel.showDialog(CategoryDialog.Delete(it)) },
             onChangeOrder = viewModel::changeOrder,
             navigateUp = navigator::pop,
+            onClickAddSubCategory = { viewModel.showDialog(CategoryDialog.Create(defaultParentId = it.id)) },
         )
 
         when (val dialog = successState.dialog) {
             null -> {}
-            CategoryDialog.Create -> {
+            is CategoryDialog.Create -> {
                 val parentCandidates = successState.categories.topLevel()
                 CategoryCreateDialog(
                     onDismissRequest = viewModel::dismissDialog,
                     onCreate = { name, contentType, parentId -> viewModel.createCategory(name, contentType, parentId) },
                     categories = successState.categories.fastMap { it.name },
                     parentCategories = parentCandidates,
+                    defaultParentId = dialog.defaultParentId,
                 )
             }
             is CategoryDialog.Rename -> {
@@ -68,10 +70,12 @@ class CategoryScreen : Screen() {
                 )
             }
             is CategoryDialog.Delete -> {
+                val hasSubcategories = successState.categories.any { it.parentId == dialog.category.id }
                 CategoryDeleteDialog(
                     onDismissRequest = viewModel::dismissDialog,
                     onDelete = { viewModel.deleteCategory(dialog.category.id) },
                     category = dialog.category.name,
+                    hasSubcategories = hasSubcategories,
                 )
             }
         }

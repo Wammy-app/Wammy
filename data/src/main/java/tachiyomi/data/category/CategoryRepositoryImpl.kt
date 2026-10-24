@@ -3,9 +3,11 @@ package tachiyomi.data.category
 import app.cash.sqldelight.async.coroutines.awaitAsList
 import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import tachiyomi.data.Database
 import tachiyomi.data.subscribeToList
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.model.toHierarchicalCategoryList
 import tachiyomi.domain.category.repository.CategoryRepository
 
 class CategoryRepositoryImpl(
@@ -17,11 +19,12 @@ class CategoryRepositoryImpl(
     }
 
     override suspend fun getAll(): List<Category> {
-        return database.categoriesQueries.getCategories(::mapCategory).awaitAsList()
+        return database.categoriesQueries.getCategories(::mapCategory).awaitAsList().toHierarchicalCategoryList()
     }
 
     override fun getAllAsFlow(): Flow<List<Category>> {
         return database.categoriesQueries.getCategories(::mapCategory).subscribeToList()
+            .map { it.toHierarchicalCategoryList() }
     }
 
     override suspend fun getSubcategories(parentId: Long): List<Category> {
@@ -116,6 +119,10 @@ class CategoryRepositoryImpl(
         database.categoriesQueries.delete(
             categoryId = categoryId,
         )
+    }
+
+    override suspend fun deleteOrphanSubcategories() {
+        database.categoriesQueries.deleteOrphanSubcategories()
     }
 
     private fun mapCategory(

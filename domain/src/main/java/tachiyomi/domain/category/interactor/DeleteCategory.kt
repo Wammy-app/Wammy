@@ -14,7 +14,19 @@ class DeleteCategory(
 ) {
 
     suspend fun await(categoryId: Long) = withNonCancellableContext {
+        // Collect subcategories to cascade deletion and preferences cleanup
+        val childCategories = try {
+            categoryRepository.getSubcategories(categoryId)
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val allAffectedCategoryIds = listOf(categoryId) + childCategories.map { it.id }
+
         try {
+            // Delete child categories explicitly first
+            childCategories.forEach { child ->
+                categoryRepository.delete(child.id)
+            }
             categoryRepository.delete(categoryId)
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)
@@ -24,7 +36,7 @@ class DeleteCategory(
         val orderedIds = categoryRepository.getAll().map { it.id }
 
         val defaultCategory = libraryPreferences.defaultCategory.get()
-        if (defaultCategory == categoryId.toInt()) {
+        if (defaultCategory.toLong() in allAffectedCategoryIds) {
             libraryPreferences.defaultCategory.delete()
         }
 
@@ -35,11 +47,13 @@ class DeleteCategory(
             downloadPreferences.downloadNewChapterCategories,
             downloadPreferences.downloadNewChapterCategoriesExclude,
         )
-        val categoryIdString = categoryId.toString()
+        val categoryIdStrings = allAffectedCategoryIds.map { it.toString() }.toSet()
         categoryPreferences.forEach { preference ->
             val ids = preference.get()
-            if (categoryIdString !in ids) return@forEach
-            preference.set(ids.minus(categoryIdString))
+            val remaining = ids.minus(categoryIdStrings)
+            if (remaining.size != ids.size) {
+                preference.set(remaining)
+            }
         }
 
         try {
