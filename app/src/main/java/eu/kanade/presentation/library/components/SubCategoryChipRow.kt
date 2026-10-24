@@ -18,8 +18,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
@@ -35,8 +41,31 @@ fun SubCategoryChipRow(
     onCreateSubCategory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val preventParentSwipeNestedScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                // Consume unconsumed horizontal scroll so parent HorizontalPager does not page
+                return Offset(x = available.x, y = 0f)
+            }
+
+            override suspend fun onPostFling(
+                consumed: Velocity,
+                available: Velocity,
+            ): Velocity {
+                // Consume unconsumed horizontal fling velocity so parent HorizontalPager does not fling
+                return Velocity(x = available.x, y = 0f)
+            }
+        }
+    }
+
     LazyRow(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .nestedScroll(preventParentSwipeNestedScroll),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
