@@ -40,8 +40,8 @@ class CreateCategoryWithName(
 
             // Re-normalize all categories into hierarchical order sequentially
             val all = categoryRepository.getAll()
-                .filterNot(Category::isSystemCategory)
                 .toHierarchicalCategoryList()
+                .filterNot(Category::isSystemCategory)
             categoryRepository.updateAllOrders(orderedIds = all.map { it.id })
 
             Result.Success

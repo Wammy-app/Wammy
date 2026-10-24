@@ -43,10 +43,12 @@ class CategoryViewModel(
             } catch (_: Exception) {}
             getCategories.subscribe()
                 .collectLatest { categories ->
+                    val hasDefaultSubcategories = categories.any { it.parentId == Category.UNCATEGORIZED_ID }
                     mutableState.update {
                         CategoryScreenState.Success(
-                            categories = categories
-                                .filterNot(Category::isSystemCategory),
+                            categories = categories.filter { cat ->
+                                !cat.isSystemCategory || hasDefaultSubcategories
+                            },
                         )
                     }
                 }

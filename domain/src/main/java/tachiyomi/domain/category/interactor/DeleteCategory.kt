@@ -3,6 +3,8 @@ package tachiyomi.domain.category.interactor
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.model.toHierarchicalCategoryList
 import tachiyomi.domain.category.repository.CategoryRepository
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -14,6 +16,10 @@ class DeleteCategory(
 ) {
 
     suspend fun await(categoryId: Long) = withNonCancellableContext {
+        if (categoryId == Category.UNCATEGORIZED_ID) {
+            return@withNonCancellableContext Result.Success
+        }
+
         // Collect subcategories to cascade deletion and preferences cleanup
         val childCategories = try {
             categoryRepository.getSubcategories(categoryId)
@@ -33,7 +39,10 @@ class DeleteCategory(
             return@withNonCancellableContext Result.InternalError(e)
         }
 
-        val orderedIds = categoryRepository.getAll().map { it.id }
+        val orderedIds = categoryRepository.getAll()
+            .toHierarchicalCategoryList()
+            .filterNot(Category::isSystemCategory)
+            .map { it.id }
 
         val defaultCategory = libraryPreferences.defaultCategory.get()
         if (defaultCategory.toLong() in allAffectedCategoryIds) {

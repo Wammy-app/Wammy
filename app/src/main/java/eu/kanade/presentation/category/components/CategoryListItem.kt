@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
+import eu.kanade.presentation.category.visualName
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
@@ -126,7 +128,13 @@ private fun ReorderableCollectionItemScope.CategoryCardContent(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onRename)
+            .then(
+                if (!category.isSystemCategory) {
+                    Modifier.clickable(onClick = onRename)
+                } else {
+                    Modifier
+                },
+            )
             .padding(vertical = MaterialTheme.padding.small)
             .padding(
                 start = MaterialTheme.padding.small,
@@ -134,18 +142,22 @@ private fun ReorderableCollectionItemScope.CategoryCardContent(
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.DragHandle,
-            contentDescription = null,
-            modifier = Modifier
-                .padding(MaterialTheme.padding.medium)
-                .draggableHandle(),
-        )
+        if (!category.isSystemCategory) {
+            Icon(
+                imageVector = Icons.Outlined.DragHandle,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(MaterialTheme.padding.medium)
+                    .draggableHandle(),
+            )
+        } else {
+            Spacer(modifier = Modifier.width(MaterialTheme.padding.medium * 2 + 24.dp))
+        }
         Column(
             modifier = Modifier.weight(1f),
         ) {
             Text(
-                text = category.name,
+                text = category.visualName,
                 style = if (isChild) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
             )
             val contentTypeText = when (category.contentType) {
@@ -172,17 +184,19 @@ private fun ReorderableCollectionItemScope.CategoryCardContent(
                 )
             }
         }
-        IconButton(onClick = onRename) {
-            Icon(
-                imageVector = Icons.Outlined.Edit,
-                contentDescription = stringResource(MR.strings.action_rename_category),
-            )
-        }
-        IconButton(onClick = onDelete) {
-            Icon(
-                imageVector = Icons.Outlined.Delete,
-                contentDescription = stringResource(MR.strings.action_delete),
-            )
+        if (!category.isSystemCategory) {
+            IconButton(onClick = onRename) {
+                Icon(
+                    imageVector = Icons.Outlined.Edit,
+                    contentDescription = stringResource(MR.strings.action_rename_category),
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = stringResource(MR.strings.action_delete),
+                )
+            }
         }
     }
 }

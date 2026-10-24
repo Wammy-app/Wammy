@@ -283,7 +283,9 @@ class LibraryViewModel(
             ) { categories, favorites, tracksAndFilters, itemPreferences, isLoading ->
                 val (tracksMap, trackingFilters) = tracksAndFilters
 
-                val showSystemCategory = favorites.isEmpty() || favorites.any { it.libraryManga.categories.contains(0L) }
+                val showSystemCategory = favorites.isEmpty() ||
+                    favorites.any { it.libraryManga.categories.contains(0L) } ||
+                    categories.any { it.parentId == 0L }
 
                 val filteredFavorites = favorites
                     .applyFilters(tracksMap, trackingFilters, itemPreferences)

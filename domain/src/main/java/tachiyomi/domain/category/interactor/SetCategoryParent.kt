@@ -15,8 +15,8 @@ class SetCategoryParent(
             categoryRepository.updateParent(categoryId, parentId)
 
             val all = categoryRepository.getAll()
-                .filterNot(Category::isSystemCategory)
                 .toHierarchicalCategoryList()
+                .filterNot(Category::isSystemCategory)
             categoryRepository.updateAllOrders(orderedIds = all.map { it.id })
 
             Result.Success

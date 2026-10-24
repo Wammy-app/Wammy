@@ -11,6 +11,9 @@ class RenameCategory(
 ) {
 
     suspend fun await(categoryId: Long, name: String) = withNonCancellableContext {
+        if (categoryId == Category.UNCATEGORIZED_ID) {
+            return@withNonCancellableContext Result.Success
+        }
         try {
             categoryRepository.updateName(categoryId = categoryId, name = name)
             Result.Success

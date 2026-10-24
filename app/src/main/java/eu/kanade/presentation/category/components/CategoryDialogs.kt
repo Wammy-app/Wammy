@@ -111,7 +111,7 @@ fun CategoryCreateDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 if (parentCategories.isNotEmpty()) {
-                    val selectedParentName = parentCategories.find { it.id == selectedParentId }?.name ?: "None (Top Level)"
+                    val selectedParentName = parentCategories.find { it.id == selectedParentId }?.visualName ?: "None (Top Level)"
 
                     ExposedDropdownMenuBox(
                         expanded = parentDropdownExpanded,
@@ -140,7 +140,7 @@ fun CategoryCreateDialog(
                             )
                             parentCategories.forEach { parent ->
                                 DropdownMenuItem(
-                                    text = { Text(parent.name) },
+                                    text = { Text(parent.visualName) },
                                     onClick = {
                                         selectedParentId = parent.id
                                         parentDropdownExpanded = false
@@ -277,7 +277,7 @@ fun CategoryRenameDialog(
 
                 if (parentCategories.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    val selectedParentName = parentCategories.find { it.id == selectedParentId }?.name ?: "None (Top Level)"
+                    val selectedParentName = parentCategories.find { it.id == selectedParentId }?.visualName ?: "None (Top Level)"
 
                     ExposedDropdownMenuBox(
                         expanded = parentDropdownExpanded,
@@ -307,7 +307,7 @@ fun CategoryRenameDialog(
                             )
                             parentCategories.forEach { parent ->
                                 DropdownMenuItem(
-                                    text = { Text(parent.name) },
+                                    text = { Text(parent.visualName) },
                                     onClick = {
                                         selectedParentId = parent.id
                                         valueHasChanged = name != category || selectedParentId != currentParentId

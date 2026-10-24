@@ -116,7 +116,7 @@ private fun CategoryContent(
                 val siblings = if (isChild) categoriesState.filter { it.parentId == category.parentId } else emptyList()
                 val isFirstChild = isChild && siblings.firstOrNull()?.id == category.id
                 val isLastChild = isChild && siblings.lastOrNull()?.id == category.id
-                val parentName = category.parentId?.let { pid -> categoriesState.find { it.id == pid }?.name }
+                val parentName = category.parentId?.let { pid -> categoriesState.find { it.id == pid }?.visualName }
 
                 CategoryListItem(
                     modifier = Modifier.animateItem(),

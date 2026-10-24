@@ -14,6 +14,9 @@ class ReorderCategory(
     private val mutex = Mutex()
 
     suspend fun await(category: Category, newIndex: Int) = withNonCancellableContext {
+        if (category.isSystemCategory) {
+            return@withNonCancellableContext Result.Unchanged
+        }
         mutex.withLock {
             val categories = categoryRepository.getAll()
                 .filterNot(Category::isSystemCategory)

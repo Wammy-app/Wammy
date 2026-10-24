@@ -308,7 +308,10 @@ data object NovelsTab : Tab {
 
         if (createSubCategoryFor != null) {
             val parentCat = createSubCategoryFor!!
-            val parentCandidates = state.displayedCategories.filter { it.isTopLevel }
+            val parentCandidates = remember(state.displayedCategories, parentCat) {
+                val top = state.displayedCategories.filter { it.isTopLevel }
+                if (top.none { it.id == parentCat.id }) listOf(parentCat) + top else top
+            }
             CategoryCreateDialog(
                 onDismissRequest = { createSubCategoryFor = null },
                 onCreate = { name, contentType, parentId ->
@@ -317,7 +320,7 @@ data object NovelsTab : Tab {
                 },
                 categories = state.displayedCategories.map { it.name },
                 parentCategories = parentCandidates,
-                defaultParentId = if (parentCat.id > 0) parentCat.id else null,
+                defaultParentId = parentCat.id,
             )
         }
 
