@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.ui.main
 
+import eu.kanade.domain.connections.service.ConnectionsPreferences
+import eu.kanade.tachiyomi.data.connections.discord.DiscordRPCService
+
 import android.animation.ValueAnimator
 import android.app.SearchManager
 import android.app.assist.AssistContent
@@ -318,6 +321,29 @@ class MainActivity : BaseActivity() {
                 chapterCache.clear()
             }
         }
+
+        val connectionsPreferences = uy.kohesive.injekt.Injekt.get<ConnectionsPreferences>()
+        connectionsPreferences.enableDiscordRPC().changes()
+            .drop(1)
+            .onEach {
+                if (it) {
+                    DiscordRPCService.start(applicationContext)
+                } else {
+                    DiscordRPCService.stop(applicationContext, 0L)
+                }
+            }
+            .launchIn(lifecycleScope)
+
+        connectionsPreferences.discordRPCStatus().changes()
+            .drop(1)
+            .onEach {
+                with(DiscordRPCService) {
+                    discordScope.launchIO {
+                        restart(applicationContext)
+                    }
+                }
+            }
+            .launchIn(lifecycleScope)
 
         window.decorView.post {
             lifecycleScope.launchIO {

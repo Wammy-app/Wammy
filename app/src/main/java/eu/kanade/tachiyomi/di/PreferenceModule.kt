@@ -86,5 +86,8 @@ class PreferenceModule(val app: Application) : InjektModule {
         addSingletonFactory {
             BasePreferences(app, get())
         }
+        addSingletonFactory {
+            eu.kanade.domain.connections.service.ConnectionsPreferences(get())
+        }
     }
 }

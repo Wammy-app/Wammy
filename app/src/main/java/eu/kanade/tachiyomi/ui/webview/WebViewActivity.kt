@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.ui.webview
 
+import eu.kanade.tachiyomi.data.connections.discord.DiscordRPCService
+import eu.kanade.tachiyomi.data.connections.discord.DiscordScreen
+import tachiyomi.core.common.util.lang.launchIO
+
 import android.app.assist.AssistContent
 import android.content.Context
 import android.content.Intent
@@ -79,6 +83,17 @@ class WebViewActivity : BaseActivity() {
                 onClearCookies = this::clearCookies,
             )
         }
+
+        with(DiscordRPCService) {
+            discordScope.launchIO { setScreen(this@WebViewActivity, DiscordScreen.WEBVIEW) }
+        }
+    }
+
+    override fun onDestroy() {
+        with(DiscordRPCService) {
+            discordScope.launchIO { setScreen(this@WebViewActivity) }
+        }
+        super.onDestroy()
     }
 
     override fun onProvideAssistContent(outContent: AssistContent) {

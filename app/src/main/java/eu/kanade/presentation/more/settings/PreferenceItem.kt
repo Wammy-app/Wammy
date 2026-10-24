@@ -194,6 +194,15 @@ internal fun PreferenceItem(
                     onClick = { if (isLoggedIn) item.logout() else item.login() },
                 )
             }
+            is Preference.PreferenceItem.ConnectionPreference -> {
+                val isLoggedIn by item.service.isLoggedInFlow.collectAsState(item.service.isLogged)
+                eu.kanade.presentation.more.settings.widget.ConnectionPreferenceWidget(
+                    service = item.service,
+                    checked = isLoggedIn,
+                    onClick = { if (isLoggedIn) item.openSettings() else item.login() },
+                    subtitle = item.subtitle,
+                )
+            }
             is Preference.PreferenceItem.InfoPreference -> {
                 InfoWidget(text = item.title)
             }

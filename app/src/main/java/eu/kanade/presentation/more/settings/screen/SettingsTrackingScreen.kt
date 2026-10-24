@@ -51,7 +51,13 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.collectAsState
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.icerock.moko.resources.StringResource
+import eu.kanade.tachiyomi.data.connections.ConnectionsManager
+import eu.kanade.tachiyomi.ui.setting.connections.DiscordLoginScreen
+import kotlinx.collections.immutable.persistentListOf
 import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.presentation.more.settings.Preference
@@ -96,9 +102,12 @@ object SettingsTrackingScreen : SearchableSettings {
     @Composable
     override fun getPreferences(): List<Preference> {
         val context = LocalContext.current
+        val navigator = LocalNavigator.currentOrThrow
+        val connectionsManager = remember { Injekt.get<ConnectionsManager>() }
         val trackPreferences = remember { Injekt.get<TrackPreferences>() }
         val trackerManager = remember { Injekt.get<TrackerManager>() }
         val sourceManager = remember { Injekt.get<SourceManager>() }
+        val isDiscordLoggedIn by connectionsManager.discord.isLoggedInFlow.collectAsState(connectionsManager.discord.isLogged)
 
         var dialog by remember { mutableStateOf<Any?>(null) }
         dialog?.run {
@@ -149,6 +158,23 @@ object SettingsTrackingScreen : SearchableSettings {
         }
 
         return listOf(
+            Preference.PreferenceGroup(
+                title = stringResource(MR.strings.pref_category_connections),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.ConnectionPreference(
+                        title = stringResource(connectionsManager.discord.nameStrRes()),
+                        subtitle = stringResource(MR.strings.pref_discord_configuration).takeIf { isDiscordLoggedIn },
+                        service = connectionsManager.discord,
+                        login = {
+                            navigator.push(DiscordLoginScreen())
+                        },
+                        openSettings = { navigator.push(SettingsDiscordScreen) },
+                    ),
+                    Preference.PreferenceItem.InfoPreference(
+                        stringResource(MR.strings.connections_discord_info),
+                    ),
+                ),
+            ),
             Preference.PreferenceItem.SwitchPreference(
                 preference = trackPreferences.autoUpdateTrack,
                 title = stringResource(MR.strings.pref_auto_update_manga_sync),
