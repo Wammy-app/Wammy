@@ -2,6 +2,7 @@ package eu.kanade.presentation.category.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -12,13 +13,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +52,10 @@ fun ReorderableCollectionItemScope.CategoryListItem(
     isFirstChild: Boolean = false,
     isLastChild: Boolean = false,
     onAddSubCategory: (() -> Unit)? = null,
+    hasSubcategories: Boolean = false,
+    subcategoriesCount: Int = 0,
+    isExpanded: Boolean = false,
+    onToggleExpand: (() -> Unit)? = null,
 ) {
     if (isChild) {
         Row(
@@ -104,14 +113,52 @@ fun ReorderableCollectionItemScope.CategoryListItem(
         ElevatedCard(
             modifier = modifier.fillMaxWidth(),
         ) {
-            CategoryCardContent(
-                category = category,
-                isChild = false,
-                parentName = null,
-                onRename = onRename,
-                onDelete = onDelete,
-                onAddSubCategory = onAddSubCategory,
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                CategoryCardContent(
+                    category = category,
+                    isChild = false,
+                    parentName = null,
+                    onRename = onRename,
+                    onDelete = onDelete,
+                    onAddSubCategory = onAddSubCategory,
+                )
+
+                if (hasSubcategories && onToggleExpand != null) {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                        thickness = 0.5.dp,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onToggleExpand)
+                            .padding(vertical = 5.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = if (isExpanded) {
+                                    "Hide sub-categories ($subcategoriesCount)"
+                                } else {
+                                    "Show sub-categories ($subcategoriesCount)"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                contentDescription = if (isExpanded) "Hide sub-categories" else "Show sub-categories",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
