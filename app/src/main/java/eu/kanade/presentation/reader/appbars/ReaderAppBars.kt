@@ -136,7 +136,6 @@ fun ReaderAppBars(
                                     totalPages = totalPages,
                                     onPageIndexChange = onPageIndexChange,
                                     onPageIndexChangeFinished = onPageIndexChangeFinished,
-                                    onClickChapters = onClickTopAppBar,
                                 )
                             }
                         }
@@ -171,7 +170,6 @@ fun ReaderAppBars(
                         totalPages = totalPages,
                         onPageIndexChange = onPageIndexChange,
                         onPageIndexChangeFinished = onPageIndexChangeFinished,
-                        onClickChapters = onClickTopAppBar,
                     )
                 }
             }

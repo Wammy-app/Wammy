@@ -1,5 +1,6 @@
 package eu.kanade.presentation.reader.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -10,12 +11,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,6 +44,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -74,7 +82,6 @@ fun ChapterNavigator(
     onPageIndexChange: (Int) -> Unit,
     onPageIndexChangeFinished: () -> Unit,
     modifier: Modifier = Modifier,
-    onClickChapters: (() -> Unit)? = null,
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -124,7 +131,6 @@ fun ChapterNavigator(
             backgroundColor = backgroundColor,
             buttonColor = buttonColor,
             modifier = modifier,
-            onClickChapters = onClickChapters,
         )
     } else {
         VerticalChapterNavigator(
@@ -144,6 +150,7 @@ fun ChapterNavigator(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HorizontalChapterNavigator(
     isRtl: Boolean,
@@ -159,91 +166,109 @@ fun HorizontalChapterNavigator(
     backgroundColor: Color,
     buttonColor: IconButtonColors,
     modifier: Modifier = Modifier,
-    onClickChapters: (() -> Unit)? = null,
 ) {
     val layoutDirection = if (isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
 
-    // We explicitly handle direction based on the reader viewer rather than the system direction
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = mainAxisPadding)
-                .clip(RoundedCornerShape(28.dp))
+                .height(68.dp)
+                .clip(CircleShape)
                 .background(backgroundColor)
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val prevEnabled = if (isRtl) enabledNext else enabledPrevious
             IconButton(
-                enabled = if (isRtl) enabledNext else enabledPrevious,
+                enabled = prevEnabled,
                 onClick = if (isRtl) onNextChapter else onPreviousChapter,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.SkipPrevious,
+                    imageVector = Icons.Default.SkipPrevious,
                     contentDescription = stringResource(
                         if (isRtl) MR.strings.action_next_chapter else MR.strings.action_previous_chapter,
                     ),
+                    tint = if (prevEnabled) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
+                    },
                 )
             }
 
             if (totalPages > 1) {
                 CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
-                    Row(
+                    val trackBg = MaterialTheme.colorScheme.surfaceVariant
+                    val dotColor = Color.White.copy(alpha = 0.8f)
+
+                    Slider(
+                        state = state,
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(contentAlignment = Alignment.CenterEnd) {
-                            Text(
-                                text = currentPage.toString(),
-                                style = MaterialTheme.typography.bodySmall,
+                            .padding(horizontal = 8.dp),
+                        interactionSource = interactionSource,
+                        thumb = {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .height(28.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(MaterialTheme.colorScheme.primary),
                             )
-                            // Taking up full length so the slider doesn't shift when 'currentPage' length changes
-                            Text(
-                                text = totalPages.toString(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.Transparent,
-                            )
-                        }
+                        },
+                        track = {
+                            Canvas(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(14.dp),
+                            ) {
+                                val cornerRadius = CornerRadius(size.height / 2, size.height / 2)
+                                drawRoundRect(
+                                    color = trackBg,
+                                    cornerRadius = cornerRadius,
+                                )
 
-                        Slider(
-                            state = state,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 6.dp),
-                            interactionSource = interactionSource,
-                        )
+                                val totalDots = totalPages.coerceIn(8, 30)
+                                val startX = size.height / 2 + 4.dp.toPx()
+                                val endX = size.width - (size.height / 2 + 4.dp.toPx())
+                                val stepX = if (totalDots > 1) (endX - startX) / (totalDots - 1) else 0f
+                                val centerY = size.height / 2
+                                val dotRadius = 1.8.dp.toPx()
 
-                        Text(
-                            text = totalPages.toString(),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                                for (i in 0 until totalDots) {
+                                    val cx = startX + (i * stepX)
+                                    drawCircle(
+                                        color = dotColor,
+                                        radius = dotRadius,
+                                        center = Offset(cx, centerY),
+                                    )
+                                }
+                            }
+                        },
+                    )
                 }
             } else {
                 Spacer(Modifier.weight(1f))
             }
 
+            val nextEnabled = if (isRtl) enabledPrevious else enabledNext
             IconButton(
-                enabled = if (isRtl) enabledPrevious else enabledNext,
+                enabled = nextEnabled,
                 onClick = if (isRtl) onPreviousChapter else onNextChapter,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.SkipNext,
+                    imageVector = Icons.Default.SkipNext,
                     contentDescription = stringResource(
                         if (isRtl) MR.strings.action_previous_chapter else MR.strings.action_next_chapter,
                     ),
+                    tint = if (nextEnabled) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
+                    },
                 )
-            }
-
-            onClickChapters?.let {
-                IconButton(onClick = it) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.FormatListBulleted,
-                        contentDescription = stringResource(MR.strings.chapters),
-                    )
-                }
             }
         }
     }
