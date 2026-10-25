@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -49,9 +50,9 @@ import tachiyomi.domain.manga.model.asMangaCover
 import kotlin.math.absoluteValue
 
 /**
- * Hero Featured Card with center-focused cover carousel:
+ * Hero Featured Card with infinite-looping center-focused cover carousel:
  * - Center card is large, prominent, and in focus
- * - Left and right cards peek in scaled down and dimmed
+ * - Left and right cards peek in scaled down and dimmed, looping infinitely (no empty space)
  * - Centered pager indicator dots below
  * - Full-width "Read" button at the bottom
  */
@@ -64,18 +65,27 @@ fun HeroFeaturedCard(
 ) {
     if (items.isEmpty()) return
 
-    val pagerState = rememberPagerState(pageCount = { items.size })
+    val isInfinite = items.size > 1
+    val virtualPageCount = if (isInfinite) items.size * 2000 else items.size
+    val initialPage = if (isInfinite) (virtualPageCount / 2) - ((virtualPageCount / 2) % items.size) else 0
+
+    val pagerState = key(items.size) {
+        rememberPagerState(
+            initialPage = initialPage,
+            pageCount = { virtualPageCount },
+        )
+    }
+
     val scope = rememberCoroutineScope()
     val isDark = isSystemInDarkTheme()
 
-    // Auto-scroll logic (rotates every 5 seconds)
+    // Auto-scroll logic (rotates forward every 5 seconds)
     LaunchedEffect(pagerState, items.size) {
         while (true) {
             delay(5000)
             if (items.size > 1 && !pagerState.isScrollInProgress) {
                 try {
-                    val nextPage = (pagerState.currentPage + 1) % items.size
-                    pagerState.animateScrollToPage(nextPage, animationSpec = tween(700))
+                    pagerState.animateScrollToPage(pagerState.currentPage + 1, animationSpec = tween(700))
                 } catch (_: Exception) {
                     // Ignored on interruption
                 }
@@ -94,9 +104,14 @@ fun HeroFeaturedCard(
         }
     }
 
-    val currentManga = items.getOrNull(pagerState.currentPage)
+    val currentActualIndex = if (items.isNotEmpty()) {
+        (pagerState.currentPage % items.size + items.size) % items.size
+    } else {
+        0
+    }
+    val currentManga = items.getOrNull(currentActualIndex)
 
-    // Button theme styling matching the reference: light contrasting button in dark mode
+    // Button theme styling matching reference: light contrasting button in dark mode
     val buttonBg = if (isDark) Color(0xFFE8E8EE) else MaterialTheme.colorScheme.primary
     val buttonContentColor = if (isDark) Color(0xFF121218) else MaterialTheme.colorScheme.onPrimary
 
@@ -111,7 +126,7 @@ fun HeroFeaturedCard(
                 .padding(bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // 1. Cover Carousel (center card focused, side cards peeking)
+            // 1. Cover Carousel (center card focused, side cards peeking in a continuous loop)
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -128,7 +143,8 @@ fun HeroFeaturedCard(
                     pageSpacing = 14.dp,
                     beyondViewportPageCount = 2,
                 ) { page ->
-                    val manga = items[page]
+                    val actualIndex = (page % items.size + items.size) % items.size
+                    val manga = items[actualIndex]
                     val coverData = remember(manga.id, manga.thumbnailUrl, manga.coverLastModified) {
                         manga.asMangaCover()
                     }
@@ -165,7 +181,7 @@ fun HeroFeaturedCard(
                 }
             }
 
-            // 2. Pager Indicator Dots
+            // 2. Pager Indicator Dots (mapped modulo items.size)
             if (items.size > 1) {
                 Spacer(modifier = Modifier.height(14.dp))
                 Row(
@@ -173,7 +189,7 @@ fun HeroFeaturedCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     repeat(items.size) { index ->
-                        val isSelected = pagerState.currentPage == index
+                        val isSelected = currentActualIndex == index
                         Box(
                             modifier = Modifier
                                 .size(
@@ -186,7 +202,9 @@ fun HeroFeaturedCard(
                                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
                                 )
                                 .clickable {
-                                    scope.launch { pagerState.animateScrollToPage(index) }
+                                    val currentVirtual = pagerState.currentPage
+                                    val diff = index - currentActualIndex
+                                    scope.launch { pagerState.animateScrollToPage(currentVirtual + diff) }
                                 },
                         )
                     }
