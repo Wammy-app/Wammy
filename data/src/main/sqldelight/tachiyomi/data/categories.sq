@@ -3,11 +3,12 @@ CREATE TABLE categories(
     name TEXT NOT NULL,
     sort INTEGER NOT NULL,
     flags INTEGER NOT NULL,
-    content_type INTEGER NOT NULL DEFAULT 0
+    content_type INTEGER NOT NULL DEFAULT 0,
+    parent_id INTEGER REFERENCES categories(_id) ON DELETE CASCADE
 );
 
 -- Insert system category
-INSERT OR IGNORE INTO categories(_id, name, sort, flags, content_type) VALUES (0, "", -1, 0, 0);
+INSERT OR IGNORE INTO categories(_id, name, sort, flags, content_type, parent_id) VALUES (0, "", -1, 0, 0, NULL);
 -- Disallow deletion of default category
 CREATE TRIGGER IF NOT EXISTS system_category_delete_trigger BEFORE DELETE
 ON categories
@@ -16,6 +17,14 @@ BEGIN SELECT CASE
         RAISE(ABORT, "System category can't be deleted")
     END;
 END;
+
+CREATE TRIGGER IF NOT EXISTS cascade_category_subcategories_delete
+BEFORE DELETE ON categories
+BEGIN
+    DELETE FROM categories WHERE parent_id = old._id;
+END;
+
+CREATE INDEX IF NOT EXISTS idx_categories_parent_id ON categories(parent_id);
 
 getCategory:
 SELECT *
@@ -29,7 +38,8 @@ _id AS id,
 name,
 sort AS `order`,
 flags,
-content_type
+content_type,
+parent_id
 FROM categories
 ORDER BY sort;
 
@@ -39,7 +49,8 @@ C._id AS id,
 C.name,
 C.sort AS `order`,
 C.flags,
-C.content_type
+C.content_type,
+C.parent_id
 FROM categories C
 JOIN mangas_categories MC
 ON C._id = MC.category_id
@@ -53,7 +64,8 @@ C._id AS id,
 C.name,
 C.sort AS `order`,
 C.flags,
-C.content_type
+C.content_type,
+C.parent_id
 FROM categories C
 JOIN mangas_categories MC
 ON C._id = MC.category_id
@@ -66,18 +78,47 @@ _id AS id,
 name,
 sort AS `order`,
 flags,
-content_type
+content_type,
+parent_id
 FROM categories
 WHERE content_type = :contentType OR content_type = 0
 ORDER BY sort;
 
+getSubcategories:
+SELECT
+_id AS id,
+name,
+sort AS `order`,
+flags,
+content_type,
+parent_id
+FROM categories
+WHERE parent_id = :parentId
+ORDER BY sort;
+
+getTopLevelCategories:
+SELECT
+_id AS id,
+name,
+sort AS `order`,
+flags,
+content_type,
+parent_id
+FROM categories
+WHERE parent_id IS NULL
+ORDER BY sort;
+
 insert:
-INSERT INTO categories(name, sort, flags, content_type)
-VALUES (:name, :order, :flags, :contentType);
+INSERT INTO categories(name, sort, flags, content_type, parent_id)
+VALUES (:name, :order, :flags, :contentType, :parentId);
 
 delete:
 DELETE FROM categories
 WHERE _id = :categoryId;
+
+deleteOrphanSubcategories:
+DELETE FROM categories
+WHERE parent_id IS NOT NULL AND parent_id NOT IN (SELECT _id FROM categories);
 
 updateName:
 UPDATE categories
@@ -87,6 +128,11 @@ WHERE _id = :categoryId;
 updateOrder:
 UPDATE categories
 SET sort = :order
+WHERE _id = :categoryId;
+
+updateParent:
+UPDATE categories
+SET parent_id = :parentId
 WHERE _id = :categoryId;
 
 updateFlags:

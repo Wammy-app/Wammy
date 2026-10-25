@@ -31,6 +31,7 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
+import eu.kanade.presentation.category.components.CategoryCreateDialog
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.library.DeleteLibraryMangaDialog
 import eu.kanade.presentation.library.LibrarySettingsDialog
@@ -122,6 +123,7 @@ data object NovelsTab : Tab {
         var reopenCategoryDialogOnReturn by androidx.compose.runtime.saveable.rememberSaveable {
             androidx.compose.runtime.mutableStateOf(false)
         }
+        var createSubCategoryFor by remember { androidx.compose.runtime.mutableStateOf<Category?>(null) }
         LaunchedEffect(navigator.lastItem) {
             if (navigator.lastItem is HomeScreen && reopenCategoryDialogOnReturn) {
                 reopenCategoryDialogOnReturn = false
@@ -298,9 +300,28 @@ data object NovelsTab : Tab {
                         onLoadMore = viewModel::loadMoreForCategory,
                         getLoadMoreKey = { state.categoryLoadKey(it) },
                         isCategoryLoading = { state.paginationLoadingCategories.contains(it.id) },
+                        onCreateSubCategory = { createSubCategoryFor = it },
                     )
                 }
             }
+        }
+
+        if (createSubCategoryFor != null) {
+            val parentCat = createSubCategoryFor!!
+            val parentCandidates = remember(state.displayedCategories, parentCat) {
+                val top = state.displayedCategories.filter { it.isTopLevel }
+                if (top.none { it.id == parentCat.id }) listOf(parentCat) + top else top
+            }
+            CategoryCreateDialog(
+                onDismissRequest = { createSubCategoryFor = null },
+                onCreate = { name, contentType, parentId ->
+                    viewModel.createCategory(name, contentType, parentId)
+                    createSubCategoryFor = null
+                },
+                categories = state.displayedCategories.map { it.name },
+                parentCategories = parentCandidates,
+                defaultParentId = parentCat.id,
+            )
         }
 
         val onDismissRequest = viewModel::closeDialog

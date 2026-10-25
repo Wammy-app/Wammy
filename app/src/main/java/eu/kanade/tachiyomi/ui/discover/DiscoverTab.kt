@@ -339,6 +339,22 @@ object DiscoverTab : Tab {
                         DiscoverSkeletonScreen()
                     } else {
                         val shimmerBrush = rememberShimmerBrush()
+
+                        var hasSettledInitialTop by rememberSaveable(animatedState.isNovel) { mutableStateOf(false) }
+
+                        LaunchedEffect(featuredManga.isNotEmpty()) {
+                            if (featuredManga.isNotEmpty() && !hasSettledInitialTop) {
+                                hasSettledInitialTop = true
+                                if (!gridState.isScrollInProgress && gridState.firstVisibleItemIndex <= 1) {
+                                    gridState.scrollToItem(0, 0)
+                                }
+                            }
+                        }
+
+                        LaunchedEffect(animatedState.isNovel) {
+                            gridState.scrollToItem(0, 0)
+                        }
+
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
                             state = gridState,
@@ -347,9 +363,9 @@ object DiscoverTab : Tab {
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                             modifier = Modifier.fillMaxSize(),
                         ) {
-                            // 1. Hero Featured Card at Top
-                            if (featuredManga.isNotEmpty()) {
-                                item(key = "hero_featured", span = { GridItemSpan(maxLineSpan) }, contentType = "hero") {
+                            // 1. Hero Featured Card at Top (Consistent stable key so scroll anchor never drops to filters)
+                            item(key = "hero_section", span = { GridItemSpan(maxLineSpan) }, contentType = "hero") {
+                                if (featuredManga.isNotEmpty()) {
                                     HeroFeaturedCard(
                                         items = featuredManga,
                                         onClick = { manga ->
@@ -357,11 +373,9 @@ object DiscoverTab : Tab {
                                                 val localManga = viewModel.getNetworkToLocalManga(manga)
                                                 navigator.push(MangaScreen(localManga.id))
                                             }
-                                        }
+                                        },
                                     )
-                                }
-                            } else if (builtinSources.isNotEmpty() && !builtinSources.all { viewModel.popularCache.containsKey(it.id) }) {
-                                item(key = "hero_skeleton", span = { GridItemSpan(maxLineSpan) }, contentType = "hero_skeleton") {
+                                } else {
                                     HeroFeaturedCardSkeleton(shimmerBrush = shimmerBrush)
                                 }
                             }

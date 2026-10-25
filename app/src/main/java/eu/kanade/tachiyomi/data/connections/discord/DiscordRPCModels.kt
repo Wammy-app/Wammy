@@ -139,7 +139,7 @@ data class ReaderData(
     val startTimestamp: Long? = null,
 )
 
-const val WAMMY_LOGO_URL = "https://raw.githubusercontent.com/kainotch/Wammy/master/.github/assets/logo.png"
+const val WAMMY_LOGO_URL = "https://raw.githubusercontent.com/Wammy-app/Wammy/master/.github/assets/logo.png"
 
 enum class DiscordScreen(
     val text: StringResource,

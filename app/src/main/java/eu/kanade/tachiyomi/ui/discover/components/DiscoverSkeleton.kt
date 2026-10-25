@@ -75,7 +75,7 @@ fun rememberShimmerBrush(): Brush {
 
 /**
  * Skeleton placeholder for the Hero Featured Card at the top of Discover.
- * Exact 215dp height, 12dp rounded corner matching HeroFeaturedCard.
+ * Matches the center-focused cover carousel layout with dots and Read button.
  */
 @Composable
 fun HeroFeaturedCardSkeleton(
@@ -83,110 +83,76 @@ fun HeroFeaturedCardSkeleton(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier
-            .fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 18.dp, bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Header Row placeholder
+            // 3 covers placeholder: center portrait cover, left/right peeking blocks
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 10.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Box(
                     modifier = Modifier
-                        .width(140.dp)
-                        .height(18.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .size(width = 46.dp, height = 220.dp)
+                        .clip(RoundedCornerShape(topEnd = 14.dp, bottomEnd = 14.dp))
                         .background(shimmerBrush),
                 )
+                Spacer(modifier = Modifier.width(14.dp))
+                Box(
+                    modifier = Modifier
+                        .size(width = 200.dp, height = 266.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(shimmerBrush),
+                )
+                Spacer(modifier = Modifier.width(14.dp))
+                Box(
+                    modifier = Modifier
+                        .size(width = 46.dp, height = 220.dp)
+                        .clip(RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp))
+                        .background(shimmerBrush),
+                )
+            }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
+            // Dots placeholder
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 22.dp, height = 4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(shimmerBrush),
+                )
+                repeat(3) {
                     Box(
                         modifier = Modifier
-                            .size(width = 18.dp, height = 5.dp)
-                            .clip(RoundedCornerShape(3.dp))
+                            .size(width = 6.dp, height = 4.dp)
+                            .clip(RoundedCornerShape(2.dp))
                             .background(shimmerBrush),
                     )
-                    repeat(3) {
-                        Box(
-                            modifier = Modifier
-                                .size(5.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(shimmerBrush),
-                        )
-                    }
                 }
             }
 
-            // Body 2-column layout placeholder
-            Row(
+            // Read button placeholder
+            Spacer(modifier = Modifier.height(16.dp))
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                // Cover poster placeholder (108dp, 3:4)
-                Box(
-                    modifier = Modifier
-                        .width(108.dp)
-                        .aspectRatio(3f / 4f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(shimmerBrush),
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Details Column placeholder
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(vertical = 2.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .height(18.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shimmerBrush),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.55f)
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shimmerBrush),
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        repeat(2) {
-                            Box(
-                                modifier = Modifier
-                                    .width(50.dp)
-                                    .height(16.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(shimmerBrush),
-                            )
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.95f)
-                            .height(28.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shimmerBrush),
-                    )
-                }
-            }
+                    .padding(horizontal = 16.dp)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(shimmerBrush),
+            )
         }
     }
 }

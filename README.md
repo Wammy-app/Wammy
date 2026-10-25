@@ -9,27 +9,27 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kainotch/Wammy/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/kainotch/Wammy?style=for-the-badge&logo=github&label=latest"></a>
+  <a href="https://github.com/Wammy-app/Wammy/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Wammy-app/Wammy?style=for-the-badge&logo=github&label=latest"></a>
   <a href="https://discord.com/invite/qybFSATs7Q"><img alt="Discord" src="https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white"></a>
-  <a href="https://github.com/kainotch/Wammy/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/kainotch/Wammy/total?style=for-the-badge&logo=github&label=downloads"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/kainotch/Wammy?style=for-the-badge"></a>
+  <a href="https://github.com/Wammy-app/Wammy/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/Wammy-app/Wammy/total?style=for-the-badge&logo=github&label=downloads"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/Wammy-app/Wammy?style=for-the-badge"></a>
 </p>
 
 <p align="center">
   <a href="https://developer.android.com/"><img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white"></a>
-  <a href="https://kotlinlang.org/"><img alt="Kotlin" src="https://img.shields.io/github/languages/top/kainotch/Wammy?style=for-the-badge&logo=kotlin&logoColor=white"></a>
+  <a href="https://kotlinlang.org/"><img alt="Kotlin" src="https://img.shields.io/github/languages/top/Wammy-app/Wammy?style=for-the-badge&logo=kotlin&logoColor=white"></a>
   <a href="https://developer.android.com/compose"><img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white"></a>
   <a href="https://m3.material.io/"><img alt="Material 3" src="https://img.shields.io/badge/Material%203-Design-6750A4?style=for-the-badge&logo=materialdesign&logoColor=white"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/kainotch/Wammy/releases/latest"><strong>Download APK</strong></a>
+  <a href="https://github.com/Wammy-app/Wammy/releases/latest"><strong>Download APK</strong></a>
   |
   <a href="https://kainotch.github.io/WammyWeb/"><strong>Website</strong></a>
   |
   <a href="https://discord.com/invite/qybFSATs7Q"><strong>Discord</strong></a>
   |
-  <a href="https://github.com/kainotch/Wammy/issues"><strong>Issues</strong></a>
+  <a href="https://github.com/Wammy-app/Wammy/issues"><strong>Issues</strong></a>
 </p>
 
 ---
@@ -84,7 +84,7 @@ If you enjoy using Wammy, please consider starring the repository — it helps m
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/kainotch/Wammy.git
+git clone https://github.com/Wammy-app/Wammy.git
 cd Wammy
 
 # 2. Check out the development branch

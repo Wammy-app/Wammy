@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -44,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.AppTheme
-import eu.kanade.presentation.manga.components.MangaCover
 import eu.kanade.presentation.theme.TachiyomiTheme
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import eu.kanade.tachiyomi.util.system.isDynamicColorAvailable
@@ -82,46 +82,58 @@ private fun AppThemesList(
     val context = LocalContext.current
     val appThemes = remember {
         AppTheme.entries
-            .filterNot { it.titleRes == null || (it == AppTheme.MONET && !DeviceUtil.isDynamicColorAvailable) }
+            .filterNot { it.titleRes == null || ((it == AppTheme.EXPRESSIVE || it == AppTheme.MONET) && !DeviceUtil.isDynamicColorAvailable) }
     }
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = PrefsHorizontalPadding),
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+    val spacing = MaterialTheme.padding.small
+    val horizontalPadding = PrefsHorizontalPadding
+
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        items(
-            items = appThemes,
-            key = { it.name },
-        ) { appTheme ->
-            Column(
-                modifier = Modifier
-                    .width(114.dp)
-                    .padding(top = 8.dp),
-            ) {
-                TachiyomiTheme(
-                    appTheme = appTheme,
-                    amoled = amoled,
+        val itemWidth = remember(maxWidth) {
+            val available = maxWidth - (horizontalPadding * 2) - (spacing * 2)
+            (available / 3).coerceAtLeast(88.dp)
+        }
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = horizontalPadding),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+        ) {
+            items(
+                items = appThemes,
+                key = { it.name },
+            ) { appTheme ->
+                Column(
+                    modifier = Modifier
+                        .width(itemWidth)
+                        .padding(top = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    AppThemePreviewItem(
-                        selected = currentTheme == appTheme,
-                        onClick = {
-                            onItemClick(appTheme)
-                            (context as? Activity)?.let { ActivityCompat.recreate(it) }
-                        },
+                    TachiyomiTheme(
+                        appTheme = appTheme,
+                        amoled = amoled,
+                    ) {
+                        AppThemePreviewItem(
+                            selected = currentTheme == appTheme,
+                            onClick = {
+                                onItemClick(appTheme)
+                                (context as? Activity)?.let { ActivityCompat.recreate(it) }
+                            },
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = stringResource(appTheme.titleRes!!),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .secondaryItemAlpha(),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        style = MaterialTheme.typography.labelMedium,
                     )
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = stringResource(appTheme.titleRes!!),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .secondaryItemAlpha(),
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    minLines = 2,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
             }
         }
     }
@@ -135,17 +147,17 @@ fun AppThemePreviewItem(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(9f / 16f)
+            .aspectRatio(1f)
             .border(
-                width = 4.dp,
+                width = if (selected) 3.dp else 1.dp,
                 color = if (selected) {
                     MaterialTheme.colorScheme.primary
                 } else {
                     DividerDefaults.color
                 },
-                shape = RoundedCornerShape(17.dp),
+                shape = RoundedCornerShape(16.dp),
             )
-            .padding(4.dp)
+            .padding(3.dp)
             .clip(RoundedCornerShape(13.dp))
             .background(MaterialTheme.colorScheme.background)
             .clickable(onClick = onClick),
@@ -154,18 +166,18 @@ fun AppThemePreviewItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp)
-                .padding(8.dp),
+                .height(26.dp)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxHeight(0.8f)
+                    .height(9.dp)
                     .weight(0.7f)
                     .padding(end = 4.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        shape = MaterialTheme.shapes.extraSmall,
                     ),
             )
 
@@ -178,38 +190,38 @@ fun AppThemePreviewItem(
                         imageVector = Icons.Filled.CheckCircle,
                         contentDescription = stringResource(MR.strings.selected),
                         tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
         }
 
-        // Cover
+        // Cover / accent block
         Box(
             modifier = Modifier
                 .padding(start = 8.dp, top = 2.dp)
+                .size(width = 36.dp, height = 26.dp)
                 .background(
-                    color = DividerDefaults.color,
-                    shape = MaterialTheme.shapes.small,
-                )
-                .fillMaxWidth(0.5f)
-                .aspectRatio(MangaCover.Book.ratio),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.extraSmall,
+                ),
         ) {
             Row(
                 modifier = Modifier
-                    .padding(4.dp)
-                    .size(width = 24.dp, height = 16.dp)
-                    .clip(RoundedCornerShape(5.dp)),
+                    .padding(3.dp)
+                    .size(width = 20.dp, height = 12.dp)
+                    .clip(RoundedCornerShape(3.dp)),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .width(12.dp)
+                        .weight(1f)
                         .background(MaterialTheme.colorScheme.tertiary),
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .width(12.dp)
+                        .weight(1f)
                         .background(MaterialTheme.colorScheme.secondary),
                 )
             }
@@ -227,14 +239,14 @@ fun AppThemePreviewItem(
             ) {
                 Row(
                     modifier = Modifier
-                        .height(32.dp)
+                        .height(20.dp)
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(17.dp)
+                            .size(10.dp)
                             .background(
                                 color = MaterialTheme.colorScheme.primary,
                                 shape = CircleShape,
@@ -242,13 +254,13 @@ fun AppThemePreviewItem(
                     )
                     Box(
                         modifier = Modifier
-                            .padding(start = 8.dp)
+                            .padding(start = 6.dp)
                             .alpha(0.6f)
-                            .height(17.dp)
+                            .height(9.dp)
                             .weight(1f)
                             .background(
                                 color = MaterialTheme.colorScheme.onSurface,
-                                shape = MaterialTheme.shapes.small,
+                                shape = MaterialTheme.shapes.extraSmall,
                             ),
                     )
                 }

@@ -1,9 +1,19 @@
 package eu.kanade.presentation.reader
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -12,9 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.compose.ui.unit.dp
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.manga.model.readerOrientation
-import eu.kanade.presentation.components.AdaptiveSheet
 import eu.kanade.presentation.reader.components.ModeSelectionDialog
 import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
@@ -26,6 +36,7 @@ import tachiyomi.presentation.core.i18n.stringResource
 
 private val ReaderOrientationsWithoutDefault = ReaderOrientation.entries - ReaderOrientation.DEFAULT
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OrientationSelectDialog(
     onDismissRequest: () -> Unit,
@@ -34,16 +45,29 @@ fun OrientationSelectDialog(
 ) {
     val manga by viewModel.mangaFlow.collectAsState()
     val orientation = remember(manga) { ReaderOrientation.fromPreference(manga?.readerOrientation?.toInt()) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    AdaptiveSheet(onDismissRequest = onDismissRequest) {
-        DialogContent(
-            orientation = orientation,
-            onChangeOrientation = {
-                viewModel.onChangeOrientation(it)
-                onChange(it.stringRes)
-                onDismissRequest()
-            },
-        )
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(bottom = 16.dp),
+        ) {
+            DialogContent(
+                orientation = orientation,
+                onChangeOrientation = {
+                    viewModel.onChangeOrientation(it)
+                    onChange(it.stringRes)
+                    onDismissRequest()
+                },
+            )
+        }
     }
 }
 

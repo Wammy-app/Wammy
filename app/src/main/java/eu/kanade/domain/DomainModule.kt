@@ -60,6 +60,7 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.RenameCategory
 import tachiyomi.domain.category.interactor.ReorderCategory
 import tachiyomi.domain.category.interactor.ResetCategoryFlags
+import tachiyomi.domain.category.interactor.SetCategoryParent
 import tachiyomi.domain.category.interactor.SetDisplayMode
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.interactor.SetSortModeForCategory
@@ -130,6 +131,7 @@ class DomainModule : InjektModule {
         addFactory { RenameCategory(get()) }
         addFactory { ReorderCategory(get()) }
         addFactory { DeleteCategory(get(), get(), get()) }
+        addFactory { SetCategoryParent(get()) }
 
         addSingletonFactory<MangaRepository> { MangaRepositoryImpl(get()) }
         addFactory { GetDuplicateLibraryManga(get(), get()) }

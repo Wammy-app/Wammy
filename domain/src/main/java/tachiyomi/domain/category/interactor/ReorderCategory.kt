@@ -14,6 +14,9 @@ class ReorderCategory(
     private val mutex = Mutex()
 
     suspend fun await(category: Category, newIndex: Int) = withNonCancellableContext {
+        if (category.isSystemCategory) {
+            return@withNonCancellableContext Result.Unchanged
+        }
         mutex.withLock {
             val categories = categoryRepository.getAll()
                 .filterNot(Category::isSystemCategory)
@@ -25,7 +28,19 @@ class ReorderCategory(
             }
 
             try {
-                categories.add(newIndex, categories.removeAt(currentIndex))
+                if (category.parentId == null) {
+                    // Moving a top-level category: collect parent and all its children to move as a block
+                    val children = categories.filter { it.parentId == category.id }
+                    val block = listOf(category) + children
+                    categories.removeAll(block)
+                    val targetIndex = newIndex.coerceIn(0, categories.size)
+                    categories.addAll(targetIndex, block)
+                } else {
+                    // Moving a child category
+                    val item = categories.removeAt(currentIndex)
+                    val targetIndex = newIndex.coerceIn(0, categories.size)
+                    categories.add(targetIndex, item)
+                }
 
                 categoryRepository.updateAllOrders(orderedIds = categories.map { it.id })
                 Result.Success

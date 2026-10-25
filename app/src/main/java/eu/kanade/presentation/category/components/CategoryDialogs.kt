@@ -12,6 +12,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -40,14 +45,19 @@ import tachiyomi.i18n.novel.TDMR
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryCreateDialog(
     onDismissRequest: () -> Unit,
-    onCreate: (String, Int) -> Unit,
+    onCreate: (String, Int, Long?) -> Unit,
     categories: List<String>,
+    parentCategories: List<Category> = emptyList(),
+    defaultParentId: Long? = null,
 ) {
     var name by remember { mutableStateOf("") }
     var contentType by remember { mutableIntStateOf(Category.CONTENT_TYPE_ALL) }
+    var selectedParentId by remember { mutableStateOf<Long?>(defaultParentId) }
+    var parentDropdownExpanded by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val nameAlreadyExists = remember(name) { categories.contains(name) }
@@ -58,7 +68,7 @@ fun CategoryCreateDialog(
             TextButton(
                 enabled = name.isNotEmpty() && !nameAlreadyExists,
                 onClick = {
-                    onCreate(name, contentType)
+                    onCreate(name, contentType, selectedParentId)
                     onDismissRequest()
                 },
             ) {
@@ -74,7 +84,9 @@ fun CategoryCreateDialog(
             Text(text = stringResource(MR.strings.action_add_category))
         },
         text = {
-            Column {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            ) {
                 OutlinedTextField(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -97,6 +109,49 @@ fun CategoryCreateDialog(
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
+
+                if (parentCategories.isNotEmpty()) {
+                    val selectedParentName = parentCategories.find { it.id == selectedParentId }?.visualName ?: "None (Top Level)"
+
+                    ExposedDropdownMenuBox(
+                        expanded = parentDropdownExpanded,
+                        onExpandedChange = { parentDropdownExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = selectedParentName,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Parent Category") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = parentDropdownExpanded) },
+                            modifier = Modifier
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                                .fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = parentDropdownExpanded,
+                            onDismissRequest = { parentDropdownExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("None (Top Level)") },
+                                onClick = {
+                                    selectedParentId = null
+                                    parentDropdownExpanded = false
+                                },
+                            )
+                            parentCategories.forEach { parent ->
+                                DropdownMenuItem(
+                                    text = { Text(parent.visualName) },
+                                    onClick = {
+                                        selectedParentId = parent.id
+                                        parentDropdownExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 Text(
                     text = stringResource(TDMR.strings.category_content_type),
@@ -157,18 +212,23 @@ private fun ContentTypeOption(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryRenameDialog(
     onDismissRequest: () -> Unit,
-    onRename: (String) -> Unit,
+    onRename: (String, Long?) -> Unit,
     categories: List<String>,
     category: String,
+    currentParentId: Long? = null,
+    parentCategories: List<Category> = emptyList(),
 ) {
     var name by remember { mutableStateOf(category) }
+    var selectedParentId by remember { mutableStateOf(currentParentId) }
+    var parentDropdownExpanded by remember { mutableStateOf(false) }
     var valueHasChanged by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
-    val nameAlreadyExists = remember(name) { categories.contains(name) }
+    val nameAlreadyExists = remember(name) { name != category && categories.contains(name) }
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
@@ -176,7 +236,7 @@ fun CategoryRenameDialog(
             TextButton(
                 enabled = valueHasChanged && !nameAlreadyExists,
                 onClick = {
-                    onRename(name)
+                    onRename(name, selectedParentId)
                     onDismissRequest()
                 },
             ) {
@@ -192,25 +252,73 @@ fun CategoryRenameDialog(
             Text(text = stringResource(MR.strings.action_rename_category))
         },
         text = {
-            OutlinedTextField(
-                modifier = Modifier.focusRequester(focusRequester),
-                value = name,
-                onValueChange = {
-                    valueHasChanged = name != it
-                    name = it
-                },
-                label = { Text(text = stringResource(MR.strings.name)) },
-                supportingText = {
-                    val msgRes = if (valueHasChanged && nameAlreadyExists) {
-                        MR.strings.error_category_exists
-                    } else {
-                        MR.strings.information_required_plain
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            ) {
+                OutlinedTextField(
+                    modifier = Modifier.focusRequester(focusRequester),
+                    value = name,
+                    onValueChange = {
+                        valueHasChanged = name != it || selectedParentId != currentParentId
+                        name = it
+                    },
+                    label = { Text(text = stringResource(MR.strings.name)) },
+                    supportingText = {
+                        val msgRes = if (valueHasChanged && nameAlreadyExists) {
+                            MR.strings.error_category_exists
+                        } else {
+                            MR.strings.information_required_plain
+                        }
+                        Text(text = stringResource(msgRes))
+                    },
+                    isError = valueHasChanged && nameAlreadyExists,
+                    singleLine = true,
+                )
+
+                if (parentCategories.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val selectedParentName = parentCategories.find { it.id == selectedParentId }?.visualName ?: "None (Top Level)"
+
+                    ExposedDropdownMenuBox(
+                        expanded = parentDropdownExpanded,
+                        onExpandedChange = { parentDropdownExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = selectedParentName,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Parent Category") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = parentDropdownExpanded) },
+                            modifier = Modifier
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                                .fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = parentDropdownExpanded,
+                            onDismissRequest = { parentDropdownExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("None (Top Level)") },
+                                onClick = {
+                                    selectedParentId = null
+                                    valueHasChanged = name != category || selectedParentId != currentParentId
+                                    parentDropdownExpanded = false
+                                },
+                            )
+                            parentCategories.forEach { parent ->
+                                DropdownMenuItem(
+                                    text = { Text(parent.visualName) },
+                                    onClick = {
+                                        selectedParentId = parent.id
+                                        valueHasChanged = name != category || selectedParentId != currentParentId
+                                        parentDropdownExpanded = false
+                                    },
+                                )
+                            }
+                        }
                     }
-                    Text(text = stringResource(msgRes))
-                },
-                isError = valueHasChanged && nameAlreadyExists,
-                singleLine = true,
-            )
+                }
+            }
         },
     )
 
@@ -224,6 +332,7 @@ fun CategoryDeleteDialog(
     onDismissRequest: () -> Unit,
     onDelete: () -> Unit,
     category: String,
+    hasSubcategories: Boolean = false,
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
@@ -244,7 +353,13 @@ fun CategoryDeleteDialog(
             Text(text = stringResource(MR.strings.delete_category))
         },
         text = {
-            Text(text = stringResource(MR.strings.delete_category_confirmation, category))
+            val baseMessage = stringResource(MR.strings.delete_category_confirmation, category)
+            val fullMessage = if (hasSubcategories) {
+                "$baseMessage\n\nAll sub-categories belonging to this category will also be deleted."
+            } else {
+                baseMessage
+            }
+            Text(text = fullMessage)
         },
     )
 }
@@ -340,10 +455,12 @@ fun ChangeCategoryDialog(
                             selection = mutableList.toList()
                         }
                     }
+                    val isChild = checkbox.value.parentId != null
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onChange(checkbox) },
+                            .clickable { onChange(checkbox) }
+                            .padding(start = if (isChild) 24.dp else 0.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         when (checkbox) {

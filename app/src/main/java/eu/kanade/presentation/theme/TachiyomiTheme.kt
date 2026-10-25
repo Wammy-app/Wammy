@@ -4,31 +4,31 @@ import android.content.Context
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.AppTheme
-import tachiyomi.presentation.core.util.collectAsState
-import androidx.compose.runtime.getValue
+import eu.kanade.presentation.theme.colorscheme.AmberColorScheme
+import eu.kanade.presentation.theme.colorscheme.AsukaColorScheme
 import eu.kanade.presentation.theme.colorscheme.BaseColorScheme
-import eu.kanade.presentation.theme.colorscheme.CatppuccinColorScheme
-import eu.kanade.presentation.theme.colorscheme.GreenAppleColorScheme
-import eu.kanade.presentation.theme.colorscheme.LavenderColorScheme
-import eu.kanade.presentation.theme.colorscheme.MidnightDuskColorScheme
+import eu.kanade.presentation.theme.colorscheme.ItsukaColorScheme
+import eu.kanade.presentation.theme.colorscheme.KanadeColorScheme
+import eu.kanade.presentation.theme.colorscheme.MamimiColorScheme
+import eu.kanade.presentation.theme.colorscheme.MikuColorScheme
+import eu.kanade.presentation.theme.colorscheme.MionColorScheme
 import eu.kanade.presentation.theme.colorscheme.MonetColorScheme
-import eu.kanade.presentation.theme.colorscheme.MonochromeColorScheme
-import eu.kanade.presentation.theme.colorscheme.NordColorScheme
-import eu.kanade.presentation.theme.colorscheme.StrawberryColorScheme
-import eu.kanade.presentation.theme.colorscheme.TachiyomiColorScheme
-import eu.kanade.presentation.theme.colorscheme.TakoColorScheme
-import eu.kanade.presentation.theme.colorscheme.TealTurqoiseColorScheme
-import eu.kanade.presentation.theme.colorscheme.TidalWaveColorScheme
-import eu.kanade.presentation.theme.colorscheme.TokyoNightColorScheme
-import eu.kanade.presentation.theme.colorscheme.YinYangColorScheme
-import eu.kanade.presentation.theme.colorscheme.YotsubaColorScheme
 import eu.kanade.presentation.theme.colorscheme.MonetCompatColorScheme
+import eu.kanade.presentation.theme.colorscheme.RemonColorScheme
+import eu.kanade.presentation.theme.colorscheme.RikkaColorScheme
+import eu.kanade.presentation.theme.colorscheme.SakuraColorScheme
+import eu.kanade.presentation.theme.colorscheme.ShanaColorScheme
+import eu.kanade.presentation.theme.colorscheme.SkyColorScheme
+import eu.kanade.presentation.theme.colorscheme.TachiyomiColorScheme
+import eu.kanade.presentation.theme.colorscheme.TotoroColorScheme
+import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -99,33 +99,31 @@ private fun getThemeColorScheme(
     isDark: Boolean,
     isAmoled: Boolean,
 ): ColorScheme {
-    val colorScheme = if (appTheme == AppTheme.MONET) {
+    val isExpressive = appTheme == AppTheme.EXPRESSIVE || appTheme == AppTheme.MONET
+    val colorScheme = if (isExpressive) {
         MonetColorScheme(context)
     } else {
-        colorSchemes.getOrDefault(appTheme, TachiyomiColorScheme)
+        colorSchemes.getOrDefault(appTheme, TotoroColorScheme)
     }
     return colorScheme.getColorScheme(
         isDark = isDark,
         isAmoled = isAmoled,
-        overrideDarkSurfaceContainers = appTheme != AppTheme.MONET,
+        overrideDarkSurfaceContainers = !isExpressive,
     )
 }
 
 private val colorSchemes: Map<AppTheme, BaseColorScheme> = mapOf(
-    AppTheme.DEFAULT to TachiyomiColorScheme,
-    AppTheme.CATPPUCCIN to CatppuccinColorScheme,
-    AppTheme.TOKYONIGHT to TokyoNightColorScheme,
-    AppTheme.GREEN_APPLE to GreenAppleColorScheme,
-    AppTheme.LAVENDER to LavenderColorScheme,
-    AppTheme.MIDNIGHT_DUSK to MidnightDuskColorScheme,
-    AppTheme.MONOCHROME to MonochromeColorScheme,
-    AppTheme.NORD to NordColorScheme,
-    AppTheme.STRAWBERRY_DAIQUIRI to StrawberryColorScheme,
-    AppTheme.TAKO to TakoColorScheme,
-    AppTheme.TEALTURQUOISE to TealTurqoiseColorScheme,
-    AppTheme.TIDAL_WAVE to TidalWaveColorScheme,
-    AppTheme.YINYANG to YinYangColorScheme,
-    AppTheme.YOTSUBA to YotsubaColorScheme,
+    AppTheme.DEFAULT to TotoroColorScheme,
+    AppTheme.MIKU to MikuColorScheme,
+    AppTheme.ASUKA to AsukaColorScheme,
+    AppTheme.MION to MionColorScheme,
+    AppTheme.RIKKA to RikkaColorScheme,
+    AppTheme.SAKURA to SakuraColorScheme,
+    AppTheme.MAMIMI to MamimiColorScheme,
+    AppTheme.KANADE to KanadeColorScheme,
+    AppTheme.ITSUKA to ItsukaColorScheme,
+    AppTheme.SHANA to ShanaColorScheme,
+    AppTheme.LIME to RemonColorScheme,
+    AppTheme.AMBER to AmberColorScheme,
+    AppTheme.SKY to SkyColorScheme,
 )
-
-

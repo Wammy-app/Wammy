@@ -13,22 +13,31 @@ class BackupCategory(
     @ProtoNumber(100) var flags: Long = 0,
     // Content type (0=all, 1=manga, 2=novel). Fork-reserved 8000+ ProtoNumber block.
     @ProtoNumber(8001) var contentType: Int = Category.CONTENT_TYPE_ALL,
+    @ProtoNumber(8002) var parentId: Long? = null,
+    @ProtoNumber(8003) var parentName: String? = null,
 ) {
-    fun toCategory(id: Long) = Category(
+    fun toCategory(id: Long, parentId: Long? = this@BackupCategory.parentId) = Category(
         id = id,
         name = this@BackupCategory.name,
         flags = this@BackupCategory.flags,
         order = this@BackupCategory.order,
         contentType = this@BackupCategory.contentType,
+        parentId = parentId,
     )
 }
 
-val backupCategoryMapper = { category: Category ->
+val backupCategoryMapper: (Category, List<Category>) -> BackupCategory = { category, allCategories ->
     BackupCategory(
         id = category.id,
         name = category.name,
         order = category.order,
         flags = category.flags,
         contentType = category.contentType,
+        parentId = category.parentId,
+        parentName = when (category.parentId) {
+            null -> null
+            Category.UNCATEGORIZED_ID -> ""
+            else -> allCategories.find { it.id == category.parentId }?.name
+        },
     )
 }

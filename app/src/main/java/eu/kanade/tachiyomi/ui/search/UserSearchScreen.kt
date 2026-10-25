@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -135,6 +136,9 @@ class UserSearchScreen : Screen {
         var recentManga by remember { mutableStateOf(loadRecentQueries(prefs, "recent_manga_list")) }
         var recentNovel by remember { mutableStateOf(loadRecentQueries(prefs, "recent_novel_list")) }
 
+        val mangaListState = rememberLazyListState()
+        val novelListState = rememberLazyListState()
+
         val mangaViewModel = viewModel<GlobalSearchViewModel>(
             factory = GlobalSearchViewModel.Factory,
             extras = remember {
@@ -183,10 +187,12 @@ class UserSearchScreen : Screen {
                     recentManga = saveRecentQuery(prefs, "recent_manga_list", query)
                     mangaViewModel.updateSearchQuery(query)
                     mangaViewModel.setSourceFilter(eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter.All)
+                    scope.launch { mangaListState.scrollToItem(0, 0) }
                 } else if (selectedTab == 2) {
                     recentNovel = saveRecentQuery(prefs, "recent_novel_list", query)
                     novelViewModel.updateSearchQuery(query)
                     novelViewModel.setSourceFilter(eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter.All)
+                    scope.launch { novelListState.scrollToItem(0, 0) }
                 }
             }
         }
@@ -350,7 +356,8 @@ class UserSearchScreen : Screen {
                                     getManga = { mangaViewModel.getManga(it) },
                                     onClickSource = { navigator.push(BrowseSourceScreen(it.id, searchQuery)) },
                                     onClickItem = { navigator.push(MangaScreen(it.id, true)) },
-                                    onLongClickItem = { navigator.push(MangaScreen(it.id, true)) }
+                                    onLongClickItem = { navigator.push(MangaScreen(it.id, true)) },
+                                    lazyListState = mangaListState,
                                 )
                             }
                         } else {
@@ -403,7 +410,8 @@ class UserSearchScreen : Screen {
                                     getManga = { novelViewModel.getManga(it) },
                                     onClickSource = { navigator.push(BrowseSourceScreen(it.id, searchQuery)) },
                                     onClickItem = { navigator.push(MangaScreen(it.id, true)) },
-                                    onLongClickItem = { navigator.push(MangaScreen(it.id, true)) }
+                                    onLongClickItem = { navigator.push(MangaScreen(it.id, true)) },
+                                    lazyListState = novelListState,
                                 )
                             }
                         } else {

@@ -2,8 +2,13 @@ package eu.kanade.presentation.browse
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import eu.kanade.presentation.browse.components.GlobalSearchCardRow
 import eu.kanade.presentation.browse.components.GlobalSearchErrorResultItem
@@ -71,18 +76,30 @@ internal fun GlobalSearchContent(
     onClickItem: (Manga) -> Unit,
     onLongClickItem: (Manga) -> Unit,
     fromSourceId: Long? = null,
+    lazyListState: LazyListState = rememberLazyListState(),
 ) {
+    val isScrolledToTop = remember {
+        derivedStateOf {
+            lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0
+        }
+    }
+    LaunchedEffect(items.keys.firstOrNull()) {
+        if (!lazyListState.isScrollInProgress && isScrolledToTop.value) {
+            lazyListState.scrollToItem(0, 0)
+        }
+    }
+
     LazyColumn(
+        state = lazyListState,
         contentPadding = contentPadding,
     ) {
         items.forEach { (source, result) ->
-            item(key = source.id) {
+            item {
                 val name = source.nameWithTypeTag()
                 GlobalSearchResultItem(
                     title = fromSourceId?.let { "▶ $name".takeIf { source.id == fromSourceId } } ?: name,
                     subtitle = LocaleHelper.getLocalizedDisplayName(source.lang),
                     onClick = { onClickSource(source) },
-                    modifier = Modifier.animateItem(),
                 ) {
                     when (result) {
                         SearchItemResult.Loading -> {

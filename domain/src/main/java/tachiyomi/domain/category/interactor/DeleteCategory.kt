@@ -3,6 +3,8 @@ package tachiyomi.domain.category.interactor
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.model.toHierarchicalCategoryList
 import tachiyomi.domain.category.repository.CategoryRepository
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -14,17 +16,36 @@ class DeleteCategory(
 ) {
 
     suspend fun await(categoryId: Long) = withNonCancellableContext {
+        if (categoryId == Category.UNCATEGORIZED_ID) {
+            return@withNonCancellableContext Result.Success
+        }
+
+        // Collect subcategories to cascade deletion and preferences cleanup
+        val childCategories = try {
+            categoryRepository.getSubcategories(categoryId)
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val allAffectedCategoryIds = listOf(categoryId) + childCategories.map { it.id }
+
         try {
+            // Delete child categories explicitly first
+            childCategories.forEach { child ->
+                categoryRepository.delete(child.id)
+            }
             categoryRepository.delete(categoryId)
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)
             return@withNonCancellableContext Result.InternalError(e)
         }
 
-        val orderedIds = categoryRepository.getAll().map { it.id }
+        val orderedIds = categoryRepository.getAll()
+            .toHierarchicalCategoryList()
+            .filterNot(Category::isSystemCategory)
+            .map { it.id }
 
         val defaultCategory = libraryPreferences.defaultCategory.get()
-        if (defaultCategory == categoryId.toInt()) {
+        if (defaultCategory.toLong() in allAffectedCategoryIds) {
             libraryPreferences.defaultCategory.delete()
         }
 
@@ -35,11 +56,13 @@ class DeleteCategory(
             downloadPreferences.downloadNewChapterCategories,
             downloadPreferences.downloadNewChapterCategoriesExclude,
         )
-        val categoryIdString = categoryId.toString()
+        val categoryIdStrings = allAffectedCategoryIds.map { it.toString() }.toSet()
         categoryPreferences.forEach { preference ->
             val ids = preference.get()
-            if (categoryIdString !in ids) return@forEach
-            preference.set(ids.minus(categoryIdString))
+            val remaining = ids.minus(categoryIdStrings)
+            if (remaining.size != ids.size) {
+                preference.set(remaining)
+            }
         }
 
         try {

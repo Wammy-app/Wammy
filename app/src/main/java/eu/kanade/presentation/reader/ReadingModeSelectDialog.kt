@@ -1,9 +1,19 @@
 package eu.kanade.presentation.reader
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -14,9 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.compose.ui.unit.dp
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.manga.model.readingMode
-import eu.kanade.presentation.components.AdaptiveSheet
 import eu.kanade.presentation.reader.components.ModeSelectionDialog
 import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsViewModel
@@ -29,6 +39,7 @@ import tachiyomi.presentation.core.i18n.stringResource
 // NOVEL is auto-assigned for novel sources, not a manual manga reading mode.
 private val ReadingModesWithoutDefault = ReadingMode.entries - ReadingMode.DEFAULT - ReadingMode.NOVEL
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReadingModeSelectDialog(
     onDismissRequest: () -> Unit,
@@ -37,16 +48,29 @@ fun ReadingModeSelectDialog(
 ) {
     val manga by viewModel.mangaFlow.collectAsState()
     val readingMode = remember(manga) { ReadingMode.fromPreference(manga?.readingMode?.toInt()) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    AdaptiveSheet(onDismissRequest = onDismissRequest) {
-        DialogContent(
-            readingMode = readingMode,
-            onChangeReadingMode = {
-                viewModel.onChangeReadingMode(it)
-                onChange(it.stringRes)
-                onDismissRequest()
-            },
-        )
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(bottom = 16.dp),
+        ) {
+            DialogContent(
+                readingMode = readingMode,
+                onChangeReadingMode = {
+                    viewModel.onChangeReadingMode(it)
+                    onChange(it.stringRes)
+                    onDismissRequest()
+                },
+            )
+        }
     }
 }
 

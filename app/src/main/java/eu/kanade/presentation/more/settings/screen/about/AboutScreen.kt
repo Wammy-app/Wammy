@@ -355,10 +355,10 @@ object AboutScreen : Screen() {
                     item { pos ->
                         SettingItem(
                             title = "Source code",
-                            subtitle = "https://github.com/kainotch",
+                            subtitle = "https://github.com/Wammy-app/Wammy",
                             icon = Icons.Outlined.OpenInNew,
                             shape = pos.shape,
-                            onClick = { uriHandler.openUri("https://github.com/kainotch") },
+                            onClick = { uriHandler.openUri("https://github.com/Wammy-app/Wammy") },
                         )
                     }
                     item { pos ->

@@ -64,6 +64,7 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.category.interactor.CreateCategoryWithName
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
@@ -118,6 +119,7 @@ class LibraryViewModel(
     private val trackerManager: TrackerManager = Injekt.get(),
     private val translatedChapterRepository: TranslatedChapterRepository = Injekt.get(),
     private val mangaRepository: MangaRepository = Injekt.get(),
+    private val createCategoryWithName: CreateCategoryWithName = Injekt.get(),
     private val type: LibraryType = LibraryType.All,
 ) : StateViewModel<LibraryViewModel.State>(State()) {
 
@@ -281,7 +283,9 @@ class LibraryViewModel(
             ) { categories, favorites, tracksAndFilters, itemPreferences, isLoading ->
                 val (tracksMap, trackingFilters) = tracksAndFilters
 
-                val showSystemCategory = favorites.isEmpty() || favorites.any { it.libraryManga.categories.contains(0L) }
+                val showSystemCategory = favorites.isEmpty() ||
+                    favorites.any { it.libraryManga.categories.contains(0L) } ||
+                    categories.any { it.parentId == 0L }
 
                 val filteredFavorites = favorites
                     .applyFilters(tracksMap, trackingFilters, itemPreferences)
@@ -578,13 +582,26 @@ class LibraryViewModel(
 
         val visibleCategoryById = HashMap<Long, Category>(visibleCategories.size * 2)
         val groupedItems = LinkedHashMap<Category, MutableList<Long>>(visibleCategories.size)
+        val childToParentId = HashMap<Long, Long>()
         for (category in visibleCategories) {
             visibleCategoryById[category.id] = category
             groupedItems[category] = mutableListOf()
+            val parentId = category.parentId
+            if (parentId != null) {
+                childToParentId[category.id] = parentId
+            }
         }
 
         for (item in this) {
+            val processedCategories = mutableSetOf<Long>()
             for (categoryId in item.libraryManga.categories) {
+                processedCategories.add(categoryId)
+                val parentId = childToParentId[categoryId]
+                if (parentId != null) {
+                    processedCategories.add(parentId)
+                }
+            }
+            for (categoryId in processedCategories) {
                 val category = visibleCategoryById[categoryId] ?: continue
                 groupedItems[category]?.add(item.id)
             }
@@ -1493,6 +1510,16 @@ class LibraryViewModel(
             .coercedActiveCategoryIndex
 
         libraryPreferences.lastUsedCategory.set(newIndex)
+    }
+
+    fun createCategory(name: String, contentType: Int = Category.CONTENT_TYPE_ALL, parentId: Long? = null) {
+        viewModelScope.launchIO {
+            createCategoryWithName.await(name, contentType, parentId)
+            try {
+                val context = Injekt.get<android.app.Application>()
+                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+            } catch (_: Exception) {}
+        }
     }
 
     fun openChangeCategoryDialog() {

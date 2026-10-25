@@ -21,6 +21,7 @@ class CategoriesRestorer(
             val dbCategoriesByName = dbCategories.groupBy { it.name }
             var nextOrder = dbCategories.maxOfOrNull { it.order }?.plus(1) ?: 0
 
+            // Pass 1: Insert or match categories (without parent initially to avoid foreign key ordering constraints)
             val categories = backupCategories
                 .sortedBy { it.order }
                 .map {
@@ -31,11 +32,33 @@ class CategoriesRestorer(
                     }
                     if (dbCategory != null) return@map dbCategory
                     val order = nextOrder++
-                    database.categoriesQueries.insert(it.name, order, it.flags, it.contentType.toLong())
+                    database.categoriesQueries.insert(
+                        name = it.name,
+                        order = order,
+                        flags = it.flags,
+                        contentType = it.contentType.toLong(),
+                        parentId = null,
+                    )
                     database.categoriesQueries.selectLastInsertedRowId()
                         .awaitAsOne()
                         .let { id -> it.toCategory(id).copy(order = order) }
                 }
+
+            // Pass 2: Re-link parent-child relationships using parentName or parentId
+            val allCurrentCategories = getCategories.await()
+            backupCategories.forEach { backupCat ->
+                val child = allCurrentCategories.firstOrNull { it.name == backupCat.name && it.contentType == backupCat.contentType }
+                if (child != null) {
+                    if (backupCat.parentId == Category.UNCATEGORIZED_ID || backupCat.parentName == "") {
+                        database.categoriesQueries.updateParent(parentId = Category.UNCATEGORIZED_ID, categoryId = child.id)
+                    } else if (!backupCat.parentName.isNullOrBlank()) {
+                        val parent = allCurrentCategories.firstOrNull { it.name == backupCat.parentName && !it.isSystemCategory }
+                        if (parent != null && parent.id != child.id) {
+                            database.categoriesQueries.updateParent(parentId = parent.id, categoryId = child.id)
+                        }
+                    }
+                }
+            }
 
             libraryPreferences.categorizedDisplaySettings.set(
                 (dbCategories + categories)

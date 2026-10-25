@@ -37,11 +37,11 @@ class AppUpdateChecker {
 
 val GITHUB_REPO: String by lazy {
     if (isNightlyBuildType) {
-        "kainotch/Wammy-nightly"
+        "Wammy-app/Wammy-nightly"
     } else if (isPreviewBuildType) {
-        "kainotch/Wammy-preview"
+        "Wammy-app/Wammy-preview"
     } else {
-        "kainotch/Wammy"
+        "Wammy-app/Wammy"
     }
 }
 
