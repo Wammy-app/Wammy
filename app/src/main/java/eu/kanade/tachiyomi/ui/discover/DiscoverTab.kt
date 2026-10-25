@@ -85,7 +85,6 @@ import eu.kanade.tachiyomi.ui.discover.components.HeroFeaturedCardSkeleton
 import eu.kanade.tachiyomi.ui.discover.components.HomeTopBar
 import eu.kanade.tachiyomi.ui.discover.components.rememberShimmerBrush
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
-import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.launch
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.Manga
@@ -373,11 +372,6 @@ object DiscoverTab : Tab {
                                             scope.launch {
                                                 val localManga = viewModel.getNetworkToLocalManga(manga)
                                                 navigator.push(MangaScreen(localManga.id))
-                                            }
-                                        },
-                                        onSubscribe = { manga ->
-                                            viewModel.toggleFavorite(manga) { isFav ->
-                                                context.toast(if (isFav) "Added to library" else "Removed from library")
                                             }
                                         },
                                     )

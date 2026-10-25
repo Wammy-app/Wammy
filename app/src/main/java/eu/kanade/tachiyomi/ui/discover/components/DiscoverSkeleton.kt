@@ -143,29 +143,16 @@ fun HeroFeaturedCardSkeleton(
                 }
             }
 
-            // Two buttons placeholder
+            // Read button placeholder
             Spacer(modifier = Modifier.height(16.dp))
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(shimmerBrush),
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(shimmerBrush),
-                )
-            }
+                    .padding(horizontal = 16.dp)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(shimmerBrush),
+            )
         }
     }
 }
