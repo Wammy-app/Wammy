@@ -133,7 +133,7 @@ fun HeroFeaturedCard(
                     .padding(top = 18.dp),
             ) {
                 val screenWidth = maxWidth
-                val centerWidth = (screenWidth * 0.58f).coerceIn(190.dp, 230.dp)
+                val centerWidth = (screenWidth * 0.56f).coerceIn(185.dp, 220.dp)
                 val sidePadding = ((screenWidth - centerWidth) / 2).coerceAtLeast(32.dp)
 
                 HorizontalPager(
@@ -156,7 +156,7 @@ fun HeroFeaturedCard(
                     Box(
                         modifier = Modifier
                             .width(centerWidth)
-                            .aspectRatio(1f)
+                            .aspectRatio(3f / 4f)
                             .graphicsLayer {
                                 scaleX = scale
                                 scaleY = scale

@@ -93,7 +93,7 @@ fun HeroFeaturedCardSkeleton(
                 .padding(top = 18.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // 3 covers placeholder: center 200dp square, left/right peeking blocks
+            // 3 covers placeholder: center portrait cover, left/right peeking blocks
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
@@ -101,21 +101,21 @@ fun HeroFeaturedCardSkeleton(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(width = 46.dp, height = 160.dp)
+                        .size(width = 46.dp, height = 220.dp)
                         .clip(RoundedCornerShape(topEnd = 14.dp, bottomEnd = 14.dp))
                         .background(shimmerBrush),
                 )
                 Spacer(modifier = Modifier.width(14.dp))
                 Box(
                     modifier = Modifier
-                        .size(200.dp)
+                        .size(width = 200.dp, height = 266.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(shimmerBrush),
                 )
                 Spacer(modifier = Modifier.width(14.dp))
                 Box(
                     modifier = Modifier
-                        .size(width = 46.dp, height = 160.dp)
+                        .size(width = 46.dp, height = 220.dp)
                         .clip(RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp))
                         .background(shimmerBrush),
                 )
