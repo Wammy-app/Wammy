@@ -11,7 +11,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -97,6 +96,13 @@ fun ReaderAppBars(
                 onOpenInWebView = onOpenInWebView,
                 onOpenInBrowser = onOpenInBrowser,
                 onShare = onShare,
+                readingMode = readingMode,
+                onClickReadingMode = onClickReadingMode,
+                orientation = orientation,
+                onClickOrientation = onClickOrientation,
+                cropEnabled = cropEnabled,
+                onClickCropBorder = onClickCropBorder,
+                onClickSettings = onClickSettings,
             )
         }
 
@@ -130,6 +136,7 @@ fun ReaderAppBars(
                                     totalPages = totalPages,
                                     onPageIndexChange = onPageIndexChange,
                                     onPageIndexChangeFinished = onPageIndexChangeFinished,
+                                    onClickChapters = onClickTopAppBar,
                                 )
                             }
                         }
@@ -146,8 +153,14 @@ fun ReaderAppBars(
             enter = slideInVertically(readerBarsSlideAnimationSpec) { it } + fadeIn(readerBarsFadeAnimationSpec),
             exit = slideOutVertically(readerBarsSlideAnimationSpec) { it } + fadeOut(readerBarsFadeAnimationSpec),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
-                if (chapterNavigatorType.isHorizontal()) {
+            if (chapterNavigatorType.isHorizontal()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
                     ChapterNavigator(
                         type = chapterNavigatorType,
                         onNextChapter = onNextChapter,
@@ -158,22 +171,9 @@ fun ReaderAppBars(
                         totalPages = totalPages,
                         onPageIndexChange = onPageIndexChange,
                         onPageIndexChangeFinished = onPageIndexChangeFinished,
+                        onClickChapters = onClickTopAppBar,
                     )
                 }
-                ReaderBottomBar(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(backgroundColor)
-                        .padding(horizontal = MaterialTheme.padding.small)
-                        .windowInsetsPadding(WindowInsets.navigationBars),
-                    readingMode = readingMode,
-                    onClickReadingMode = onClickReadingMode,
-                    orientation = orientation,
-                    onClickOrientation = onClickOrientation,
-                    cropEnabled = cropEnabled,
-                    onClickCropBorder = onClickCropBorder,
-                    onClickSettings = onClickSettings,
-                )
             }
         }
     }
