@@ -16,6 +16,7 @@ import eu.kanade.presentation.category.components.CategoryRenameDialog
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.collectLatest
+import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.category.model.topLevel
 import tachiyomi.presentation.core.screens.LoadingScreen
 
@@ -49,7 +50,14 @@ class CategoryScreen : Screen() {
         when (val dialog = successState.dialog) {
             null -> {}
             is CategoryDialog.Create -> {
-                val parentCandidates = successState.categories.topLevel()
+                val defaultCat = Category(
+                    id = Category.UNCATEGORIZED_ID,
+                    name = "",
+                    order = -1,
+                    flags = 0,
+                )
+                val topLevelCats = successState.categories.topLevel().filterNot { it.isSystemCategory }
+                val parentCandidates = listOf(defaultCat) + topLevelCats
                 CategoryCreateDialog(
                     onDismissRequest = viewModel::dismissDialog,
                     onCreate = { name, contentType, parentId -> viewModel.createCategory(name, contentType, parentId) },
@@ -59,7 +67,14 @@ class CategoryScreen : Screen() {
                 )
             }
             is CategoryDialog.Rename -> {
-                val parentCandidates = successState.categories.filter { it.isTopLevel && it.id != dialog.category.id }
+                val defaultCat = Category(
+                    id = Category.UNCATEGORIZED_ID,
+                    name = "",
+                    order = -1,
+                    flags = 0,
+                )
+                val topLevelCats = successState.categories.filter { it.isTopLevel && it.id != dialog.category.id && !it.isSystemCategory }
+                val parentCandidates = listOf(defaultCat) + topLevelCats
                 CategoryRenameDialog(
                     onDismissRequest = viewModel::dismissDialog,
                     onRename = { newName, newParentId -> viewModel.renameCategory(dialog.category, newName, newParentId) },

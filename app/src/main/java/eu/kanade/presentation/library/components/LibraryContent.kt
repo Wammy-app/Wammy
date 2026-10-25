@@ -153,20 +153,18 @@ fun LibraryContent(
                 getLoadMoreKey = getLoadMoreKey,
                 isCategoryLoading = isCategoryLoading,
                 header = { category ->
-                    if (showPageTabs && (topLevelCategories.size > 1 || !topLevelCategories.first().isSystemCategory)) {
-                        val pageSubcategories = remember(categories, category) {
-                            categories.filter { it.parentId == category.id }
-                        }
-                        SubCategoryChipRow(
-                            subcategories = pageSubcategories,
-                            selectedSubCategoryId = if (category.id == activeCategory?.id) selectedSubCategoryId else null,
-                            getItemCountForCategory = getItemCountForCategory,
-                            parentTotalCount = getItemCountForCategory(category),
-                            onSelectSubCategory = { selectedSubCategoryId = it },
-                            onCreateSubCategory = { onCreateSubCategory(category) },
-                            modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
-                        )
+                    val pageSubcategories = remember(categories, category) {
+                        categories.filter { it.parentId == category.id }
                     }
+                    SubCategoryChipRow(
+                        subcategories = pageSubcategories,
+                        selectedSubCategoryId = if (category.id == activeCategory?.id) selectedSubCategoryId else null,
+                        getItemCountForCategory = getItemCountForCategory,
+                        parentTotalCount = getItemCountForCategory(category),
+                        onSelectSubCategory = { selectedSubCategoryId = it },
+                        onCreateSubCategory = { onCreateSubCategory(category) },
+                        modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
+                    )
                 },
             )
         }
