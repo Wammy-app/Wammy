@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">Wammy</string>
 
@@ -245,6 +245,20 @@
     <string name="theme_yinyang">Yin &amp; Yang</string>
     <string name="theme_yotsuba">Yotsuba</string>
     <string name="theme_tidalwave">Tidal Wave</string>
+    <string name="theme_expressive">Expressive</string>
+    <string name="theme_totoro">Totoro</string>
+    <string name="theme_asuka">Asuka</string>
+    <string name="theme_itsuka">Itsuka</string>
+    <string name="theme_kanade">Kanade</string>
+    <string name="theme_mamimi">Mamimi</string>
+    <string name="theme_miku">Miku</string>
+    <string name="theme_mion">Mion</string>
+    <string name="theme_rikka">Rikka</string>
+    <string name="theme_sakura">Sakura</string>
+    <string name="theme_shana">Shana</string>
+    <string name="theme_lime">Remon</string>
+    <string name="theme_amber">Amber</string>
+    <string name="theme_sky">Sky</string>
     <string name="pref_dark_theme_pure_black">Pure black dark mode</string>
     <string name="pref_relative_format">Relative timestamps</string>
     <!-- "Today" instead of "2023-12-31" -->

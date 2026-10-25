@@ -1,4 +1,4 @@
-﻿package eu.kanade.domain.ui
+package eu.kanade.domain.ui
 
 import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.TabletUiMode
@@ -21,7 +21,7 @@ class UiPreferences(
     val appTheme: Preference<AppTheme> = preferenceStore.getEnum(
         "pref_app_theme",
         if (DeviceUtil.isDynamicColorAvailable) {
-            AppTheme.MONET
+            AppTheme.EXPRESSIVE
         } else {
             AppTheme.DEFAULT
         },
