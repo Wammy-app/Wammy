@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.ui.discover.components
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -38,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.coerceIn
@@ -78,7 +78,7 @@ fun HeroFeaturedCard(
     }
 
     val scope = rememberCoroutineScope()
-    val isDark = isSystemInDarkTheme()
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     // Auto-scroll logic (rotates forward every 5 seconds)
     LaunchedEffect(pagerState, items.size) {
@@ -112,7 +112,7 @@ fun HeroFeaturedCard(
     }
     val currentManga = items.getOrNull(currentActualIndex)
 
-    val containerBg = if (isDark) Color(0xFF13131C) else MaterialTheme.colorScheme.surfaceContainerLow
+    val containerBg = if (isDark) Color(0xFF13131C) else MaterialTheme.colorScheme.surfaceContainer
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -208,8 +208,11 @@ fun HeroFeaturedCard(
                                 )
                                 .clip(RoundedCornerShape(2.dp))
                                 .background(
-                                    if (isSelected) Color.White.copy(alpha = 0.95f)
-                                    else Color.White.copy(alpha = 0.28f),
+                                    if (isSelected) {
+                                        if (isDark) Color.White.copy(alpha = 0.95f) else MaterialTheme.colorScheme.primary
+                                    } else {
+                                        if (isDark) Color.White.copy(alpha = 0.28f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                    },
                                 )
                                 .clickable {
                                     val currentVirtual = pagerState.currentPage
