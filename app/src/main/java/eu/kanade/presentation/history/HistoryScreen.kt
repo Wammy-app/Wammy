@@ -28,6 +28,7 @@ import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.presentation.components.relativeDateText
 import eu.kanade.presentation.history.components.HistoryItem
 import eu.kanade.presentation.theme.TachiyomiPreviewTheme
+import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.ui.history.HistoryFilter
 import eu.kanade.tachiyomi.ui.history.HistoryViewModel
 import kotlinx.datetime.LocalDate
@@ -84,7 +85,12 @@ fun HistoryScreen(
                 scrollBehavior = scrollBehavior,
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = if (!isTabletUi()) 84.dp else 0.dp),
+            )
+        },
     ) { contentPadding ->
         Column(
             modifier = Modifier.padding(contentPadding),

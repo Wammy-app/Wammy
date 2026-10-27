@@ -43,6 +43,7 @@ import eu.kanade.presentation.library.components.MassImportDialog
 import eu.kanade.presentation.manga.components.LibraryBottomActionMenu
 import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
 import eu.kanade.presentation.util.Tab
+import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.NovelGlobalSearchScreen
@@ -235,7 +236,12 @@ data object NovelsTab : Tab {
                     onExportEpubClicked = viewModel::openExportEpubDialog,
                 )
             },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.padding(bottom = if (!isTabletUi() && !state.selectionMode) 84.dp else 0.dp),
+                )
+            },
         ) { contentPadding ->
             when {
                 state.isLoading -> {

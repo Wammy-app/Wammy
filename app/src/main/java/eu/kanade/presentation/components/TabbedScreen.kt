@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.icerock.moko.resources.StringResource
+import eu.kanade.presentation.util.isTabletUi
 import kotlinx.coroutines.launch
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.TabText
@@ -96,7 +97,12 @@ fun TabbedScreen(
                 }
             }
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = if (!isTabletUi()) 84.dp else 0.dp),
+            )
+        },
     ) { contentPadding ->
         HorizontalPager(
             modifier = Modifier
