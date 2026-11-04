@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import eu.kanade.presentation.browse.components.SourceLogoBadge
 import eu.kanade.presentation.library.components.RatingBadge
 import eu.kanade.presentation.library.components.formatViewsCount
 import tachiyomi.domain.manga.model.Manga
@@ -52,6 +53,7 @@ fun DiscoverMangaCard(
     manga: Manga,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    showSourceLogo: Boolean = false,
 ) {
     val sourceManager = remember { Injekt.get<SourceManager>() }
     val sourceName = remember(manga.source) {
@@ -99,6 +101,15 @@ fun DiscoverMangaCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
+
+            if (showSourceLogo) {
+                SourceLogoBadge(
+                    sourceId = manga.source,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(5.dp),
+                )
+            }
 
             if (rating != null && rating > 0.0) {
                 RatingBadge(

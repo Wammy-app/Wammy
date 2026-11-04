@@ -6,6 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -42,8 +48,11 @@ import eu.kanade.tachiyomi.data.sync.FirestoreUserRepository
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchViewModel
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.NovelGlobalSearchViewModel
+import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchItemResult
+import eu.kanade.tachiyomi.ui.discover.components.DiscoverMangaCard
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.profile.PublicProfileScreen
+import tachiyomi.domain.manga.model.Manga
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -136,8 +145,8 @@ class UserSearchScreen : Screen {
         var recentManga by remember { mutableStateOf(loadRecentQueries(prefs, "recent_manga_list")) }
         var recentNovel by remember { mutableStateOf(loadRecentQueries(prefs, "recent_novel_list")) }
 
-        val mangaListState = rememberLazyListState()
-        val novelListState = rememberLazyListState()
+        val mangaGridState = rememberLazyGridState()
+        val novelGridState = rememberLazyGridState()
 
         val mangaViewModel = viewModel<GlobalSearchViewModel>(
             factory = GlobalSearchViewModel.Factory,
@@ -187,12 +196,12 @@ class UserSearchScreen : Screen {
                     recentManga = saveRecentQuery(prefs, "recent_manga_list", query)
                     mangaViewModel.updateSearchQuery(query)
                     mangaViewModel.setSourceFilter(eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter.All)
-                    scope.launch { mangaListState.scrollToItem(0, 0) }
+                    scope.launch { mangaGridState.scrollToItem(0, 0) }
                 } else if (selectedTab == 2) {
                     recentNovel = saveRecentQuery(prefs, "recent_novel_list", query)
                     novelViewModel.updateSearchQuery(query)
                     novelViewModel.setSourceFilter(eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter.All)
-                    scope.launch { novelListState.scrollToItem(0, 0) }
+                    scope.launch { novelGridState.scrollToItem(0, 0) }
                 }
             }
         }
@@ -350,14 +359,13 @@ class UserSearchScreen : Screen {
                                     )
                                 }
                             } else {
-                                GlobalSearchContent(
+                                UnifiedSearchGrid(
                                     items = mangaState.items,
-                                    contentPadding = PaddingValues(bottom = 16.dp),
-                                    getManga = { mangaViewModel.getManga(it) },
-                                    onClickSource = { navigator.push(BrowseSourceScreen(it.id, searchQuery)) },
-                                    onClickItem = { navigator.push(MangaScreen(it.id, true)) },
-                                    onLongClickItem = { navigator.push(MangaScreen(it.id, true)) },
-                                    lazyListState = mangaListState,
+                                    searchQuery = searchQuery,
+                                    gridState = mangaGridState,
+                                    onMangaClick = { manga ->
+                                        navigator.push(MangaScreen(manga.id, true))
+                                    },
                                 )
                             }
                         } else {
@@ -404,14 +412,13 @@ class UserSearchScreen : Screen {
                                     )
                                 }
                             } else {
-                                GlobalSearchContent(
+                                UnifiedSearchGrid(
                                     items = novelState.items,
-                                    contentPadding = PaddingValues(bottom = 16.dp),
-                                    getManga = { novelViewModel.getManga(it) },
-                                    onClickSource = { navigator.push(BrowseSourceScreen(it.id, searchQuery)) },
-                                    onClickItem = { navigator.push(MangaScreen(it.id, true)) },
-                                    onLongClickItem = { navigator.push(MangaScreen(it.id, true)) },
-                                    lazyListState = novelListState,
+                                    searchQuery = searchQuery,
+                                    gridState = novelGridState,
+                                    onMangaClick = { novel ->
+                                        navigator.push(MangaScreen(novel.id, true))
+                                    },
                                 )
                             }
                         } else {
@@ -568,6 +575,79 @@ fun UserListItem(user: CloudUser, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )
+        }
+    }
+}
+
+@Composable
+private fun UnifiedSearchGrid(
+    items: Map<eu.kanade.tachiyomi.source.Source, SearchItemResult>,
+    searchQuery: String,
+    gridState: LazyGridState,
+    onMangaClick: (Manga) -> Unit,
+) {
+    val mangaResults = remember(items) {
+        items.values
+            .filterIsInstance<SearchItemResult.Success>()
+            .flatMap { it.result }
+            .distinctBy { "${it.source}_${it.url}" }
+    }
+    val isLoading = remember(items) {
+        items.values.any { it is SearchItemResult.Loading }
+    }
+
+    if (mangaResults.isEmpty()) {
+        if (isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "No results found for \"$searchQuery\".",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 15.sp,
+                )
+            }
+        }
+    } else {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            state = gridState,
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            if (isLoading) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            items(
+                items = mangaResults,
+                key = { "${it.source}_${it.id}_${it.url}" },
+            ) { manga ->
+                DiscoverMangaCard(
+                    manga = manga,
+                    showSourceLogo = true,
+                    onClick = { onMangaClick(manga) },
+                )
+            }
         }
     }
 }

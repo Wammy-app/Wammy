@@ -2,9 +2,14 @@ package eu.kanade.presentation.browse.components
 
 import android.util.DisplayMetrics
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dangerous
 import androidx.compose.material.icons.filled.Warning
@@ -14,8 +19,10 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
@@ -24,12 +31,14 @@ import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import coil3.compose.AsyncImage
 import eu.kanade.domain.source.model.icon
 import eu.kanade.presentation.util.rememberResourceBitmapPainter
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import eu.kanade.tachiyomi.jsplugin.source.JsSource
@@ -187,4 +196,73 @@ sealed class Result<out T> {
     data object Loading : Result<Nothing>()
     data object Error : Result<Nothing>()
     data class Success<out T>(val value: T) : Result<T>()
+}
+
+@Composable
+fun SourceLogoBadge(
+    sourceId: Long,
+    modifier: Modifier = Modifier,
+    size: Dp = 22.dp,
+) {
+    val extensionManager = remember { Injekt.get<ExtensionManager>() }
+    val sourceManager = remember { Injekt.get<SourceManager>() }
+
+    val actualSource = remember(sourceId) {
+        try {
+            sourceManager.get(sourceId)
+        } catch (_: Exception) {
+            null
+        }
+    }
+    val sourceName = actualSource?.name ?: ""
+
+    val builtinRes = remember(sourceId, sourceName) {
+        BuiltinSourceManager.getIconRes(sourceId, sourceName)
+    }
+    val extensionDrawable = remember(sourceId) {
+        if (builtinRes == null) extensionManager.getAppIconForSource(sourceId) else null
+    }
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .shadow(2.dp, RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.Black.copy(alpha = 0.68f))
+            .padding(2.5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            builtinRes != null -> {
+                Image(
+                    painter = painterResource(builtinRes),
+                    contentDescription = sourceName,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            extensionDrawable != null -> {
+                Image(
+                    bitmap = remember(extensionDrawable) { extensionDrawable.toBitmap().asImageBitmap() },
+                    contentDescription = sourceName,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            actualSource is JsSource -> {
+                AsyncImage(
+                    model = actualSource.iconUrl,
+                    contentDescription = sourceName,
+                    placeholder = ColorPainter(Color(0x1F888888)),
+                    error = rememberResourceBitmapPainter(id = R.mipmap.ic_default_source),
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            else -> {
+                Image(
+                    painter = painterResource(R.mipmap.ic_default_source),
+                    contentDescription = sourceName,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
 }

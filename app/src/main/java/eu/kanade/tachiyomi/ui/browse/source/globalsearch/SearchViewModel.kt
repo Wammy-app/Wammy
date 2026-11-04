@@ -196,24 +196,8 @@ abstract class SearchViewModel(
     private fun updateItems(items: Map<Source, SearchItemResult>) {
         mutableState.update { state ->
             val newItems = if (items.isNotEmpty()) items else state.items
-            val sortedItems = newItems.toSortedMap(sortComparator(newItems))
-            
-            val seenTitles = mutableSetOf<String>()
-            val processedItems = sortedItems.mapNotNull { (source, result) ->
-                if (result is SearchItemResult.Success) {
-                    val uniqueMangas = result.result.filter { seenTitles.add(it.title.lowercase().trim()) }
-                    if (uniqueMangas.isEmpty() && result.result.isNotEmpty()) {
-                        null
-                    } else {
-                        source to SearchItemResult.Success(uniqueMangas)
-                    }
-                } else {
-                    source to result
-                }
-            }.toMap()
-
             state.copy(
-                items = processedItems.toSortedMap(sortComparator(processedItems)),
+                items = newItems.toSortedMap(sortComparator(newItems)),
             )
         }
     }
@@ -222,24 +206,8 @@ abstract class SearchViewModel(
         if (source !in getSelectedSources()) return
         mutableState.update { state ->
             val newItems = state.items + (source to result)
-            val sortedItems = newItems.toSortedMap(sortComparator(newItems))
-            
-            val seenTitles = mutableSetOf<String>()
-            val processedItems = sortedItems.mapNotNull { (src, res) ->
-                if (res is SearchItemResult.Success) {
-                    val uniqueMangas = res.result.filter { seenTitles.add(it.title.lowercase().trim()) }
-                    if (uniqueMangas.isEmpty() && res.result.isNotEmpty()) {
-                        null
-                    } else {
-                        src to SearchItemResult.Success(uniqueMangas)
-                    }
-                } else {
-                    src to res
-                }
-            }.toMap()
-
             state.copy(
-                items = processedItems.toSortedMap(sortComparator(processedItems)),
+                items = newItems.toSortedMap(sortComparator(newItems)),
             )
         }
     }
