@@ -18,6 +18,8 @@ import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.PathInterpolator
 import androidx.core.animation.doOnEnd
 import eu.kanade.tachiyomi.R
@@ -274,8 +276,8 @@ class PageCurlOverlay(
 
         animator?.cancel()
         animator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 300L
-            interpolator = PathInterpolator(0.25f, 0.1f, 0.25f, 1f)
+            duration = 480L
+            interpolator = AccelerateDecelerateInterpolator()
             addUpdateListener { anim ->
                 val p = anim.animatedValue as Float
                 engine.computeCurl(p, touchY, fromRight)
@@ -291,10 +293,10 @@ class PageCurlOverlay(
 
     private fun animateSettle(from: Float, to: Float, commit: Boolean) {
         animator?.cancel()
-        val duration = (abs(to - from) * 260f).toLong().coerceIn(120L, 280L)
+        val duration = (abs(to - from) * 450f).toLong().coerceIn(180L, 420L)
         animator = ValueAnimator.ofFloat(from, to).apply {
             this.duration = duration
-            interpolator = PathInterpolator(0.25f, 0.1f, 0.25f, 1f)
+            interpolator = DecelerateInterpolator(1.5f)
             addUpdateListener { anim ->
                 val p = anim.animatedValue as Float
                 engine.computeCurl(p, downY, fromRight)
