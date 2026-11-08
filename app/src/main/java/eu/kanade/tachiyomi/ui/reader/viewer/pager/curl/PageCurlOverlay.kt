@@ -177,8 +177,7 @@ class PageCurlOverlay(
                             val dist = if (fromRight) (downX - ev.x) else (ev.x - downX)
                             val travel = (pw * 0.55f).coerceAtLeast(300f)
                             val progress = (dist / travel).coerceIn(0f, 1f)
-                            val curlY = bounds.top + bounds.height() * 0.25f
-                            engine.computeCurl(progress, curlY, fromRight)
+                            engine.computeCurl(progress, downY, fromRight)
                             invalidate()
 
                             velocityTracker?.addMovement(ev)
@@ -200,9 +199,6 @@ class PageCurlOverlay(
         velocityTracker?.addMovement(ev)
 
         val pw = engine.pageWidth.takeIf { it > 0 } ?: width.toFloat().coerceAtLeast(1f)
-        val bounds = viewer.getPageBounds(viewer.pager.currentItem)
-            ?: RectF(0f, 0f, width.toFloat(), height.toFloat())
-        val curlY = bounds.top + bounds.height() * 0.25f
         val travel = (pw * 0.55f).coerceAtLeast(300f)
 
         when (ev.actionMasked) {
@@ -210,7 +206,7 @@ class PageCurlOverlay(
                 if (isDragging && travel > 0f) {
                     val dist = if (fromRight) (downX - ev.x) else (ev.x - downX)
                     val progress = (dist / travel).coerceIn(0f, 1f)
-                    engine.computeCurl(progress, curlY, fromRight)
+                    engine.computeCurl(progress, downY, fromRight)
                     invalidate()
                 }
                 return true
@@ -304,9 +300,6 @@ class PageCurlOverlay(
 
     private fun animateSettle(from: Float, to: Float, commit: Boolean) {
         animator?.cancel()
-        val bounds = viewer.getPageBounds(viewer.pager.currentItem)
-            ?: RectF(0f, 0f, width.toFloat(), height.toFloat())
-        val curlY = bounds.top + bounds.height() * 0.25f
 
         val duration = if (commit) {
             ((1f - from) * 450f + 180f).toLong().coerceIn(320L, 500L)
@@ -323,7 +316,7 @@ class PageCurlOverlay(
             this.interpolator = settleInterpolator
             addUpdateListener { anim ->
                 val p = anim.animatedValue as Float
-                engine.computeCurl(p, curlY, fromRight)
+                engine.computeCurl(p, downY, fromRight)
                 invalidate()
             }
             doOnEnd {
