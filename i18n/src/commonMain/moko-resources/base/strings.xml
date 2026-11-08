@@ -53,21 +53,17 @@
     <string name="action_settings">Settings</string>
     <string name="action_menu">Menu</string>
     <string name="action_filter">Filter</string>
-    <string name="action_set_interval">Set interval</string>
     <string name="action_filter_bookmarked">Bookmarked</string>
     <string name="action_filter_tracked">Tracked</string>
     <string name="action_filter_unread">Unread</string>
     <string name="action_filter_interval_custom">Customized update frequency</string>
-    <string name="action_filter_custom_extension">Custom extension</string>
     <!-- reserved for #4048 -->
-    <string name="action_filter_empty">Remove filter</string>
     <string name="action_sort_alpha">Alphabetically</string>
     <string name="action_sort_count">Total entries</string>
     <string name="action_sort_total">Total chapters</string>
     <string name="action_sort_last_read">Last read</string>
     <string name="action_sort_last_manga_update">Last update check</string>
     <string name="action_sort_unread_count">Unread count</string>
-    <string name="action_sort_next_updated">Next expected update</string>
     <string name="action_sort_latest_chapter">Latest chapter</string>
     <string name="action_sort_chapter_fetch_date">Chapter fetch date</string>
     <string name="action_sort_date_added">Date added</string>
@@ -91,7 +87,6 @@
     <string name="action_disable_all">Disable all</string>
     <string name="action_edit">Edit</string>
     <string name="action_add">Add</string>
-    <string name="action_update_category">Update category</string>
     <string name="action_open_random_manga">Open random entry</string>
     <string name="action_add_category">Add category</string>
     <string name="action_edit_categories">Edit categories</string>
@@ -184,14 +179,8 @@
     <string name="onboarding_description">Let\'s set some things up first. You can always change these in the settings later too.</string>
     <string name="onboarding_action_next">Next</string>
     <string name="onboarding_action_finish">Get started</string>
-    <string name="onboarding_action_skip">Skip</string>
     <string name="onboarding_storage_info">Select a folder where %1$s will store chapter downloads, backups, and more.\n\nSelected folder: %2$s</string>
     <string name="onboarding_storage_action_select">Select a folder</string>
-    <string name="onboarding_storage_selection_required">A folder must be selected</string>
-    <string name="onboarding_storage_help_info">Updating from an older version and not sure what to select? Refer to the storage guide for more information.</string>
-    <string name="onboarding_storage_help_action">Storage guide</string>
-    <string name="onboarding_permission_install_apps">Install apps permission</string>
-    <string name="onboarding_permission_install_apps_description">To install source extensions.</string>
     <string name="onboarding_permission_notifications">Notification permission</string>
     <string name="onboarding_permission_notifications_description">Get notified for library updates and more.</string>
     <string name="onboarding_permission_ignore_battery_opts">Background battery usage</string>
@@ -217,7 +206,6 @@
 
     <string name="pref_appearance_summary">Theme, date &amp; time format</string>
     <string name="pref_library_summary">Categories, global update, chapter swipe</string>
-    <string name="pref_reader_summary">Reading mode, display, navigation</string>
     <string name="pref_downloads_summary">Automatic download, download ahead</string>
     <string name="pref_tracking_summary">One-way progress sync, enhanced sync</string>
     <string name="pref_browse_summary">Sources, extensions, global search</string>
@@ -231,20 +219,6 @@
     <string name="theme_system">System</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
-    <string name="theme_monet">Dynamic</string>
-    <string name="theme_catppuccin">Catppuccin</string>
-    <string name="theme_tokyonight">Tokyo Night</string>
-    <string name="theme_greenapple">Green Apple</string>
-    <string name="theme_lavender">Lavender</string>
-    <string name="theme_midnightdusk">Midnight Dusk</string>
-    <string name="theme_monochrome">Monochrome</string>
-    <string name="theme_nord">Nord</string>
-    <string name="theme_strawberrydaiquiri">Strawberry Daiquiri</string>
-    <string name="theme_tako">Tako</string>
-    <string name="theme_tealturquoise">Teal &amp; Turquoise</string>
-    <string name="theme_yinyang">Yin &amp; Yang</string>
-    <string name="theme_yotsuba">Yotsuba</string>
-    <string name="theme_tidalwave">Tidal Wave</string>
     <string name="theme_expressive">Expressive</string>
     <string name="theme_totoro">Totoro</string>
     <string name="theme_asuka">Asuka</string>
@@ -378,7 +352,6 @@
     <string name="ext_installer_shizuku_stopped">Shizuku is not running</string>
     <string name="ext_installer_shizuku_unavailable_dialog">Install and start Shizuku to use Shizuku as extension installer.</string>
     <string name="ext_revoke_trust">Revoke trusted unknown extensions</string>
-    <string name="downloading_with_progress">Downloading... (%d%%)</string>
 
     <!-- Extension repos -->
     <string name="action_open_repo">Open source repo</string>
@@ -681,12 +654,9 @@
     <string name="check_for_updates">Check for updates</string>
 
     <!-- ACRA -->
-    <string name="pref_enable_acra">Send crash reports</string>
-    <string name="pref_acra_summary">Helps fix any bugs. No sensitive data will be sent</string>
 
 
     <!-- More -->
-    <string name="fdroid_warning">F-Droid builds are not officially supported.\nTap to learn more.</string>
     <string name="label_downloaded_only">Downloaded only</string>
     <string name="pref_incognito_mode">Incognito mode</string>
     <string name="pref_incognito_mode_summary">Pauses reading history</string>
@@ -1174,18 +1144,9 @@
     <string name="pref_translation_translate_tags_desc">Translate genre tags and merge with original tags</string>
     <string name="pref_translation_smart_auto">Smart auto-translate</string>
     <string name="pref_translation_smart_auto_desc">Detect source language and skip translation if it matches target language</string>
-    <string name="pref_translation_chunk_mode">Translation chunk mode</string>
-    <string name="pref_translation_chunk_mode_paragraphs">Group by paragraphs (%d per chunk)</string>
-    <string name="pref_translation_chunk_mode_characters">Group by characters (%d per chunk)</string>
-    <string name="pref_translation_chunk_mode_words">Group by words (%d per chunk)</string>
     <string name="pref_translation_chunk_paragraphs">Paragraphs</string>
-    <string name="pref_translation_chunk_characters">Characters</string>
-    <string name="pref_translation_chunk_words">Words</string>
     <string name="pref_translation_chunk_size">Translation chunk size</string>
     <string name="pref_translation_chunk_paragraphs_rec">Paragraphs per chunk (recommended: 20–100)</string>
-    <string name="pref_translation_chunk_characters_rec">Characters per chunk (recommended: 1000–5000)</string>
-    <string name="pref_translation_chunk_words_rec">Words per chunk (recommended: 200–2000)</string>
-    <string name="pref_translation_chunk_units">Units per chunk</string>
     <string name="pref_translation_contextual_anchoring">Contextual anchoring</string>
     <string name="pref_translation_contextual_anchoring_desc">Send previous translated paragraphs as context to LLM engines for better consistency</string>
     <string name="pref_translation_contextual_anchoring_paragraphs">Context paragraphs</string>
@@ -1201,12 +1162,8 @@
     <string name="pref_translation_status_idle">Idle — no tasks in queue</string>
     <string name="pref_translation_resume">Resume</string>
     <string name="pref_translation_pause">Pause</string>
-    <string name="pref_translation_resume_desc">Resume processing queued translations</string>
-    <string name="pref_translation_pause_desc">Pause translation processing</string>
     <string name="pref_translation_cancel">Cancel</string>
-    <string name="pref_translation_cancel_desc">Cancel current translation (saves partial progress)</string>
     <string name="pref_translation_clear_queue">Clear Queue</string>
-    <string name="pref_translation_clear_queue_desc">Remove all pending translations from the queue</string>
     <string name="pref_translation_test_engine">Test %s</string>
     <string name="pref_translation_testing">Testing...</string>
     <string name="pref_translation_test_send">Send a test translation</string>
@@ -1284,12 +1241,6 @@
     <!-- Misc UI -->
     <string name="action_collapse">Collapse</string>
     <string name="action_expand">Expand</string>
-    <string name="supportUsScreen.perks">Patrons get access to exclusive channels, with more perks to come.</string>
-    <string name="supportUsScreen.donationPlatform.patreon">Patreon (preferred)</string>
-    <string name="supportUsScreen.donationPlatform.opencollective">OpenCollective</string>
-    <string name="supportUsScreen.currentlySupportedBy">Mihon is currently backed by %d+ patrons. We want to thank each and everyone of you. Let's make Mihon even better together.</string>
-    <string name="supportUsScreen.contactForDetailsMessage">For alternative options or any related questions, join our Discord server.</string>
-    <string name="supportUsScreen.contactPlatform">Discord</string>
 
     <string name="donationCampaign.title">Enjoying the app?</string>
     <string name="donationCampaign.paragraph1">Hi! I'm the main developer behind Mihon, and I'd like to ask you to consider supporting its development financially. With enough support, I'll be able to work on Mihon full-time and focus on long-standing issues as well as highly requested features.</string>
