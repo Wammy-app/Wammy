@@ -229,10 +229,30 @@ class MangaCoverFetcher(
             }
         }
 
+        // Retry once on HTTP 429 (burst rate limiting by image CDN)
+        if (!response.isSuccessful && response.code == 429) {
+            response.close()
+            kotlinx.coroutines.delay(450L)
+            try {
+                response = client.newCall(newRequest(reqUrl)).await()
+            } catch (_: Exception) {}
+        }
+
         // If the primary cover URL failed with 404 and is a rewritten novel cover, try novellunar fallback
         if (!response.isSuccessful && response.code == 404 && reqUrl.contains("rs.novelbuddy.me/covers/")) {
             val slug = reqUrl.substringAfterLast("/").substringBeforeLast(".")
             val fallbackUrl = "https://img.novellunar.com/$slug.webp"
+            try {
+                response.close()
+                response = client.newCall(newRequest(fallbackUrl)).await()
+            } catch (_: Exception) {}
+        }
+
+        // If Comic Asura cover failed with 404 or 503, fallback to Comic Asura's official default thumbnail
+        if (!response.isSuccessful && (response.code == 404 || response.code == 503) &&
+            (reqUrl.contains("2xstorage.com") || sourceLazy.value?.baseUrl?.contains("comicasura") == true)
+        ) {
+            val fallbackUrl = "https://comicasura.net/images/thumb-default.webp?v=1"
             try {
                 response.close()
                 response = client.newCall(newRequest(fallbackUrl)).await()
