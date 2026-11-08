@@ -71,6 +71,16 @@ object SettingsReaderScreen : SearchableSettings {
                 preference = readerPref.pageTransitions,
                 title = stringResource(MR.strings.pref_page_transitions),
             ),
+            Preference.PreferenceItem.ListPreference(
+                preference = readerPref.pageTransitionStyle,
+                entries = ReaderPreferences.PageTransitionStyle.entries
+                    .associate { it.value to stringResource(it.titleRes) },
+                title = stringResource(MR.strings.pref_page_transition_style),
+            ),
+            Preference.PreferenceItem.SwitchPreference(
+                preference = readerPref.pageTurnSound,
+                title = stringResource(MR.strings.pref_page_turn_sound),
+            ),
             getDisplayGroup(readerPreferences = readerPref),
             getEInkGroup(readerPreferences = readerPref),
             getReadingGroup(readerPreferences = readerPref),

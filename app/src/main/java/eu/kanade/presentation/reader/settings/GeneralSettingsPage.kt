@@ -44,6 +44,12 @@ internal fun ColumnScope.GeneralPage(viewModel: ReaderSettingsViewModel) {
     val flashIntervalPref = viewModel.preferences.flashPageInterval
     val flashInterval by flashIntervalPref.collectAsState()
 
+
+    val pageTransitions by viewModel.preferences.pageTransitions.collectAsState()
+
+    val pageTransitionStyle by viewModel.preferences.pageTransitionStyle.collectAsState()
+
+
     val flashColorPref = viewModel.preferences.flashColor
     val flashColor by flashColorPref.collectAsState()
 
@@ -131,6 +137,21 @@ internal fun ColumnScope.GeneralPage(viewModel: ReaderSettingsViewModel) {
         label = stringResource(MR.strings.pref_page_transitions),
         pref = viewModel.preferences.pageTransitions,
     )
+    if (pageTransitions) {
+        SettingsChipRow(MR.strings.pref_page_transition_style) {
+            ReaderPreferences.PageTransitionStyle.entries.forEach { style ->
+                FilterChip(
+                    selected = pageTransitionStyle == style.value,
+                    onClick = { viewModel.preferences.pageTransitionStyle.set(style.value) },
+                    label = { Text(stringResource(style.titleRes)) },
+                )
+            }
+        }
+        CheckboxItem(
+            label = stringResource(MR.strings.pref_page_turn_sound),
+            pref = viewModel.preferences.pageTurnSound,
+        )
+    }
 
     CheckboxItem(
         label = stringResource(MR.strings.pref_flash_page),

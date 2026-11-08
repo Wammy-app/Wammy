@@ -24,6 +24,7 @@ import coil3.dispose
 import coil3.imageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
+import coil3.request.allowHardware
 import coil3.request.crossfade
 import coil3.size.Precision
 import coil3.size.ViewSizeResolver
@@ -178,6 +179,29 @@ open class ReaderPageImageView @JvmOverloads constructor(
     }
 
     /**
+     * Returns the bounding rectangle of the displayed page image in view coordinates.
+     */
+    fun getImageDisplayRect(): RectF? {
+        val pv = pageView ?: return null
+        return when (pv) {
+            is SubsamplingScaleImageView -> {
+                if (!pv.isReady) return null
+                val tl = pv.sourceToViewCoord(0f, 0f) ?: return null
+                val br = pv.sourceToViewCoord(pv.sWidth.toFloat(), pv.sHeight.toFloat()) ?: return null
+                RectF(tl.x, tl.y, br.x, br.y)
+            }
+            is PhotoView -> pv.displayRect
+            is AppCompatImageView -> {
+                val d = pv.drawable ?: return null
+                val rect = RectF(0f, 0f, d.intrinsicWidth.toFloat(), d.intrinsicHeight.toFloat())
+                pv.imageMatrix?.mapRect(rect)
+                rect
+            }
+            else -> null
+        }
+    }
+
+    /**
      * Check if the image can be panned to the left
      */
     fun canPanLeft(): Boolean = canPan { it.left }
@@ -302,7 +326,8 @@ open class ReaderPageImageView @JvmOverloads constructor(
             }
             is BufferedSource -> {
                 if (!isWebtoon || alwaysDecodeLongStripWithSSIV) {
-                    setHardwareConfig(ImageUtil.canUseHardwareBitmap(data))
+                    val useHardware = config.allowHardwareBitmap && ImageUtil.canUseHardwareBitmap(data)
+                    setHardwareConfig(useHardware)
                     setImage(ImageSource.inputStream(data.inputStream()))
                     isVisible = true
                     return@apply
@@ -312,6 +337,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                     .data(data)
                     .memoryCachePolicy(CachePolicy.DISABLED)
                     .diskCachePolicy(CachePolicy.DISABLED)
+                    .allowHardware(config.allowHardwareBitmap)
                     .target(
                         onSuccess = { result ->
                             val image = result as BitmapImage
@@ -421,6 +447,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         val cropBorders: Boolean = false,
         val zoomStartPosition: ZoomStartPosition = ZoomStartPosition.CENTER,
         val landscapeZoom: Boolean = false,
+        val allowHardwareBitmap: Boolean = true,
     )
 
     enum class ZoomStartPosition {

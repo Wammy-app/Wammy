@@ -22,3 +22,8 @@
 *.woff binary
 *.pyc binary
 *.swp binary
+
+# Audio
+*.wav binary
+*.mp3 binary
+*.ogg binary

@@ -21,6 +21,13 @@ class ReaderPreferences(
 
     val pageTransitions: Preference<Boolean> = preferenceStore.getBoolean("pref_enable_transitions_key", true)
 
+    val pageTransitionStyle: Preference<Int> = preferenceStore.getInt(
+        "pref_page_transition_style_key",
+        PageTransitionStyle.DEFAULT.value,
+    )
+
+    val pageTurnSound: Preference<Boolean> = preferenceStore.getBoolean("pref_page_turn_sound_key", true)
+
     val flashOnPageChange: Preference<Boolean> = preferenceStore.getBoolean("pref_reader_flash", false)
 
     val flashDurationMillis: Preference<Int> = preferenceStore.getInt("pref_reader_flash_duration", MILLI_CONVERSION)
@@ -204,6 +211,19 @@ class ReaderPreferences(
     )
 
     // endregion
+
+    enum class PageTransitionStyle(
+        val value: Int,
+        val titleRes: StringResource,
+    ) {
+        DEFAULT(0, MR.strings.pref_page_transition_style_slide),
+        CURL(1, MR.strings.pref_page_transition_style_curl),
+        ;
+
+        companion object {
+            fun fromPreference(value: Int): PageTransitionStyle = entries.find { it.value == value } ?: DEFAULT
+        }
+    }
 
     enum class FlashColor {
         BLACK,

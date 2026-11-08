@@ -5,11 +5,19 @@ import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup.LayoutParams
+import android.widget.FrameLayout.LayoutParams
 import androidx.core.view.children
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.viewpager.widget.ViewPager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.RectF
+import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
+import eu.kanade.tachiyomi.ui.reader.viewer.pager.curl.CurlPagerContainer
+import eu.kanade.tachiyomi.ui.reader.viewer.pager.curl.PageCurlOverlay
+import eu.kanade.tachiyomi.widget.ViewPagerAdapter
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
@@ -49,7 +57,15 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     /**
      * Adapter of the pager.
      */
-    private val adapter = PagerViewerAdapter(this)
+    val adapter = PagerViewerAdapter(this)
+
+    val container = CurlPagerContainer(activity).apply {
+        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+    }
+
+    val curlOverlay = PageCurlOverlay(activity, this).apply {
+        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+    }
 
     /**
      * Currently active item. It can be a chapter page or a chapter transition.
@@ -94,10 +110,15 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     }
 
     init {
+        container.viewer = this
+        container.addView(pager)
+        container.addView(curlOverlay)
+        container.curlOverlay = curlOverlay
+
         pager.isVisible = false // Don't layout the pager yet
         pager.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         pager.isFocusable = false
-        pager.offscreenPageLimit = 1
+        pager.offscreenPageLimit = if (isCurlTransitionEnabled()) 2 else 1
         pager.id = R.id.reader_pager
         pager.adapter = adapter
         pager.addOnPageChangeListener(pagerListener)
@@ -136,6 +157,7 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
         }
 
         config.imagePropertyChangedListener = {
+            pager.offscreenPageLimit = if (isCurlTransitionEnabled()) 2 else 1
             refreshAdapter()
         }
 
@@ -161,12 +183,63 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
      * Returns the view this viewer uses.
      */
     override fun getView(): View {
-        return pager
+        return container
     }
 
     /**
      * Returns the PagerPageHolder for the provided page
      */
+    fun isRtlDirection(): Boolean = this is R2LPagerViewer
+
+    fun isCurlTransitionEnabled(): Boolean =
+        config.usePageTransitions &&
+            config.pageTransitionStyle == ReaderPreferences.PageTransitionStyle.CURL &&
+            (this is L2RPagerViewer || this is R2LPagerViewer) &&
+            !config.dualPageSplit
+
+    fun isZoomed(): Boolean {
+        val holder = (currentPage as? ReaderPage)?.let(::getPageHolder) ?: return false
+        return holder.canPanLeft() || holder.canPanRight()
+    }
+
+    fun capturePageToBitmap(position: Int, target: Bitmap): Boolean {
+        val targetItem = adapter.items.getOrNull(position) ?: return false
+        val view = pager.children.firstOrNull { child ->
+            (child as? ViewPagerAdapter.PositionableView)?.item == targetItem
+        } ?: return false
+        if (view.width <= 0 || view.height <= 0) {
+            val w = pager.width.takeIf { it > 0 } ?: target.width
+            val h = pager.height.takeIf { it > 0 } ?: target.height
+            view.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY),
+            )
+            view.layout(0, 0, w, h)
+        }
+        if (view.width <= 0 || view.height <= 0) return false
+        val canvas = Canvas(target)
+        val bgColor = when (config.theme) {
+            0 -> android.graphics.Color.WHITE
+            2 -> android.graphics.Color.rgb(32, 33, 36)
+            1 -> android.graphics.Color.rgb(25, 26, 28)
+            else -> android.graphics.Color.rgb(25, 26, 28)
+        }
+        canvas.drawColor(bgColor)
+        canvas.save()
+        canvas.translate(-view.scrollX.toFloat(), -view.scrollY.toFloat())
+        view.draw(canvas)
+        canvas.restore()
+        return true
+    }
+
+    fun getPageBounds(position: Int): RectF? {
+        val targetItem = adapter.items.getOrNull(position) ?: return null
+        val holder = pager.children.firstOrNull { child ->
+            (child as? ViewPagerAdapter.PositionableView)?.item == targetItem
+        } as? ReaderPageImageView ?: return null
+        return holder.getImageDisplayRect()
+    }
+
     private fun getPageHolder(page: ReaderPage): PagerPageHolder? =
         pager.children
             .filterIsInstance(PagerPageHolder::class.java)
@@ -336,6 +409,11 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             val holder = (currentPage as? ReaderPage)?.let(::getPageHolder)
             if (holder != null && config.navigateToPan && holder.canPanRight()) {
                 holder.panRight()
+            } else if (isCurlTransitionEnabled()) {
+                if (!curlOverlay.isCurling) {
+                    val nextPos = pager.currentItem + 1
+                    curlOverlay.startCurlAnimation(nextPos, fromRight = true)
+                }
             } else {
                 pager.setCurrentItem(pager.currentItem + 1, config.usePageTransitions)
             }
@@ -350,6 +428,11 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             val holder = (currentPage as? ReaderPage)?.let(::getPageHolder)
             if (holder != null && config.navigateToPan && holder.canPanLeft()) {
                 holder.panLeft()
+            } else if (isCurlTransitionEnabled()) {
+                if (!curlOverlay.isCurling) {
+                    val prevPos = pager.currentItem - 1
+                    curlOverlay.startCurlAnimation(prevPos, fromRight = false)
+                }
             } else {
                 pager.setCurrentItem(pager.currentItem - 1, config.usePageTransitions)
             }
