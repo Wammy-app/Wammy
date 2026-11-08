@@ -19,7 +19,7 @@ abstract class ViewerConfig(readerPreferences: ReaderPreferences, private val sc
     var tappingInverted = ReaderPreferences.TappingInvertMode.NONE
     var longTapEnabled = true
     var usePageTransitions = false
-    var pageTransitionStyle = ReaderPreferences.PageTransitionStyle.DEFAULT
+    var pageTransitionStyle = ReaderPreferences.PageTransitionStyle.DEFAULT_STYLE
     var pageTurnSound = true
     var doubleTapAnimDuration = 500
     var volumeKeysEnabled = false

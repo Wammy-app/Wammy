@@ -23,7 +23,7 @@ class ReaderPreferences(
 
     val pageTransitionStyle: Preference<Int> = preferenceStore.getInt(
         "pref_page_transition_style_key",
-        PageTransitionStyle.DEFAULT.value,
+        PageTransitionStyle.DEFAULT_STYLE.value,
     )
 
     val pageTurnSound: Preference<Boolean> = preferenceStore.getBoolean("pref_page_turn_sound_key", true)
@@ -216,12 +216,13 @@ class ReaderPreferences(
         val value: Int,
         val titleRes: StringResource,
     ) {
-        DEFAULT(0, MR.strings.pref_page_transition_style_slide),
         CURL(1, MR.strings.pref_page_transition_style_curl),
+        SLIDE(0, MR.strings.pref_page_transition_style_slide),
         ;
 
         companion object {
-            fun fromPreference(value: Int): PageTransitionStyle = entries.find { it.value == value } ?: DEFAULT
+            val DEFAULT_STYLE = CURL
+            fun fromPreference(value: Int): PageTransitionStyle = entries.find { it.value == value } ?: DEFAULT_STYLE
         }
     }
 
