@@ -44,6 +44,16 @@ class SourceRateLimitPolicyTest {
     }
 
     @Test
+    fun `unrecognized CDN host resolves to NONE`() {
+        val policy = policy()
+        policy.specFor("i0.wp.com") shouldBe RateLimitSpec.NONE
+        policy.specFor("lh3.googleusercontent.com") shouldBe RateLimitSpec.NONE
+        policy.specFor("cdn.randomsite.org") shouldBe RateLimitSpec.NONE
+        policy.specFor("img.somehost.net") shouldBe RateLimitSpec.NONE
+        policy.specFor("s1.mangaassets.com") shouldBe RateLimitSpec.NONE
+    }
+
+    @Test
     fun `unknown host resolves to NONE when throttling is disabled`() {
         val prefs = NovelDownloadPreferences(InMemoryPreferenceStore())
         prefs.enableRequestThrottling().set(false)

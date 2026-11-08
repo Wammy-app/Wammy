@@ -40,7 +40,7 @@ class RateLimitResolverTest {
             ),
         )
 
-        resolver.resolve(sourceId = 1L) shouldBe RateLimitSpec(delayMillis = 2000L, jitterMillis = 0L, permits = 1)
+        resolver.resolve(sourceId = 1L) shouldBe RateLimitSpec(delayMillis = 2000L, jitterMillis = 0L, permits = 3)
     }
 
     @Test

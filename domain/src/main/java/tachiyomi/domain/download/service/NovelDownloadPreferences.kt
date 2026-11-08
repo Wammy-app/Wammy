@@ -24,7 +24,7 @@ class NovelDownloadPreferences(
      */
     fun requestDelay() = preferenceStore.getInt(
         "novel_request_delay_ms",
-        3000, // Default 3 seconds
+        1000, // Default 1 second
     )
 
     /**
@@ -34,7 +34,7 @@ class NovelDownloadPreferences(
      */
     fun requestJitter() = preferenceStore.getInt(
         "novel_request_jitter_ms",
-        1000, // Default 0-1 second random
+        500, // Default 0-500ms random
     )
 
     /**
@@ -45,7 +45,7 @@ class NovelDownloadPreferences(
      */
     fun requestPermits() = preferenceStore.getInt(
         "novel_request_permits",
-        1, // Default: every request is paced individually, matching pre-burst behavior
+        3, // Default 3 permits burst
     )
 
     /**
@@ -117,7 +117,7 @@ class NovelDownloadPreferences(
      */
     fun parallelNovelDownloads() = preferenceStore.getInt(
         "novel_parallel_downloads",
-        1, // Default to 1 for rate limiting
+        3, // Default to 3 parallel downloads
     )
 
     /**

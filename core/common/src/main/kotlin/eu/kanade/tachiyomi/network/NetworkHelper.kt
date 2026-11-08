@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import eu.kanade.tachiyomi.util.system.WebViewUtil
 import okhttp3.Cache
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.io.File
@@ -23,7 +24,12 @@ class NetworkHelper(
     val rateLimitInterceptor = PerHostDynamicRateLimitInterceptor()
 
     private val clientBuilder: OkHttpClient.Builder = run {
+        val dispatcher = Dispatcher().apply {
+            maxRequests = 64
+            maxRequestsPerHost = 15
+        }
         val builder = OkHttpClient.Builder()
+            .dispatcher(dispatcher)
             .cookieJar(cookieJar)
             .connectTimeout(30.seconds)
             .readTimeout(30.seconds)

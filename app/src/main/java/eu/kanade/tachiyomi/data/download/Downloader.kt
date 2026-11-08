@@ -556,7 +556,7 @@ class Downloader(
             // Start downloading images/text, consider we can have downloaded images already
             val isNovel = download.source.isNovelSource()
             pageList.asFlow().flatMapMerge(
-                concurrency = if (isNovel) 1 else downloadPreferences.parallelPageLimit.get(),
+                concurrency = if (isNovel) 3 else downloadPreferences.parallelPageLimit.get(),
             ) { page ->
                 flow {
                     // For novel sources, skip image URL fetching - we'll get text content instead

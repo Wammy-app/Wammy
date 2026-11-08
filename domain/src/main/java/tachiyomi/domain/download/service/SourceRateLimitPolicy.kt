@@ -44,7 +44,9 @@ class SourceRateLimitPolicy(
             // extension (e.g. a CDN on an unrelated domain) is still a real, unknown site that
             // deserves conservative pacing by default.
             ?: run {
-                if (normalized in exemptInfrastructureHosts) return RateLimitSpec.NONE
+                if (normalized in exemptInfrastructureHosts || isStaticOrCdnHost(normalized)) {
+                    return RateLimitSpec.NONE
+                }
                 logWouldThrottle(normalized, resolver.resolveDefaultIgnoringToggle())
                 return resolver.resolveDefault()
             }
@@ -137,8 +139,47 @@ class SourceRateLimitPolicy(
         ).first()
     }
 
+    private fun isStaticOrCdnHost(host: String): Boolean {
+        if (cdnDomainSuffixes.any { host.endsWith(it) }) return true
+        val firstLabel = host.substringBefore('.')
+        return firstLabel in cdnPrefixLabels || cdnLabelPattern.matches(firstLabel)
+    }
+
     private companion object {
         const val CACHE_TTL_NANOS = 5_000_000_000L // 5 seconds
+
+        val cdnDomainSuffixes = listOf(
+            ".wp.com",
+            ".googleusercontent.com",
+            ".blogspot.com",
+            ".cloudinary.com",
+            ".statically.io",
+            ".imageboss.net",
+            ".freeimage.host",
+            ".weserv.nl",
+            ".imgur.com",
+            ".b-cdn.net",
+            ".bunnycdn.com",
+            ".cloudfront.net",
+            ".fastly.net",
+            ".akamaized.net",
+            ".cdn77.org",
+            ".cloudflarestorage.com",
+            ".r2.dev",
+        )
+
+        val cdnPrefixLabels = setOf(
+            "cdn",
+            "images",
+            "img",
+            "static",
+            "assets",
+            "media",
+            "pics",
+            "content",
+        )
+
+        val cdnLabelPattern = Regex("^(cdn|img|s)[0-9]+$")
 
         val exemptInfrastructureHosts = setOf(
             "cloudflare-dns.com",
