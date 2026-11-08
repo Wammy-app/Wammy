@@ -62,6 +62,7 @@ class PageCurlOverlay(
     private var isDragging = false
     private var downX = 0f
     private var downY = 0f
+    private var currentY = 0f
     private var fromRight = true
     private var targetPosition = -1
 
@@ -141,6 +142,7 @@ class PageCurlOverlay(
             MotionEvent.ACTION_DOWN -> {
                 downX = ev.x
                 downY = ev.y
+                currentY = ev.y
                 isDragging = false
                 velocityTracker?.recycle()
                 velocityTracker = VelocityTracker.obtain().apply { addMovement(ev) }
@@ -178,7 +180,8 @@ class PageCurlOverlay(
                             val dist = (rawDist - touchSlop).coerceAtLeast(0f)
                             val travel = (pw * 0.55f).coerceAtLeast(300f)
                             val progress = (dist / travel).coerceIn(0f, 1f)
-                            engine.computeCurl(progress, downY, fromRight)
+                            currentY = ev.y
+                            engine.computeCurl(progress, currentY, fromRight)
                             invalidate()
 
                             velocityTracker?.addMovement(ev)
@@ -208,7 +211,8 @@ class PageCurlOverlay(
                     val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
                     val dist = (rawDist - touchSlop).coerceAtLeast(0f)
                     val progress = (dist / travel).coerceIn(0f, 1f)
-                    engine.computeCurl(progress, downY, fromRight)
+                    currentY = ev.y
+                    engine.computeCurl(progress, currentY, fromRight)
                     invalidate()
                 }
                 return true
@@ -216,6 +220,7 @@ class PageCurlOverlay(
             MotionEvent.ACTION_UP -> {
                 if (isDragging && travel > 0f) {
                     isDragging = false
+                    currentY = ev.y
                     val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
                     val dist = (rawDist - touchSlop).coerceAtLeast(0f)
                     val progress = (dist / travel).coerceIn(0f, 1f)
@@ -320,7 +325,7 @@ class PageCurlOverlay(
             this.interpolator = settleInterpolator
             addUpdateListener { anim ->
                 val p = anim.animatedValue as Float
-                engine.computeCurl(p, downY, fromRight)
+                engine.computeCurl(p, currentY, fromRight)
                 invalidate()
             }
             doOnEnd {
