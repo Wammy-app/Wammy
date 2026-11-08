@@ -293,10 +293,19 @@ class PageCurlOverlay(
 
     private fun animateSettle(from: Float, to: Float, commit: Boolean) {
         animator?.cancel()
-        val duration = (abs(to - from) * 450f).toLong().coerceIn(180L, 420L)
+        val duration = if (commit) {
+            ((1f - from * 0.35f) * 480f).toLong().coerceIn(380L, 480L)
+        } else {
+            (abs(to - from) * 300f).toLong().coerceIn(150L, 260L)
+        }
+        val settleInterpolator = if (commit) {
+            AccelerateDecelerateInterpolator()
+        } else {
+            DecelerateInterpolator(1.5f)
+        }
         animator = ValueAnimator.ofFloat(from, to).apply {
             this.duration = duration
-            interpolator = DecelerateInterpolator(1.5f)
+            this.interpolator = settleInterpolator
             addUpdateListener { anim ->
                 val p = anim.animatedValue as Float
                 engine.computeCurl(p, downY, fromRight)
