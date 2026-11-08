@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,7 +60,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class UserSearchScreen : Screen {
+class UserSearchScreen(
+    private var initialQuery: String = "",
+    private var initialTab: Int = 0,
+) : Screen {
 
     private fun loadRecentUsers(prefs: SharedPreferences): List<Pair<String, CloudUser>> {
         val str = prefs.getString("recent_users_list", null) ?: return emptyList()
@@ -135,13 +139,27 @@ class UserSearchScreen : Screen {
         val scope = rememberCoroutineScope()
         val repo = remember { FirestoreUserRepository() }
 
-        var searchQuery by remember { mutableStateOf("") }
+        var searchQuery by rememberSaveable { mutableStateOf(initialQuery) }
         var searchResults by remember { mutableStateOf<List<Pair<String, CloudUser>>>(emptyList()) }
         var isSearching by remember { mutableStateOf(false) }
         var searchJob by remember { mutableStateOf<Job?>(null) }
         
-        var selectedTab by remember { mutableStateOf(0) }
+        var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
         val tabs = listOf("Users", "Manga", "Novel")
+
+        LaunchedEffect(searchQuery) {
+            initialQuery = searchQuery
+        }
+        LaunchedEffect(selectedTab) {
+            initialTab = selectedTab
+        }
+        LaunchedEffect(searchQuery, selectedTab) {
+            if (selectedTab == 0 && searchQuery.isNotEmpty() && searchResults.isEmpty()) {
+                isSearching = true
+                searchResults = repo.searchByPrefix(searchQuery)
+                isSearching = false
+            }
+        }
         
         var recentUsers by remember { mutableStateOf(loadRecentUsers(prefs)) }
         var recentManga by remember { mutableStateOf(loadRecentQueries(prefs, "recent_manga_list")) }
