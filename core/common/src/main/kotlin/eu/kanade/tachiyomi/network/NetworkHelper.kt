@@ -51,7 +51,7 @@ class NetworkHelper(
             builder.addNetworkInterceptor(httpLoggingInterceptor)
         }
 
-        val doh = preferences.dohProvider.get().let { if (it == -1) PREF_DOH_CLOUDFLARE else it }
+        val doh = preferences.dohProvider.get()
         when (doh) {
             PREF_DOH_CLOUDFLARE -> builder.dohCloudflare()
             PREF_DOH_GOOGLE -> builder.dohGoogle()
