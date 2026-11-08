@@ -174,7 +174,8 @@ class PageCurlOverlay(
                             visibility = VISIBLE
 
                             val pw = engine.pageWidth.takeIf { it > 0 } ?: width.toFloat().coerceAtLeast(1f)
-                            val dist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                            val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                            val dist = (rawDist - touchSlop).coerceAtLeast(0f)
                             val travel = (pw * 0.55f).coerceAtLeast(300f)
                             val progress = (dist / travel).coerceIn(0f, 1f)
                             engine.computeCurl(progress, downY, fromRight)
@@ -204,7 +205,8 @@ class PageCurlOverlay(
         when (ev.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
                 if (isDragging && travel > 0f) {
-                    val dist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                    val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                    val dist = (rawDist - touchSlop).coerceAtLeast(0f)
                     val progress = (dist / travel).coerceIn(0f, 1f)
                     engine.computeCurl(progress, downY, fromRight)
                     invalidate()
@@ -214,7 +216,8 @@ class PageCurlOverlay(
             MotionEvent.ACTION_UP -> {
                 if (isDragging && travel > 0f) {
                     isDragging = false
-                    val dist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                    val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                    val dist = (rawDist - touchSlop).coerceAtLeast(0f)
                     val progress = (dist / travel).coerceIn(0f, 1f)
                     velocityTracker?.computeCurrentVelocity(1000)
                     val vx = velocityTracker?.xVelocity ?: 0f
@@ -231,7 +234,8 @@ class PageCurlOverlay(
             MotionEvent.ACTION_CANCEL -> {
                 if (isDragging && travel > 0f) {
                     isDragging = false
-                    val dist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                    val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                    val dist = (rawDist - touchSlop).coerceAtLeast(0f)
                     val progress = (dist / travel).coerceIn(0f, 1f)
                     animateSettle(from = progress, to = 0f, commit = false)
                 }

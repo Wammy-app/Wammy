@@ -103,18 +103,21 @@ class PageCurlEngine {
         // Natural comic corner tilt: if user touched near the top (relTouchY < 0.5),
         // the top corner curls faster than the bottom; if near bottom, vice versa.
         val tilt = (0.5f - relTouchY) * 0.70f * w
-
-        val totalTravel = w * 1.15f
+        val absTilt = kotlin.math.abs(tilt)
+        val curTilt = tilt * (1f - p * 0.35f)
+        val totalTravel = w + 2f * absTilt
 
         val centerFoldX: Float
         if (fromRight) {
-            centerFoldX = pageRight - p * totalTravel
-            foldTopX = centerFoldX - tilt * (1f - p * 0.4f)
-            foldBottomX = centerFoldX + tilt * (1f - p * 0.4f)
+            val startCenter = pageRight + absTilt
+            centerFoldX = startCenter - p * totalTravel
+            foldTopX = centerFoldX - curTilt
+            foldBottomX = centerFoldX + curTilt
         } else {
-            centerFoldX = pageLeft + p * totalTravel
-            foldTopX = centerFoldX + tilt * (1f - p * 0.4f)
-            foldBottomX = centerFoldX - tilt * (1f - p * 0.4f)
+            val startCenter = pageLeft - absTilt
+            centerFoldX = startCenter + p * totalTravel
+            foldTopX = centerFoldX + curTilt
+            foldBottomX = centerFoldX - curTilt
         }
 
         midX = (foldTopX + foldBottomX) * 0.5f
