@@ -15,9 +15,11 @@ import android.graphics.Shader
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import androidx.core.animation.doOnEnd
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
@@ -57,12 +59,14 @@ class PageCurlOverlay(
     var isCurling = false
         private set
 
+    private var isDragging = false
     private var downX = 0f
     private var downY = 0f
     private var fromRight = true
     private var targetPosition = -1
 
     private var animator: ValueAnimator? = null
+    private var velocityTracker: VelocityTracker? = null
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
 
     private var soundPool: SoundPool? = null
@@ -131,27 +135,52 @@ class PageCurlOverlay(
     }
 
     fun shouldInterceptTouch(ev: MotionEvent): Boolean {
-        if (isCurling) return true
         if (viewer.isZoomed()) return false
 
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = ev.x
                 downY = ev.y
+                isDragging = false
+                velocityTracker?.recycle()
+                velocityTracker = VelocityTracker.obtain().apply { addMovement(ev) }
                 return false
             }
             MotionEvent.ACTION_MOVE -> {
+                if (isCurling) return true
                 val dx = ev.x - downX
                 val dy = ev.y - downY
                 if (abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.3f) {
+                    if (!ensureBitmaps()) return false
+
                     val currentPos = viewer.pager.currentItem
                     val targetPos = if (dx < 0) currentPos + 1 else currentPos - 1
                     val curlFromRight = (dx < 0)
 
                     if (targetPos in 0 until viewer.adapter.count) {
-                        parent?.requestDisallowInterceptTouchEvent(true)
-                        startCurlAnimation(targetPos, curlFromRight)
-                        return true
+                        val curBmp = currentBitmap ?: return false
+                        val nxtBmp = nextBitmap ?: return false
+                        val okCur = viewer.capturePageToBitmap(currentPos, curBmp)
+                        val okNxt = viewer.capturePageToBitmap(targetPos, nxtBmp)
+                        if (okCur && okNxt) {
+                            val bounds = viewer.getPageBounds(currentPos)
+                                ?: RectF(0f, 0f, width.toFloat(), height.toFloat())
+                            engine.setup(bounds.left, bounds.top, bounds.right, bounds.bottom)
+
+                            isDragging = true
+                            isCurling = true
+                            targetPosition = targetPos
+                            fromRight = curlFromRight
+                            visibility = VISIBLE
+                            val pw = engine.pageWidth.takeIf { it > 0 } ?: width.toFloat().coerceAtLeast(1f)
+                            val dist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                            val progress = (dist / pw).coerceIn(0f, 1f)
+                            val curlY = bounds.top + bounds.height() * 0.25f
+                            engine.computeCurl(progress, curlY, fromRight)
+                            invalidate()
+                            parent?.requestDisallowInterceptTouchEvent(true)
+                            return true
+                        }
                     }
                 }
             }
@@ -161,8 +190,54 @@ class PageCurlOverlay(
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(ev: MotionEvent): Boolean {
-        if (isCurling) return true
-        return shouldInterceptTouch(ev)
+        if (!isCurling && !shouldInterceptTouch(ev)) {
+            return false
+        }
+        velocityTracker?.addMovement(ev)
+
+        val pw = engine.pageWidth.takeIf { it > 0 } ?: width.toFloat().coerceAtLeast(1f)
+        val bounds = viewer.getPageBounds(viewer.pager.currentItem)
+            ?: RectF(0f, 0f, width.toFloat(), height.toFloat())
+        val curlY = bounds.top + bounds.height() * 0.25f
+
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                if (isDragging && pw > 0f) {
+                    val dist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                    val progress = (dist / pw).coerceIn(0f, 1f)
+                    engine.computeCurl(progress, curlY, fromRight)
+                    invalidate()
+                }
+                return true
+            }
+            MotionEvent.ACTION_UP -> {
+                if (isDragging && pw > 0f) {
+                    isDragging = false
+                    val dist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                    val progress = (dist / pw).coerceIn(0f, 1f)
+                    velocityTracker?.computeCurrentVelocity(1000)
+                    val vx = velocityTracker?.xVelocity ?: 0f
+                    val shouldCommit = progress > 0.30f ||
+                        (fromRight && vx < -400f) ||
+                        (!fromRight && vx > 400f)
+                    if (shouldCommit) {
+                        playPageTurnSound()
+                    }
+                    animateSettle(from = progress, to = if (shouldCommit) 1f else 0f, commit = shouldCommit)
+                }
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                if (isDragging && pw > 0f) {
+                    isDragging = false
+                    val dist = if (fromRight) (downX - ev.x) else (ev.x - downX)
+                    val progress = (dist / pw).coerceIn(0f, 1f)
+                    animateSettle(from = progress, to = 0f, commit = false)
+                }
+                return true
+            }
+        }
+        return super.onTouchEvent(ev)
     }
 
     fun startCurlAnimation(targetPos: Int, fromRight: Boolean, onComplete: (() -> Unit)? = null) {
@@ -222,9 +297,42 @@ class PageCurlOverlay(
         }
     }
 
+    private fun animateSettle(from: Float, to: Float, commit: Boolean) {
+        animator?.cancel()
+        val bounds = viewer.getPageBounds(viewer.pager.currentItem)
+            ?: RectF(0f, 0f, width.toFloat(), height.toFloat())
+        val curlY = bounds.top + bounds.height() * 0.25f
+
+        // Slowly and gently turn the remaining distance when finger is released
+        val duration = if (commit) {
+            ((1f - from * 0.2f) * 520f).toLong().coerceIn(450L, 560L)
+        } else {
+            (from * 350f).toLong().coerceIn(180L, 300L)
+        }
+        val settleInterpolator = if (commit) {
+            DecelerateInterpolator(1.8f)
+        } else {
+            DecelerateInterpolator(1.5f)
+        }
+        animator = ValueAnimator.ofFloat(from, to).apply {
+            this.duration = duration
+            this.interpolator = settleInterpolator
+            addUpdateListener { anim ->
+                val p = anim.animatedValue as Float
+                engine.computeCurl(p, curlY, fromRight)
+                invalidate()
+            }
+            doOnEnd {
+                finishCurl(commit)
+            }
+            start()
+        }
+    }
+
     private fun finishCurl(commit: Boolean) {
         val target = targetPosition
         isCurling = false
+        isDragging = false
         visibility = INVISIBLE
         if (commit && target >= 0) {
             viewer.pager.setCurrentItem(target, false)
@@ -369,6 +477,8 @@ class PageCurlOverlay(
         currentBitmap = null
         nextBitmap?.recycle()
         nextBitmap = null
+        velocityTracker?.recycle()
+        velocityTracker = null
         soundPool?.release()
         soundPool = null
         soundLoaded = false
