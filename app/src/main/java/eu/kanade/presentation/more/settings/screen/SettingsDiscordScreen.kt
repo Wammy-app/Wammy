@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -92,6 +93,13 @@ object SettingsDiscordScreen : SearchableSettings {
 
         val enableDRPC by enableDRPCPref.collectAsState()
         val showButtons by showButtonsPref.collectAsState()
+        val isDiscordLoggedIn by connectionsManager.discord.isLoggedInFlow.collectAsState(connectionsManager.discord.isLogged)
+
+        LaunchedEffect(isDiscordLoggedIn) {
+            if (!isDiscordLoggedIn) {
+                navigator.pop()
+            }
+        }
 
         var dialog by remember { mutableStateOf<Any?>(null) }
         dialog?.run {

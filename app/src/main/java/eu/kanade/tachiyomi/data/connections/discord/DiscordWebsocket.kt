@@ -55,7 +55,9 @@ open class DiscordWebSocketImpl(
         .url("wss://gateway.discord.gg/?encoding=json&v=10")
         .build()
 
-    private var webSocket: WebSocket? = client.newWebSocket(request, Listener())
+    private val listener = Listener()
+
+    private var webSocket: WebSocket? = client.newWebSocket(request, listener)
 
     private var connected = false
 
@@ -84,17 +86,28 @@ open class DiscordWebSocketImpl(
     @Suppress("MagicNumber")
     override fun close() {
         logcat(LogPriority.INFO) { "Closing Discord WebSocket, sending offline status" }
-        webSocket?.send(
-            json.encodeToString(
-                Presence.Response(
-                    op = OpCode.DISPATCH.value.toLong(),
-                    d = Presence(status = "offline"),
+        try {
+            webSocket?.send(
+                json.encodeToString(
+                    Presence.Response(
+                        op = OpCode.PRESENCE_UPDATE.value.toLong(),
+                        d = Presence(
+                            status = "offline",
+                            activities = emptyList(),
+                            afk = true,
+                        ),
+                    ),
                 ),
-            ),
-        )
-        webSocket?.close(4000, "Interrupt")
-        connected = false
-        connectionState.value = false
+            )
+            webSocket?.close(1000, "Normal closure")
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR) { "Error closing Discord WebSocket: ${e.message}" }
+        } finally {
+            listener.scope.cancel()
+            webSocket = null
+            connected = false
+            connectionState.value = false
+        }
     }
 
     override suspend fun sendActivity(presence: Presence) {

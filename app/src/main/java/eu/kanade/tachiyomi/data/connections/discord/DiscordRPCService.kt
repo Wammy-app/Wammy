@@ -42,10 +42,11 @@ class DiscordRPCService : Service() {
         logcat(LogPriority.INFO) { "Starting Discord RPC service" }
 
         val token = connectionsPreferences.connectionsToken(connectionsManager.discord).get()
+        val accounts = connectionsManager.discord.getAccounts()
 
-        if (token.isBlank()) {
-            logcat(LogPriority.WARN) { "Discord RPC disabled due to missing token" }
-            connectionsPreferences.enableDiscordRPC().set(false)
+        if (token.isBlank() || accounts.isEmpty()) {
+            logcat(LogPriority.WARN) { "Discord RPC disabled due to missing token or accounts" }
+            connectionsManager.discord.logout()
             stopSelf()
             return
         }
@@ -103,8 +104,9 @@ class DiscordRPCService : Service() {
             rpc = null
 
             val token = connectionsPreferences.connectionsToken(connectionsManager.discord).get()
-            if (token.isBlank()) {
-                logcat(LogPriority.WARN) { "Discord RPC restart failed due to missing token" }
+            val accounts = connectionsManager.discord.getAccounts()
+            if (token.isBlank() || accounts.isEmpty()) {
+                logcat(LogPriority.WARN) { "Discord RPC restart failed due to missing token or accounts" }
                 stopSelf()
                 return
             }
@@ -155,15 +157,18 @@ class DiscordRPCService : Service() {
 
         fun start(context: Context, connectionsManager: ConnectionsManager = Injekt.get()) {
             handler.removeCallbacksAndMessages(null)
-            val token = connectionsPreferences.connectionsToken(connectionsManager.discord).get()
-            if (connectionsPreferences.enableDiscordRPC().get()) {
-                if (token.isBlank()) {
-                    logcat(LogPriority.WARN) { "Discord RPC not started due to missing token" }
-                    connectionsPreferences.enableDiscordRPC().set(false)
-                } else if (rpc == null) {
-                    since = System.currentTimeMillis()
-                    context.startForegroundService(Intent(context, DiscordRPCService::class.java))
+            val discord = connectionsManager.discord
+            val token = connectionsPreferences.connectionsToken(discord).get()
+            val accounts = discord.getAccounts()
+            if (token.isBlank() || accounts.isEmpty()) {
+                if (token.isNotBlank() || connectionsPreferences.enableDiscordRPC().get()) {
+                    discord.logout()
                 }
+                return
+            }
+            if (connectionsPreferences.enableDiscordRPC().get() && rpc == null) {
+                since = System.currentTimeMillis()
+                context.startForegroundService(Intent(context, DiscordRPCService::class.java))
             }
         }
 
@@ -171,6 +176,10 @@ class DiscordRPCService : Service() {
             handler.removeCallbacksAndMessages(null)
             if (delay > 0) {
                 handler.postDelayed({
+                    rpc?.run {
+                        closeRPC()
+                        rpc = null
+                    }
                     val stopIntent = Intent(context, DiscordRPCService::class.java).apply {
                         action = STOP_SERVICE
                     }
@@ -181,6 +190,10 @@ class DiscordRPCService : Service() {
                     }
                 }, delay)
             } else {
+                rpc?.run {
+                    closeRPC()
+                    rpc = null
+                }
                 val stopIntent = Intent(context, DiscordRPCService::class.java).apply {
                     action = STOP_SERVICE
                 }
@@ -194,6 +207,11 @@ class DiscordRPCService : Service() {
 
         fun restart(context: Context, connectionsManager: ConnectionsManager = Injekt.get()) {
             val token = connectionsPreferences.connectionsToken(connectionsManager.discord).get()
+            val accounts = connectionsManager.discord.getAccounts()
+            if (token.isBlank() || accounts.isEmpty()) {
+                stop(context, 0L)
+                return
+            }
             if (connectionsPreferences.enableDiscordRPC().get() && token.isNotBlank()) {
                 val restartIntent = Intent(context, DiscordRPCService::class.java).apply {
                     action = ACTION_RESTART

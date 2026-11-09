@@ -1,9 +1,12 @@
 package eu.kanade.tachiyomi.data.connections.discord
 
+import android.app.Application
 import android.content.Context
 import android.graphics.Color
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.connections.ConnectionsService
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
@@ -24,6 +27,13 @@ class Discord(id: Long) : ConnectionsService(id) {
     override fun logout() {
         super.logout()
         connectionsPreferences.connectionsToken(this).delete()
+        connectionsPreferences.setConnectionsCredentials(this, "", "")
+        connectionsPreferences.enableDiscordRPC().set(false)
+        connectionsPreferences.discordAccounts().delete()
+        val context = try { Injekt.get<Application>() } catch (_: Exception) { null }
+        if (context != null) {
+            DiscordRPCService.stop(context, 0L)
+        }
     }
 
     override suspend fun login(username: String, password: String) {
@@ -31,7 +41,24 @@ class Discord(id: Long) : ConnectionsService(id) {
     }
 
     override val isLogged: Boolean
-        get() = getToken().isNotBlank()
+        get() {
+            val token = getToken()
+            val accounts = getAccounts()
+            if (token.isNotBlank() && accounts.isEmpty()) {
+                logout()
+                return false
+            }
+            return token.isNotBlank() && accounts.isNotEmpty()
+        }
+
+    override val isLoggedInFlow: Flow<Boolean> by lazy {
+        combine(
+            connectionsPreferences.connectionsToken(this).changes(),
+            connectionsPreferences.discordAccounts().changes(),
+        ) { token, accountsJson ->
+            token.isNotBlank() && accountsJson.isNotBlank() && accountsJson != "[]"
+        }
+    }
 
     override fun getToken(): String {
         return connectionsPreferences.connectionsToken(this).get()
@@ -73,8 +100,24 @@ class Discord(id: Long) : ConnectionsService(id) {
 
     fun removeAccount(accountId: String) {
         val accounts = getAccounts().toMutableList()
+        val removed = accounts.find { it.id == accountId }
+        val wasActive = removed?.isActive == true || removed?.token == getToken()
         accounts.removeAll { it.id == accountId }
         saveAccounts(accounts)
+
+        val context = try { Injekt.get<Application>() } catch (_: Exception) { null }
+
+        if (accounts.isEmpty()) {
+            logout()
+        } else if (wasActive) {
+            val next = accounts.first().copy(isActive = true)
+            accounts[0] = next
+            saveAccounts(accounts)
+            connectionsPreferences.connectionsToken(this).set(next.token)
+            if (context != null) {
+                restartRichPresence(context)
+            }
+        }
     }
 
     fun setActiveAccount(accountId: String) {
