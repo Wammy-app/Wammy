@@ -176,7 +176,7 @@ class PageCurlOverlay(
                             val pw = engine.pageWidth.takeIf { it > 0 } ?: width.toFloat().coerceAtLeast(1f)
                             val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
                             val dist = (rawDist - touchSlop).coerceAtLeast(0f)
-                            val travel = (pw * 0.55f).coerceAtLeast(300f)
+                            val travel = (pw * 0.85f).coerceAtLeast(400f)
                             val progress = (dist / travel).coerceIn(0f, 1f)
                             engine.computeCurl(progress, downY, fromRight)
                             invalidate()
@@ -200,7 +200,7 @@ class PageCurlOverlay(
         velocityTracker?.addMovement(ev)
 
         val pw = engine.pageWidth.takeIf { it > 0 } ?: width.toFloat().coerceAtLeast(1f)
-        val travel = (pw * 0.55f).coerceAtLeast(300f)
+        val travel = (pw * 0.85f).coerceAtLeast(400f)
 
         when (ev.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
@@ -223,7 +223,7 @@ class PageCurlOverlay(
                     val vx = velocityTracker?.xVelocity ?: 0f
                     val isFlingForward = if (fromRight) vx < -350f else vx > 350f
                     val isFlingBackward = if (fromRight) vx > 350f else vx < -350f
-                    val shouldCommit = (progress > 0.38f && !isFlingBackward) || isFlingForward
+                    val shouldCommit = (progress > 0.35f && !isFlingBackward) || isFlingForward
                     if (shouldCommit) {
                         playPageTurnSound()
                     }
@@ -287,7 +287,7 @@ class PageCurlOverlay(
 
         animator?.cancel()
         animator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 480L
+            duration = 800L
             interpolator = AccelerateDecelerateInterpolator()
             addUpdateListener { anim ->
                 val p = anim.animatedValue as Float
@@ -306,15 +306,21 @@ class PageCurlOverlay(
         animator?.cancel()
 
         val duration = if (commit) {
-            ((1f - from) * 450f + 180f).toLong().coerceIn(320L, 500L)
+            val remaining = (1f - from).coerceAtLeast(0f)
+            if (remaining < 0.05f) {
+                120L
+            } else {
+                (remaining * 700f + 350f).toLong().coerceIn(450L, 850L)
+            }
         } else {
-            (from * 400f + 120f).toLong().coerceIn(180L, 350L)
+            val remaining = from.coerceAtLeast(0f)
+            if (remaining < 0.05f) {
+                120L
+            } else {
+                (remaining * 550f + 250f).toLong().coerceIn(350L, 700L)
+            }
         }
-        val settleInterpolator = if (commit) {
-            DecelerateInterpolator(1.8f)
-        } else {
-            DecelerateInterpolator(1.5f)
-        }
+        val settleInterpolator = DecelerateInterpolator(1.0f)
         animator = ValueAnimator.ofFloat(from, to).apply {
             this.duration = duration
             this.interpolator = settleInterpolator
