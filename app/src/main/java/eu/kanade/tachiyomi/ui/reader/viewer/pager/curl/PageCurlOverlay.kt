@@ -263,13 +263,20 @@ class PageCurlOverlay(
         return super.onTouchEvent(ev)
     }
 
+    fun fastForward() {
+        if (!isCurling) return
+        finishCurl(commit = true)
+    }
+
     fun startCurlAnimation(
         targetPos: Int,
         fromRight: Boolean,
         isBackward: Boolean = false,
         onComplete: (() -> Unit)? = null,
     ) {
-        if (isCurling) return
+        if (isCurling) {
+            fastForward()
+        }
         if (!ensureBitmaps()) {
             viewer.pager.setCurrentItem(targetPos, false)
             onComplete?.invoke()
@@ -358,11 +365,17 @@ class PageCurlOverlay(
     }
 
     private fun finishCurl(commit: Boolean) {
+        val anim = animator
+        animator = null
+        anim?.removeAllListeners()
+        anim?.cancel()
+
         val target = targetPosition
+        targetPosition = -1
         isCurling = false
         isDragging = false
         visibility = INVISIBLE
-        if (commit && target >= 0) {
+        if (commit && target >= 0 && target < (viewer.pager.adapter?.count ?: 0)) {
             viewer.pager.setCurrentItem(target, false)
         }
     }
