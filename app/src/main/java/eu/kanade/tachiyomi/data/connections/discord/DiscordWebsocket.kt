@@ -63,6 +63,9 @@ open class DiscordWebSocketImpl(
 
     private val connectionState = MutableStateFlow(false)
 
+    @Volatile
+    private var isClosed = false
+
     override val coroutineContext: CoroutineContext
         get() = SupervisorJob() + Dispatchers.IO
 
@@ -85,20 +88,29 @@ open class DiscordWebSocketImpl(
 
     @Suppress("MagicNumber")
     override fun close() {
-        logcat(LogPriority.INFO) { "Closing Discord WebSocket, sending offline status" }
+        if (isClosed) return
+        isClosed = true
+        logcat(LogPriority.INFO) { "Closing Discord WebSocket, clearing presence" }
         try {
-            webSocket?.send(
-                json.encodeToString(
+            if (connected && webSocket != null) {
+                // Opcode 3: Clear all activities and set status back to online.
+                // Note: "offline" is invalid in Discord Gateway and is rejected.
+                val clearPayload = json.encodeToString(
                     Presence.Response(
                         op = OpCode.PRESENCE_UPDATE.value.toLong(),
                         d = Presence(
-                            status = "offline",
+                            status = "online",
                             activities = emptyList(),
-                            afk = true,
+                            afk = false,
+                            since = null,
                         ),
                     ),
-                ),
-            )
+                )
+                webSocket?.send(clearPayload)
+                try {
+                    Thread.sleep(300L)
+                } catch (_: InterruptedException) {}
+            }
             webSocket?.close(1000, "Normal closure")
         } catch (e: Exception) {
             logcat(LogPriority.ERROR) { "Error closing Discord WebSocket: ${e.message}" }
@@ -184,13 +196,14 @@ open class DiscordWebSocketImpl(
         @Suppress("MagicNumber")
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             logcat(LogPriority.INFO) { "Server Closed : $code $reason" }
-            if (code == 4000) {
+            if (code == 4000 || isClosed) {
                 scope.cancel()
             }
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             logcat(LogPriority.ERROR) { "Failure : ${t.message}" }
+            if (isClosed) return
             if (t.message != "Interrupt") {
                 this@DiscordWebSocketImpl.webSocket = client.newWebSocket(request, Listener())
             }

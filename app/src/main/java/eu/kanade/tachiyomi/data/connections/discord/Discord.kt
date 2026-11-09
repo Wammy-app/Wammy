@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
+import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
@@ -25,6 +26,7 @@ class Discord(id: Long) : ConnectionsService(id) {
     override fun getLogoColor() = Color.rgb(88, 101, 242)
 
     override fun logout() {
+        val oldToken = getToken()
         super.logout()
         connectionsPreferences.connectionsToken(this).delete()
         connectionsPreferences.setConnectionsCredentials(this, "", "")
@@ -33,6 +35,11 @@ class Discord(id: Long) : ConnectionsService(id) {
         val context = try { Injekt.get<Application>() } catch (_: Exception) { null }
         if (context != null) {
             DiscordRPCService.stop(context, 0L)
+        }
+        if (oldToken.isNotBlank()) {
+            DiscordRPCService.discordScope.launchIO {
+                DiscordRPCService.clearDiscordPresence(oldToken)
+            }
         }
     }
 
@@ -102,6 +109,7 @@ class Discord(id: Long) : ConnectionsService(id) {
         val accounts = getAccounts().toMutableList()
         val removed = accounts.find { it.id == accountId }
         val wasActive = removed?.isActive == true || removed?.token == getToken()
+        val removedToken = removed?.token ?: ""
         accounts.removeAll { it.id == accountId }
         saveAccounts(accounts)
 
@@ -109,11 +117,21 @@ class Discord(id: Long) : ConnectionsService(id) {
 
         if (accounts.isEmpty()) {
             logout()
+            if (removedToken.isNotBlank()) {
+                DiscordRPCService.discordScope.launchIO {
+                    DiscordRPCService.clearDiscordPresence(removedToken)
+                }
+            }
         } else if (wasActive) {
             val next = accounts.first().copy(isActive = true)
             accounts[0] = next
             saveAccounts(accounts)
             connectionsPreferences.connectionsToken(this).set(next.token)
+            if (removedToken.isNotBlank() && removedToken != next.token) {
+                DiscordRPCService.discordScope.launchIO {
+                    DiscordRPCService.clearDiscordPresence(removedToken)
+                }
+            }
             if (context != null) {
                 restartRichPresence(context)
             }

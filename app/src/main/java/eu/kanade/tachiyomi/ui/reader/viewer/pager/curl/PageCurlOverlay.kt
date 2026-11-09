@@ -53,6 +53,7 @@ class PageCurlOverlay(
     private val flapPath = Path()
     private val dropShadowPath = Path()
     private val creasePath = Path()
+    private val curlStripPath = Path()
 
     private var currentBitmap: Bitmap? = null
     private var nextBitmap: Bitmap? = null
@@ -457,22 +458,25 @@ class PageCurlOverlay(
         canvas.clipPath(uncurledPath)
         canvas.drawBitmap(curBmp, 0f, 0f, bitmapPaint)
 
+        // 3D paper curl roll width along the fold line
+        val cDist = (engine.pageWidth * 0.20f).coerceIn(100f, 190f)
+
         // Drop shadow onto stationary current page when incoming old page rolls over
         if (isBackward) {
             val sDist = 50f
             dropShadowPath.reset()
-            dropShadowPath.moveTo(fxT, pT)
-            dropShadowPath.lineTo(fxT - normX * sDist, pT - normY * sDist)
-            dropShadowPath.lineTo(fxB - normX * sDist, pB - normY * sDist)
-            dropShadowPath.lineTo(fxB, pB)
+            dropShadowPath.moveTo(fxT - normX * cDist, pT - normY * cDist)
+            dropShadowPath.lineTo(fxT - normX * (cDist + sDist), pT - normY * (cDist + sDist))
+            dropShadowPath.lineTo(fxB - normX * (cDist + sDist), pB - normY * (cDist + sDist))
+            dropShadowPath.lineTo(fxB - normX * cDist, pB - normY * cDist)
             dropShadowPath.close()
 
             dropShadowPaint.shader = LinearGradient(
-                engine.midX,
-                engine.midY,
-                engine.midX - normX * sDist,
-                engine.midY - normY * sDist,
-                Color.argb(130, 0, 0, 0),
+                engine.midX - normX * cDist,
+                engine.midY - normY * cDist,
+                engine.midX - normX * (cDist + sDist),
+                engine.midY - normY * (cDist + sDist),
+                Color.argb(120, 0, 0, 0),
                 Color.TRANSPARENT,
                 Shader.TileMode.CLAMP,
             )
@@ -480,7 +484,7 @@ class PageCurlOverlay(
         }
         canvas.restore()
 
-        // 4. Actual folded flap (the entire turned page back)
+        // 4. Actual folded flap (curled paper roll)
         // Mathematically reflect the peeled region across the fold line!
         reflectMatrix.reset()
         reflectMatrix.postTranslate(-engine.midX, -engine.midY)
@@ -492,7 +496,15 @@ class PageCurlOverlay(
         flapPath.reset()
         revealedPath.transform(reflectMatrix, flapPath)
 
+        curlStripPath.reset()
+        curlStripPath.moveTo(fxT, pT)
+        curlStripPath.lineTo(fxT - normX * cDist, pT - normY * cDist)
+        curlStripPath.lineTo(fxB - normX * cDist, pB - normY * cDist)
+        curlStripPath.lineTo(fxB, pB)
+        curlStripPath.close()
+
         canvas.save()
+        canvas.clipPath(curlStripPath)
         canvas.clipPath(flapPath)
 
         // 4a. Warm off-white paper base
@@ -502,8 +514,8 @@ class PageCurlOverlay(
         val flapBmp = if (isBackward) nxtBmp else curBmp
         canvas.drawBitmap(flapBmp, reflectMatrix, backPagePaint)
 
-        // 4c. Soft natural crease shadow along the fold bend (NOT a cylinder)
-        val creaseDist = 36f
+        // 4c. Soft natural crease shadow along the fold bend
+        val creaseDist = (cDist * 0.35f).coerceIn(25f, 50f)
         creasePath.reset()
         creasePath.moveTo(fxT, pT)
         creasePath.lineTo(fxT - normX * creaseDist, pT - normY * creaseDist)

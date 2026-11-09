@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.util.system.notificationBuilder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
@@ -75,10 +76,14 @@ class DiscordRPCService : Service() {
     }
 
     override fun onDestroy() {
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (_: Exception) {}
         NotificationReceiver.dismissNotification(this, Notifications.ID_DISCORD_RPC)
         rpc?.run {
-            closeRPC()
+            val r = this
             rpc = null
+            discordScope.launchIO { r.closeRPC() }
         }
         super.onDestroy()
     }
@@ -90,6 +95,9 @@ class DiscordRPCService : Service() {
             ACTION_RESTART -> restartRPC()
             STOP_SERVICE -> {
                 logcat(LogPriority.INFO) { "Stopping Discord RPC service" }
+                try {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } catch (_: Exception) {}
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -161,6 +169,7 @@ class DiscordRPCService : Service() {
             val token = connectionsPreferences.connectionsToken(discord).get()
             val accounts = discord.getAccounts()
             if (token.isBlank() || accounts.isEmpty()) {
+                stop(context, 0L)
                 if (token.isNotBlank() || connectionsPreferences.enableDiscordRPC().get()) {
                     discord.logout()
                 }
@@ -176,32 +185,46 @@ class DiscordRPCService : Service() {
             handler.removeCallbacksAndMessages(null)
             if (delay > 0) {
                 handler.postDelayed({
-                    rpc?.run {
-                        closeRPC()
-                        rpc = null
-                    }
-                    val stopIntent = Intent(context, DiscordRPCService::class.java).apply {
-                        action = STOP_SERVICE
-                    }
-                    try {
-                        context.startService(stopIntent)
-                    } catch (e: Exception) {
-                        logcat(LogPriority.ERROR) { "Failed to stop Discord RPC service: ${e.message}" }
-                    }
+                    stopImmediate(context)
                 }, delay)
             } else {
-                rpc?.run {
-                    closeRPC()
-                    rpc = null
+                stopImmediate(context)
+            }
+        }
+
+        private fun stopImmediate(context: Context) {
+            val currentRpc = rpc
+            rpc = null
+            if (currentRpc != null) {
+                discordScope.launchIO {
+                    currentRpc.closeRPC()
                 }
-                val stopIntent = Intent(context, DiscordRPCService::class.java).apply {
-                    action = STOP_SERVICE
+            }
+            try {
+                context.stopService(Intent(context, DiscordRPCService::class.java))
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR) { "Failed to stop Discord RPC service: ${e.message}" }
+            }
+        }
+
+        suspend fun clearDiscordPresence(token: String) {
+            if (token.isBlank()) return
+            try {
+                logcat(LogPriority.INFO) { "Explicitly clearing Discord presence for token" }
+                val ws = DiscordWebSocketImpl(token)
+                withTimeoutOrNull(4000L) {
+                    ws.sendActivity(
+                        Presence(
+                            status = "online",
+                            activities = emptyList(),
+                            afk = false,
+                            since = null,
+                        ),
+                    )
                 }
-                try {
-                    context.startService(stopIntent)
-                } catch (e: Exception) {
-                    logcat(LogPriority.ERROR) { "Failed to stop Discord RPC service: ${e.message}" }
-                }
+                ws.close()
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR) { "Failed to explicitly clear Discord presence: ${e.message}" }
             }
         }
 
