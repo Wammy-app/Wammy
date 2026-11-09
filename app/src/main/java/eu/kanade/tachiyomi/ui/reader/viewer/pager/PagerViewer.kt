@@ -412,7 +412,12 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             } else if (isCurlTransitionEnabled()) {
                 if (!curlOverlay.isCurling) {
                     val nextPos = pager.currentItem + 1
-                    curlOverlay.startCurlAnimation(nextPos, fromRight = true)
+                    val isR2L = this is R2LPagerViewer
+                    curlOverlay.startCurlAnimation(
+                        targetPos = nextPos,
+                        fromRight = true,
+                        isBackward = isR2L,
+                    )
                 }
             } else {
                 pager.setCurrentItem(pager.currentItem + 1, config.usePageTransitions)
@@ -431,7 +436,12 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             } else if (isCurlTransitionEnabled()) {
                 if (!curlOverlay.isCurling) {
                     val prevPos = pager.currentItem - 1
-                    curlOverlay.startCurlAnimation(prevPos, fromRight = false)
+                    val isR2L = this is R2LPagerViewer
+                    curlOverlay.startCurlAnimation(
+                        targetPos = prevPos,
+                        fromRight = false,
+                        isBackward = !isR2L,
+                    )
                 }
             } else {
                 pager.setCurrentItem(pager.currentItem - 1, config.usePageTransitions)

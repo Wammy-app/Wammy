@@ -23,6 +23,7 @@ import android.view.animation.DecelerateInterpolator
 import androidx.core.animation.doOnEnd
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
+import eu.kanade.tachiyomi.ui.reader.viewer.pager.R2LPagerViewer
 import kotlin.math.abs
 
 /**
@@ -63,6 +64,8 @@ class PageCurlOverlay(
     private var downX = 0f
     private var downY = 0f
     private var fromRight = true
+    var isBackward: Boolean = false
+        private set
     private var targetPosition = -1
 
     private var animator: ValueAnimator? = null
@@ -153,9 +156,15 @@ class PageCurlOverlay(
                 if (abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.3f) {
                     if (!ensureBitmaps()) return false
 
+                    val isR2L = viewer is R2LPagerViewer
                     val currentPos = viewer.pager.currentItem
-                    val targetPos = if (dx < 0) currentPos + 1 else currentPos - 1
-                    val curlFromRight = (dx < 0)
+                    val (targetPos, curlFromRight, backward) = if (isR2L) {
+                        if (dx > 0) Triple(currentPos - 1, false, false)
+                        else Triple(currentPos + 1, true, true)
+                    } else {
+                        if (dx < 0) Triple(currentPos + 1, true, false)
+                        else Triple(currentPos - 1, false, true)
+                    }
 
                     if (targetPos in 0 until viewer.adapter.count) {
                         val curBmp = currentBitmap ?: return false
@@ -171,6 +180,7 @@ class PageCurlOverlay(
                             isCurling = true
                             targetPosition = targetPos
                             fromRight = curlFromRight
+                            isBackward = backward
                             visibility = VISIBLE
 
                             val pw = engine.pageWidth.takeIf { it > 0 } ?: width.toFloat().coerceAtLeast(1f)
@@ -245,7 +255,12 @@ class PageCurlOverlay(
         return super.onTouchEvent(ev)
     }
 
-    fun startCurlAnimation(targetPos: Int, fromRight: Boolean, onComplete: (() -> Unit)? = null) {
+    fun startCurlAnimation(
+        targetPos: Int,
+        fromRight: Boolean,
+        isBackward: Boolean = false,
+        onComplete: (() -> Unit)? = null,
+    ) {
         if (isCurling) return
         if (!ensureBitmaps()) {
             viewer.pager.setCurrentItem(targetPos, false)
@@ -279,10 +294,12 @@ class PageCurlOverlay(
 
         targetPosition = targetPos
         this.fromRight = fromRight
+        this.isBackward = isBackward
         isCurling = true
         visibility = VISIBLE
 
         val touchY = bounds.top + bounds.height() * 0.25f
+        this.downY = touchY
         playPageTurnSound()
 
         animator?.cancel()
@@ -386,33 +403,14 @@ class PageCurlOverlay(
         }
         revealedPath.close()
 
+        // 2. Revealed page underneath or landed (nxtBmp)
         canvas.save()
         canvas.clipRect(pL, pT, pR, pB)
         canvas.clipPath(revealedPath)
         canvas.drawBitmap(nxtBmp, 0f, 0f, bitmapPaint)
-
-        // Drop shadow onto revealed page along diagonal fold line
-        val sDist = 50f
-        dropShadowPath.reset()
-        dropShadowPath.moveTo(fxT, pT)
-        dropShadowPath.lineTo(fxT + normX * sDist, pT + normY * sDist)
-        dropShadowPath.lineTo(fxB + normX * sDist, pB + normY * sDist)
-        dropShadowPath.lineTo(fxB, pB)
-        dropShadowPath.close()
-
-        dropShadowPaint.shader = LinearGradient(
-            engine.shadowStartX,
-            engine.shadowStartY,
-            engine.shadowEndX,
-            engine.shadowEndY,
-            Color.argb(130, 0, 0, 0),
-            Color.TRANSPARENT,
-            Shader.TileMode.CLAMP,
-        )
-        canvas.drawPath(dropShadowPath, dropShadowPaint)
         canvas.restore()
 
-        // 3. Flat uncurled part of the current page (curBmp)
+        // 3. Flat uncurled part of current page (curBmp)
         uncurledPath.reset()
         if (fromRight) {
             uncurledPath.moveTo(pL, pT)
@@ -431,6 +429,31 @@ class PageCurlOverlay(
         canvas.clipRect(pL, pT, pR, pB)
         canvas.clipPath(uncurledPath)
         canvas.drawBitmap(curBmp, 0f, 0f, bitmapPaint)
+        canvas.restore()
+
+        // Drop shadow along diagonal fold line onto the underlying page
+        val sDist = 50f
+        val sSign = if (isBackward) -1f else 1f
+        dropShadowPath.reset()
+        dropShadowPath.moveTo(fxT, pT)
+        dropShadowPath.lineTo(fxT + normX * sDist * sSign, pT + normY * sDist * sSign)
+        dropShadowPath.lineTo(fxB + normX * sDist * sSign, pB + normY * sDist * sSign)
+        dropShadowPath.lineTo(fxB, pB)
+        dropShadowPath.close()
+
+        dropShadowPaint.shader = LinearGradient(
+            engine.midX,
+            engine.midY,
+            engine.midX + normX * sDist * sSign,
+            engine.midY + normY * sDist * sSign,
+            Color.argb(130, 0, 0, 0),
+            Color.TRANSPARENT,
+            Shader.TileMode.CLAMP,
+        )
+        canvas.save()
+        canvas.clipRect(pL, pT, pR, pB)
+        canvas.clipPath(if (isBackward) uncurledPath else revealedPath)
+        canvas.drawPath(dropShadowPath, dropShadowPaint)
         canvas.restore()
 
         // 4. Actual folded flap (the entire turned page back)
@@ -452,7 +475,8 @@ class PageCurlOverlay(
         canvas.drawPath(flapPath, paperPaint)
 
         // 4b. Translucent mirrored comic artwork showing through the paper
-        canvas.drawBitmap(curBmp, reflectMatrix, backPagePaint)
+        val flapBmp = if (isBackward) nxtBmp else curBmp
+        canvas.drawBitmap(flapBmp, reflectMatrix, backPagePaint)
 
         // 4c. Soft natural crease shadow along the fold bend (NOT a cylinder)
         val creaseDist = 36f
