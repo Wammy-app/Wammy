@@ -23,7 +23,6 @@ import android.view.animation.DecelerateInterpolator
 import androidx.core.animation.doOnEnd
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
-import eu.kanade.tachiyomi.ui.reader.viewer.pager.R2LPagerViewer
 import kotlin.math.abs
 
 /**
@@ -154,15 +153,9 @@ class PageCurlOverlay(
                 if (abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.3f) {
                     if (!ensureBitmaps()) return false
 
-                    val isR2L = viewer is R2LPagerViewer
                     val currentPos = viewer.pager.currentItem
-                    val goingForward = dx < 0
-                    val targetPos = if (goingForward) {
-                        if (isR2L) currentPos - 1 else currentPos + 1
-                    } else {
-                        if (isR2L) currentPos + 1 else currentPos - 1
-                    }
-                    val curlFromRight = goingForward
+                    val targetPos = if (dx < 0) currentPos + 1 else currentPos - 1
+                    val curlFromRight = (dx < 0)
 
                     if (targetPos in 0 until viewer.adapter.count) {
                         val curBmp = currentBitmap ?: return false
