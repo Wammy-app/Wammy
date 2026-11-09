@@ -41,7 +41,7 @@ object DiscordOAuth {
             .appendQueryParameter("client_id", CLIENT_ID)
             .appendQueryParameter("response_type", "code")
             .appendQueryParameter("redirect_uri", REDIRECT_URI)
-            .appendQueryParameter("scope", "identify activities.write rpc.activities.write")
+            .appendQueryParameter("scope", "identify")
             .appendQueryParameter("code_challenge", challenge)
             .appendQueryParameter("code_challenge_method", "S256")
             .build()
