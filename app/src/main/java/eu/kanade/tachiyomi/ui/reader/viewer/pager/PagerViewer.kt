@@ -415,7 +415,7 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
                     val isR2L = this is R2LPagerViewer
                     curlOverlay.startCurlAnimation(
                         targetPos = nextPos,
-                        fromRight = true,
+                        fromRight = !isR2L,
                         isBackward = isR2L,
                     )
                 }
@@ -439,7 +439,7 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
                     val isR2L = this is R2LPagerViewer
                     curlOverlay.startCurlAnimation(
                         targetPos = prevPos,
-                        fromRight = false,
+                        fromRight = !isR2L,
                         isBackward = !isR2L,
                     )
                 }

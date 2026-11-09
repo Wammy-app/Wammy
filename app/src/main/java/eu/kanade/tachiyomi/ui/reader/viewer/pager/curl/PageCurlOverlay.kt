@@ -160,10 +160,10 @@ class PageCurlOverlay(
                     val currentPos = viewer.pager.currentItem
                     val (targetPos, curlFromRight, backward) = if (isR2L) {
                         if (dx > 0) Triple(currentPos - 1, false, false)
-                        else Triple(currentPos + 1, true, true)
+                        else Triple(currentPos + 1, false, true)
                     } else {
                         if (dx < 0) Triple(currentPos + 1, true, false)
-                        else Triple(currentPos - 1, false, true)
+                        else Triple(currentPos - 1, true, true)
                     }
 
                     if (targetPos in 0 until viewer.adapter.count) {
@@ -184,10 +184,10 @@ class PageCurlOverlay(
                             visibility = VISIBLE
 
                             val pw = engine.pageWidth.takeIf { it > 0 } ?: width.toFloat().coerceAtLeast(1f)
-                            val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
-                            val dist = (rawDist - touchSlop).coerceAtLeast(0f)
+                            val dist = (abs(dx) - touchSlop).coerceAtLeast(0f)
                             val travel = (pw * 0.85f).coerceAtLeast(400f)
-                            val progress = (dist / travel).coerceIn(0f, 1f)
+                            val ratio = (dist / travel).coerceIn(0f, 1f)
+                            val progress = if (isBackward) (1f - ratio) else ratio
                             engine.computeCurl(progress, downY, fromRight)
                             invalidate()
 
@@ -215,9 +215,9 @@ class PageCurlOverlay(
         when (ev.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
                 if (isDragging && travel > 0f) {
-                    val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
-                    val dist = (rawDist - touchSlop).coerceAtLeast(0f)
-                    val progress = (dist / travel).coerceIn(0f, 1f)
+                    val dist = (abs(ev.x - downX) - touchSlop).coerceAtLeast(0f)
+                    val ratio = (dist / travel).coerceIn(0f, 1f)
+                    val progress = if (isBackward) (1f - ratio) else ratio
                     engine.computeCurl(progress, downY, fromRight)
                     invalidate()
                 }
@@ -226,28 +226,36 @@ class PageCurlOverlay(
             MotionEvent.ACTION_UP -> {
                 if (isDragging && travel > 0f) {
                     isDragging = false
-                    val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
-                    val dist = (rawDist - touchSlop).coerceAtLeast(0f)
-                    val progress = (dist / travel).coerceIn(0f, 1f)
+                    val dist = (abs(ev.x - downX) - touchSlop).coerceAtLeast(0f)
+                    val ratio = (dist / travel).coerceIn(0f, 1f)
+                    val progress = if (isBackward) (1f - ratio) else ratio
+
                     velocityTracker?.computeCurrentVelocity(1000)
                     val vx = velocityTracker?.xVelocity ?: 0f
-                    val isFlingForward = if (fromRight) vx < -350f else vx > 350f
-                    val isFlingBackward = if (fromRight) vx > 350f else vx < -350f
-                    val shouldCommit = (progress > 0.35f && !isFlingBackward) || isFlingForward
+                    val userDraggedRight = ev.x > downX
+                    val isFlingAlongDrag = if (userDraggedRight) vx > 350f else vx < -350f
+                    val isFlingOpposite = if (userDraggedRight) vx < -350f else vx > 350f
+                    val shouldCommit = (ratio > 0.35f && !isFlingOpposite) || isFlingAlongDrag
                     if (shouldCommit) {
                         playPageTurnSound()
                     }
-                    animateSettle(from = progress, to = if (shouldCommit) 1f else 0f, commit = shouldCommit)
+                    val targetProgress = if (isBackward) {
+                        if (shouldCommit) 0f else 1f
+                    } else {
+                        if (shouldCommit) 1f else 0f
+                    }
+                    animateSettle(from = progress, to = targetProgress, commit = shouldCommit)
                 }
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
                 if (isDragging && travel > 0f) {
                     isDragging = false
-                    val rawDist = if (fromRight) (downX - ev.x) else (ev.x - downX)
-                    val dist = (rawDist - touchSlop).coerceAtLeast(0f)
-                    val progress = (dist / travel).coerceIn(0f, 1f)
-                    animateSettle(from = progress, to = 0f, commit = false)
+                    val dist = (abs(ev.x - downX) - touchSlop).coerceAtLeast(0f)
+                    val ratio = (dist / travel).coerceIn(0f, 1f)
+                    val progress = if (isBackward) (1f - ratio) else ratio
+                    val abortProgress = if (isBackward) 1f else 0f
+                    animateSettle(from = progress, to = abortProgress, commit = false)
                 }
                 return true
             }
@@ -302,8 +310,13 @@ class PageCurlOverlay(
         this.downY = touchY
         playPageTurnSound()
 
+        val startP = if (isBackward) 1f else 0f
+        val endP = if (isBackward) 0f else 1f
+        engine.computeCurl(startP, touchY, fromRight)
+        invalidate()
+
         animator?.cancel()
-        animator = ValueAnimator.ofFloat(0f, 1f).apply {
+        animator = ValueAnimator.ofFloat(startP, endP).apply {
             duration = 800L
             interpolator = AccelerateDecelerateInterpolator()
             addUpdateListener { anim ->
@@ -322,20 +335,11 @@ class PageCurlOverlay(
     private fun animateSettle(from: Float, to: Float, commit: Boolean) {
         animator?.cancel()
 
-        val duration = if (commit) {
-            val remaining = (1f - from).coerceAtLeast(0f)
-            if (remaining < 0.05f) {
-                120L
-            } else {
-                (remaining * 700f + 350f).toLong().coerceIn(450L, 850L)
-            }
+        val remaining = abs(to - from).coerceAtLeast(0f)
+        val duration = if (remaining < 0.05f) {
+            120L
         } else {
-            val remaining = from.coerceAtLeast(0f)
-            if (remaining < 0.05f) {
-                120L
-            } else {
-                (remaining * 550f + 250f).toLong().coerceIn(350L, 700L)
-            }
+            (remaining * 700f + 350f).toLong().coerceIn(450L, 850L)
         }
         val settleInterpolator = DecelerateInterpolator(1.0f)
         animator = ValueAnimator.ofFloat(from, to).apply {
@@ -403,14 +407,37 @@ class PageCurlOverlay(
         }
         revealedPath.close()
 
-        // 2. Revealed page underneath or landed (nxtBmp)
+        val topBmp = if (isBackward) nxtBmp else curBmp
+        val underBmp = if (isBackward) curBmp else nxtBmp
+
+        // 2. Underneath page (curBmp when backward, nxtBmp when forward)
         canvas.save()
         canvas.clipRect(pL, pT, pR, pB)
         canvas.clipPath(revealedPath)
-        canvas.drawBitmap(nxtBmp, 0f, 0f, bitmapPaint)
+        canvas.drawBitmap(underBmp, 0f, 0f, bitmapPaint)
+
+        // Drop shadow onto underneath page along diagonal fold line
+        val sDist = 50f
+        dropShadowPath.reset()
+        dropShadowPath.moveTo(fxT, pT)
+        dropShadowPath.lineTo(fxT + normX * sDist, pT + normY * sDist)
+        dropShadowPath.lineTo(fxB + normX * sDist, pB + normY * sDist)
+        dropShadowPath.lineTo(fxB, pB)
+        dropShadowPath.close()
+
+        dropShadowPaint.shader = LinearGradient(
+            engine.shadowStartX,
+            engine.shadowStartY,
+            engine.shadowEndX,
+            engine.shadowEndY,
+            Color.argb(130, 0, 0, 0),
+            Color.TRANSPARENT,
+            Shader.TileMode.CLAMP,
+        )
+        canvas.drawPath(dropShadowPath, dropShadowPaint)
         canvas.restore()
 
-        // 3. Flat uncurled part of current page (curBmp)
+        // 3. Flat uncurled part of top page (topBmp)
         uncurledPath.reset()
         if (fromRight) {
             uncurledPath.moveTo(pL, pT)
@@ -428,32 +455,7 @@ class PageCurlOverlay(
         canvas.save()
         canvas.clipRect(pL, pT, pR, pB)
         canvas.clipPath(uncurledPath)
-        canvas.drawBitmap(curBmp, 0f, 0f, bitmapPaint)
-        canvas.restore()
-
-        // Drop shadow along diagonal fold line onto the underlying page
-        val sDist = 50f
-        val sSign = if (isBackward) -1f else 1f
-        dropShadowPath.reset()
-        dropShadowPath.moveTo(fxT, pT)
-        dropShadowPath.lineTo(fxT + normX * sDist * sSign, pT + normY * sDist * sSign)
-        dropShadowPath.lineTo(fxB + normX * sDist * sSign, pB + normY * sDist * sSign)
-        dropShadowPath.lineTo(fxB, pB)
-        dropShadowPath.close()
-
-        dropShadowPaint.shader = LinearGradient(
-            engine.midX,
-            engine.midY,
-            engine.midX + normX * sDist * sSign,
-            engine.midY + normY * sDist * sSign,
-            Color.argb(130, 0, 0, 0),
-            Color.TRANSPARENT,
-            Shader.TileMode.CLAMP,
-        )
-        canvas.save()
-        canvas.clipRect(pL, pT, pR, pB)
-        canvas.clipPath(if (isBackward) uncurledPath else revealedPath)
-        canvas.drawPath(dropShadowPath, dropShadowPaint)
+        canvas.drawBitmap(topBmp, 0f, 0f, bitmapPaint)
         canvas.restore()
 
         // 4. Actual folded flap (the entire turned page back)
@@ -475,8 +477,7 @@ class PageCurlOverlay(
         canvas.drawPath(flapPath, paperPaint)
 
         // 4b. Translucent mirrored comic artwork showing through the paper
-        val flapBmp = if (isBackward) nxtBmp else curBmp
-        canvas.drawBitmap(flapBmp, reflectMatrix, backPagePaint)
+        canvas.drawBitmap(topBmp, reflectMatrix, backPagePaint)
 
         // 4c. Soft natural crease shadow along the fold bend (NOT a cylinder)
         val creaseDist = 36f
