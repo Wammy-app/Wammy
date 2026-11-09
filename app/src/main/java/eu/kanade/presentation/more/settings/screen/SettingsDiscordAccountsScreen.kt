@@ -90,7 +90,7 @@ private fun DiscordAccountsScreenContent() {
                 actions = {
                     IconButton(
                         onClick = {
-                            DiscordOAuth.launchAuthorization(context)
+                            navigator.push(DiscordLoginScreen())
                         },
                     ) {
                         Icon(

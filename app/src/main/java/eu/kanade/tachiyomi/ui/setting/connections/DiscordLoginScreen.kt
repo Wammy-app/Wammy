@@ -4,14 +4,24 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebStorage
 import android.webkit.WebView
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.kevinnzou.web.AccompanistWebChromeClient
@@ -35,6 +46,7 @@ import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.data.connections.ConnectionsManager
 import eu.kanade.tachiyomi.data.connections.discord.DiscordAccount
+import eu.kanade.tachiyomi.data.connections.discord.DiscordRPCService
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.util.system.isDebugBuildType
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
@@ -70,10 +82,30 @@ class DiscordLoginScreen : Screen() {
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
 
-        var currentUrl by remember { mutableStateOf(DISCORD_LOGIN_URL) }
+        var showTokenDialog by remember { mutableStateOf(false) }
+        var hasRetrievedToken by remember { mutableStateOf(false) }
 
         val webViewClient = remember {
             object : AccompanistWebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): WebResourceResponse? {
+                    val auth = request?.requestHeaders?.get("Authorization")
+                        ?: request?.requestHeaders?.get("authorization")
+                    if (!auth.isNullOrBlank() && !auth.startsWith("Bearer ") && !auth.startsWith("Bot ") && auth.length > 30) {
+                        if (!hasRetrievedToken) {
+                            hasRetrievedToken = true
+                            login(auth, context)
+                            scope.launch(Dispatchers.Main) {
+                                view?.loadUrl("about:blank")
+                                navigator.pop()
+                            }
+                        }
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
+
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
                     url?.let {
@@ -152,10 +184,13 @@ class DiscordLoginScreen : Screen() {
                 ): Boolean {
                     message?.let { token ->
                         if (token != JS_TOKEN_NULL && token != JS_TOKEN_ERROR) {
-                            login(token, context)
-                            scope.launch(Dispatchers.Main) {
-                                view?.loadUrl("about:blank")
-                                navigator.pop()
+                            if (!hasRetrievedToken) {
+                                hasRetrievedToken = true
+                                login(token, context)
+                                scope.launch(Dispatchers.Main) {
+                                    view?.loadUrl("about:blank")
+                                    navigator.pop()
+                                }
                             }
                             result?.confirm()
                             return true
@@ -167,6 +202,51 @@ class DiscordLoginScreen : Screen() {
             }
         }
 
+        if (showTokenDialog) {
+            var tokenInput by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { showTokenDialog = false },
+                title = { Text(text = "Enter Discord Token") },
+                text = {
+                    Column {
+                        Text(
+                            text = "Paste your Discord user token below to connect Rich Presence directly:",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        OutlinedTextField(
+                            value = tokenInput,
+                            onValueChange = { tokenInput = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp),
+                            placeholder = { Text(text = "User token...") },
+                            singleLine = true,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (tokenInput.isNotBlank()) {
+                                showTokenDialog = false
+                                login(tokenInput.trim(), context)
+                                scope.launch(Dispatchers.Main) {
+                                    navigator.pop()
+                                }
+                            }
+                        },
+                    ) {
+                        Text(text = "Connect")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showTokenDialog = false }) {
+                        Text(text = "Cancel")
+                    }
+                },
+            )
+        }
+
         Scaffold(
             topBar = {
                 Box {
@@ -176,6 +256,11 @@ class DiscordLoginScreen : Screen() {
                         actions = {
                             AppBarActions(
                                 persistentListOf(
+                                    AppBar.Action(
+                                        title = "Enter Token",
+                                        icon = Icons.Outlined.Edit,
+                                        onClick = { showTokenDialog = true },
+                                    ),
                                     AppBar.OverflowAction(
                                         title = stringResource(MR.strings.action_webview_refresh),
                                         onClick = { webViewNavigator.reload() },
@@ -226,10 +311,13 @@ class DiscordLoginScreen : Screen() {
                             @JavascriptInterface
                             fun onRetrieveToken(token: String) {
                                 if (token != JS_TOKEN_NULL && token != JS_TOKEN_ERROR) {
-                                    login(token, context)
-                                    scope.launch(Dispatchers.Main) {
-                                        webView.loadUrl("about:blank")
-                                        navigator.pop()
+                                    if (!hasRetrievedToken) {
+                                        hasRetrievedToken = true
+                                        login(token, context)
+                                        scope.launch(Dispatchers.Main) {
+                                            webView.loadUrl("about:blank")
+                                            navigator.pop()
+                                        }
                                     }
                                 }
                             }
@@ -251,31 +339,39 @@ class DiscordLoginScreen : Screen() {
 
         launchIO {
             try {
+                val cleanToken = token.trim().removeSurrounding("\"")
                 networkHelper.client.newCall(
                     okhttp3.Request.Builder()
                         .url(DISCORD_USER_API_URL)
-                        .addHeader("Authorization", token)
+                        .addHeader("Authorization", cleanToken)
                         .build(),
                 ).execute().use { response ->
                     if (response.isSuccessful) {
                         val body = response.body.string()
                         val account = json.decodeFromString<DiscordAccount>(body)
                             .copy(
-                                token = token,
+                                token = cleanToken,
                                 isActive = true,
                             )
                         connectionsManager.discord.addAccount(account)
 
-                        connectionsPreferences.connectionsToken(connectionsManager.discord).set(token)
+                        connectionsPreferences.connectionsToken(connectionsManager.discord).set(cleanToken)
                         connectionsPreferences.setConnectionsCredentials(
                             connectionsManager.discord,
+                            account.username,
                             "Discord",
-                            "Logged In",
                         )
+                        connectionsPreferences.enableDiscordRPC().set(true)
+                        DiscordRPCService.start(context)
+
+                        withContext(Dispatchers.Main) {
+                            context.toast(MR.strings.login_success)
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            context.toast("Discord login failed: HTTP ${response.code}")
+                        }
                     }
-                }
-                withContext(Dispatchers.Main) {
-                    context.toast(MR.strings.login_success)
                 }
             } catch (e: Exception) {
                 logcat(LogPriority.ERROR, e) { "Discord login error: ${e.message}" }

@@ -167,7 +167,7 @@ object SettingsTrackingScreen : SearchableSettings {
                         subtitle = stringResource(MR.strings.pref_discord_configuration).takeIf { isDiscordLoggedIn },
                         service = connectionsManager.discord,
                         login = {
-                            DiscordOAuth.launchAuthorization(context)
+                            navigator.push(DiscordLoginScreen())
                         },
                         openSettings = { navigator.push(SettingsDiscordScreen) },
                     ),
