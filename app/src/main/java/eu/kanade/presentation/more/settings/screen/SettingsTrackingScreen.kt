@@ -1,4 +1,4 @@
-﻿@file:Suppress("ktlint:standard:max-line-length")
+@file:Suppress("ktlint:standard:max-line-length")
 
 package eu.kanade.presentation.more.settings.screen
 
@@ -56,6 +56,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.tachiyomi.data.connections.ConnectionsManager
+import eu.kanade.tachiyomi.data.connections.discord.DiscordOAuth
 import eu.kanade.tachiyomi.ui.setting.connections.DiscordLoginScreen
 import kotlinx.collections.immutable.persistentListOf
 import eu.kanade.domain.track.model.AutoTrackState
@@ -166,7 +167,7 @@ object SettingsTrackingScreen : SearchableSettings {
                         subtitle = stringResource(MR.strings.pref_discord_configuration).takeIf { isDiscordLoggedIn },
                         service = connectionsManager.discord,
                         login = {
-                            navigator.push(DiscordLoginScreen())
+                            DiscordOAuth.launchAuthorization(context)
                         },
                         openSettings = { navigator.push(SettingsDiscordScreen) },
                     ),

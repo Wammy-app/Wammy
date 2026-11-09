@@ -283,6 +283,20 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.setting.connections.DiscordOAuthLoginActivity"
+            android:exported="true"
+            android:label="@string/connections_discord">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="discord-1551895517397516318" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".data.notification.NotificationReceiver"
             android:exported="false" />

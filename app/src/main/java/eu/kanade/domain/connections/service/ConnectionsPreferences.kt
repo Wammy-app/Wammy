@@ -54,6 +54,8 @@ class ConnectionsPreferences(
 
     fun discordAccounts() = preferenceStore.getString("discord_accounts", "")
 
+    fun discordOAuthCodeVerifier() = preferenceStore.getString("discord_oauth_code_verifier", "")
+
     companion object {
         fun connectionsUsername(syncId: Long) = "pref_connections_username_$syncId"
         private fun connectionsPassword(syncId: Long) = "pref_connections_password_$syncId"

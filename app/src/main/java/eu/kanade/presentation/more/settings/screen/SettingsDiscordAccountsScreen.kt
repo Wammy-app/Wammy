@@ -39,6 +39,7 @@ import eu.kanade.domain.connections.service.ConnectionsPreferences
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.tachiyomi.data.connections.ConnectionsManager
 import eu.kanade.tachiyomi.data.connections.discord.DiscordAccount
+import eu.kanade.tachiyomi.data.connections.discord.DiscordOAuth
 import eu.kanade.tachiyomi.ui.setting.connections.DiscordLoginScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +78,7 @@ private fun DiscordAccountsScreenContent() {
     val navigator = LocalNavigator.currentOrThrow
     val screenModel = remember { DiscordAccountsScreenModel() }
     val state by screenModel.state.collectAsState()
+    val context = LocalContext.current
 
     val noAccountsFoundString = stringResource(MR.strings.no_accounts_found)
 
@@ -88,7 +90,7 @@ private fun DiscordAccountsScreenContent() {
                 actions = {
                     IconButton(
                         onClick = {
-                            navigator.push(DiscordLoginScreen())
+                            DiscordOAuth.launchAuthorization(context)
                         },
                     ) {
                         Icon(
