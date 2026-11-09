@@ -9,6 +9,9 @@
         </intent>
         <!-- Needed to detect Google Play Services availability for telemetry init -->
         <package android:name="com.google.android.gms" />
+        <package android:name="com.discord" />
+        <package android:name="com.discord.canary" />
+        <package android:name="com.discord.ptb" />
     </queries>
 
     <!-- Internet -->

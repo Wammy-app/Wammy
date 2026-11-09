@@ -47,15 +47,25 @@ object DiscordOAuth {
             .build()
     }
 
+    private val DISCORD_PACKAGES = listOf(
+        "com.discord",
+        "com.discord.canary",
+        "com.discord.ptb",
+    )
+
     fun launchAuthorization(context: Context) {
         val uri = buildAuthUri()
-        try {
-            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        for (pkg in DISCORD_PACKAGES) {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                    setPackage(pkg)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+                return
+            } catch (_: Exception) {
             }
-            context.startActivity(intent)
-        } catch (_: Exception) {
-            context.openInBrowser(uri, forceDefaultBrowser = true)
         }
+        context.openInBrowser(uri, forceDefaultBrowser = true)
     }
 }
