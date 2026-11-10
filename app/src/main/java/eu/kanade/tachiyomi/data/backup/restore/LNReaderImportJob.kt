@@ -78,6 +78,7 @@ class LNReaderImportJob(private val context: Context, workerParams: WorkerParame
                 Result.failure()
             }
         } finally {
+            BackupNotifier.clearRestoreProgress()
             context.cancelNotification(Notifications.ID_RESTORE_PROGRESS)
         }
     }

@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalDensity
@@ -31,6 +32,7 @@ import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastMap
 import androidx.compose.ui.util.fastMaxBy
 import dev.icerock.moko.resources.StringResource
+import eu.kanade.tachiyomi.data.backup.BackupNotifier
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -63,32 +65,55 @@ fun AppStateBanners(
     downloadedOnlyMode: Boolean,
     incognitoMode: Boolean,
     indexing: Boolean,
+    restoring: BackupNotifier.RestoreProgressState? = null,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     val mainInsets = WindowInsets.statusBars
     val mainInsetsTop = mainInsets.getTop(density)
+    var lastRestoring by remember { mutableStateOf(restoring) }
+    if (restoring != null) {
+        lastRestoring = restoring
+    }
+
     SubcomposeLayout(modifier = modifier) { constraints ->
-        val indexingPlaceable = subcompose(0) {
+        val restoringPlaceable = subcompose(0) {
+            AnimatedVisibility(
+                visible = restoring != null,
+                enter = expandVertically(),
+                exit = shrinkVertically(),
+            ) {
+                lastRestoring?.let {
+                    RestoringBackupBanner(
+                        restoring = it,
+                        modifier = Modifier.windowInsetsPadding(mainInsets),
+                    )
+                }
+            }
+        }.fastMap { it.measure(constraints) }
+        val restoringHeight = restoringPlaceable.fastMaxBy { it.height }?.height ?: 0
+
+        val indexingPlaceable = subcompose(1) {
             AnimatedVisibility(
                 visible = indexing,
                 enter = expandVertically(),
                 exit = shrinkVertically(),
             ) {
+                val top = (mainInsetsTop - restoringHeight).coerceAtLeast(0)
                 IndexingDownloadBanner(
-                    modifier = Modifier.windowInsetsPadding(mainInsets),
+                    modifier = Modifier.windowInsetsPadding(WindowInsets(top = top)),
                 )
             }
         }.fastMap { it.measure(constraints) }
         val indexingHeight = indexingPlaceable.fastMaxBy { it.height }?.height ?: 0
 
-        val downloadedOnlyPlaceable = subcompose(1) {
+        val downloadedOnlyPlaceable = subcompose(2) {
             AnimatedVisibility(
                 visible = downloadedOnlyMode,
                 enter = expandVertically(),
                 exit = shrinkVertically(),
             ) {
-                val top = (mainInsetsTop - indexingHeight).coerceAtLeast(0)
+                val top = (mainInsetsTop - restoringHeight - indexingHeight).coerceAtLeast(0)
                 DownloadedOnlyModeBanner(
                     modifier = Modifier.windowInsetsPadding(WindowInsets(top = top)),
                 )
@@ -96,13 +121,13 @@ fun AppStateBanners(
         }.fastMap { it.measure(constraints) }
         val downloadedOnlyHeight = downloadedOnlyPlaceable.fastMaxBy { it.height }?.height ?: 0
 
-        val incognitoPlaceable = subcompose(2) {
+        val incognitoPlaceable = subcompose(3) {
             AnimatedVisibility(
                 visible = incognitoMode,
                 enter = expandVertically(),
                 exit = shrinkVertically(),
             ) {
-                val top = (mainInsetsTop - indexingHeight - downloadedOnlyHeight).coerceAtLeast(0)
+                val top = (mainInsetsTop - restoringHeight - indexingHeight - downloadedOnlyHeight).coerceAtLeast(0)
                 IncognitoModeBanner(
                     modifier = Modifier.windowInsetsPadding(WindowInsets(top = top)),
                 )
@@ -110,15 +135,18 @@ fun AppStateBanners(
         }.fastMap { it.measure(constraints) }
         val incognitoHeight = incognitoPlaceable.fastMaxBy { it.height }?.height ?: 0
 
-        layout(constraints.maxWidth, indexingHeight + downloadedOnlyHeight + incognitoHeight) {
-            indexingPlaceable.fastForEach {
+        layout(constraints.maxWidth, restoringHeight + indexingHeight + downloadedOnlyHeight + incognitoHeight) {
+            restoringPlaceable.fastForEach {
                 it.place(0, 0)
             }
+            indexingPlaceable.fastForEach {
+                it.place(0, restoringHeight)
+            }
             downloadedOnlyPlaceable.fastForEach {
-                it.place(0, indexingHeight)
+                it.place(0, restoringHeight + indexingHeight)
             }
             incognitoPlaceable.fastForEach {
-                it.place(0, indexingHeight + downloadedOnlyHeight)
+                it.place(0, restoringHeight + indexingHeight + downloadedOnlyHeight)
             }
         }
     }
@@ -155,7 +183,30 @@ private fun IncognitoModeBanner(modifier: Modifier = Modifier) {
 }
 
 @Composable
+private fun RestoringBackupBanner(
+    restoring: BackupNotifier.RestoreProgressState,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(if (restoring.isSync) MR.strings.syncing_library else MR.strings.restoring_backup)
+    LoadingBanner(
+        text = formatRestoreBannerText(label, restoring.progress, restoring.maxAmount),
+        modifier = modifier,
+    )
+}
+
+@Composable
 private fun IndexingDownloadBanner(modifier: Modifier = Modifier) {
+    LoadingBanner(
+        text = stringResource(MR.strings.download_notifier_cache_renewal),
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun LoadingBanner(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
     val density = LocalDensity.current
     Row(
         modifier = Modifier
@@ -164,6 +215,7 @@ private fun IndexingDownloadBanner(modifier: Modifier = Modifier) {
             .padding(8.dp)
             .then(modifier),
         horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         var textHeight by remember { mutableStateOf(0.dp) }
         CircularProgressIndicator(
@@ -173,7 +225,7 @@ private fun IndexingDownloadBanner(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = stringResource(MR.strings.download_notifier_cache_renewal),
+            text = text,
             color = MaterialTheme.colorScheme.onSecondary,
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.labelMedium,
@@ -183,5 +235,17 @@ private fun IndexingDownloadBanner(modifier: Modifier = Modifier) {
                 }
             },
         )
+    }
+}
+
+internal fun formatRestoreBannerText(
+    label: String,
+    progress: Int,
+    maxAmount: Int,
+): String {
+    return if (progress > 0 && maxAmount > 0) {
+        "$label ($progress/$maxAmount)"
+    } else {
+        "$label..."
     }
 }

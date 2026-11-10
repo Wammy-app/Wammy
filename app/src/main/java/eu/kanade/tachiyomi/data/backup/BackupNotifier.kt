@@ -15,6 +15,9 @@ import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import tachiyomi.core.common.i18n.pluralStringResource
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.storage.displayablePath
@@ -24,6 +27,21 @@ import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 
 class BackupNotifier(private val context: Context) {
+
+    data class RestoreProgressState(
+        val progress: Int = 0,
+        val maxAmount: Int = 0,
+        val isSync: Boolean = false,
+    )
+
+    companion object {
+        private val _restoreProgress = MutableStateFlow<RestoreProgressState?>(null)
+        val restoreProgress: StateFlow<RestoreProgressState?> = _restoreProgress.asStateFlow()
+
+        fun clearRestoreProgress() {
+            _restoreProgress.value = null
+        }
+    }
 
     private val preferences: SecurityPreferences by injectLazy()
 
@@ -93,7 +111,7 @@ class BackupNotifier(private val context: Context) {
     fun showRestoreProgress(
         content: String = "",
         progress: Int = 0,
-        maxAmount: Int = 100,
+        maxAmount: Int = 0,
         sync: Boolean = false,
     ): NotificationCompat.Builder {
         val builder = with(progressNotificationBuilder) {
@@ -108,7 +126,12 @@ class BackupNotifier(private val context: Context) {
                 setContentText(content)
             }
 
-            setProgress(maxAmount, progress, false)
+            _restoreProgress.value = RestoreProgressState(
+                progress = progress,
+                maxAmount = maxAmount,
+                isSync = sync,
+            )
+            setProgress(maxAmount, progress, maxAmount <= 0)
             setOnlyAlertOnce(true)
 
             clearActions()
@@ -125,6 +148,7 @@ class BackupNotifier(private val context: Context) {
     }
 
     fun showRestoreError(error: String?) {
+        clearRestoreProgress()
         context.cancelNotification(Notifications.ID_RESTORE_PROGRESS)
 
         with(completeNotificationBuilder) {
@@ -149,6 +173,7 @@ class BackupNotifier(private val context: Context) {
             context.stringResource(MR.strings.restore_completed)
         }
 
+        clearRestoreProgress()
         context.cancelNotification(Notifications.ID_RESTORE_PROGRESS)
 
         val timeString = context.stringResource(

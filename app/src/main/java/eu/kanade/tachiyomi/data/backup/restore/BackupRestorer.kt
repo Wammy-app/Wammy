@@ -70,6 +70,7 @@ class BackupRestorer(
 
     suspend fun restore(uri: Uri, options: RestoreOptions) {
         val startTime = System.currentTimeMillis()
+        notifier.showRestoreProgress(progress = 0, maxAmount = 0, sync = isSync)
 
         restoreFromFile(uri, options)
 

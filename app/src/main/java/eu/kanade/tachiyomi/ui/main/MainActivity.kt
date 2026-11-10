@@ -63,6 +63,7 @@ import eu.kanade.presentation.more.settings.screen.browse.ExtensionStoresScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.DefaultNavigatorScreenTransition
+import eu.kanade.tachiyomi.data.backup.BackupNotifier
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
@@ -191,6 +192,7 @@ class MainActivity : BaseActivity() {
             var incognito by remember { mutableStateOf(getIncognitoState.await(null)) }
             val downloadOnly by preferences.downloadedOnly.collectAsState()
             val indexing by downloadCache.isInitializing.collectAsState()
+            val restoreProgress by BackupNotifier.restoreProgress.collectAsState()
 
             val themeMode by uiPreferences.themeMode.collectAsState()
             val isSystemDark = isSystemInDarkTheme()
@@ -201,6 +203,7 @@ class MainActivity : BaseActivity() {
             }
             
             val statusBarBackgroundColor = when {
+                restoreProgress != null -> IndexingBannerBackgroundColor
                 indexing -> IndexingBannerBackgroundColor
                 downloadOnly -> DownloadedOnlyBannerBackgroundColor
                 incognito -> IncognitoModeBannerBackgroundColor
@@ -256,6 +259,7 @@ class MainActivity : BaseActivity() {
                             downloadedOnlyMode = downloadOnly,
                             incognitoMode = incognito,
                             indexing = indexing,
+                            restoring = restoreProgress,
                             modifier = Modifier.windowInsetsPadding(scaffoldInsets),
                         )
                     },

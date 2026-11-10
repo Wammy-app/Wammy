@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.data.backup.create.BackupCreator
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestorer
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
+import eu.kanade.tachiyomi.data.notification.Notifications
+import eu.kanade.tachiyomi.util.system.cancelNotification
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -256,6 +258,8 @@ class DriveSyncManager(
                     logcat(LogPriority.ERROR, e) { "DriveSync: BackupRestorer failed" }
                     return@withContext SyncResult.Error("Failed to restore backup: ${e.message}")
                 } finally {
+                    BackupNotifier.clearRestoreProgress()
+                    context.cancelNotification(Notifications.ID_RESTORE_PROGRESS)
                     tempFile.delete()
                 }
 
