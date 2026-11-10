@@ -78,6 +78,8 @@ class LibraryPreferences(
 
     val joinedLibrary: Preference<Boolean> = preferenceStore.getBoolean("pref_joined_library", true)
 
+    val spaceSeparatedLibrary: Preference<Boolean> = preferenceStore.getBoolean("pref_space_separated_library", true)
+
     val showContinueReadingButton: Preference<Boolean> = preferenceStore.getBoolean(
         "display_continue_reading_button",
         false,

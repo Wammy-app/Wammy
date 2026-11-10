@@ -39,6 +39,7 @@ import eu.kanade.tachiyomi.util.chapter.getNextUnread
 import eu.kanade.tachiyomi.util.removeCovers
 import eu.kanade.tachiyomi.util.source.getMangaUrlOrNull
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -129,6 +130,12 @@ class LibraryViewModel(
     private val itemCacheMangaRef = HashMap<Long, LibraryManga>()
     private var itemCachePrefs: DisplayPreferences? = null
 
+    private val isActiveFlow = MutableStateFlow(true)
+
+    fun setActive(active: Boolean) {
+        isActiveFlow.value = active
+    }
+
     enum class LibraryType {
         All,
         Manga,
@@ -157,20 +164,29 @@ class LibraryViewModel(
         // this init block runs.
         if (getLibraryManga.isPaginationEnabled()) {
             viewModelScope.launchIO {
-                combine(
-                    categoriesForType(),
-                    getLibraryItemPreferencesFlow(),
-                    state.map { it.searchQuery }.distinctUntilChanged(),
-                    libraryPreferences.useRegexSearch.changes(),
-                ) { categories, prefs, query, useRegex ->
-                    buildPageSpecs(categories, prefs, query, useRegex)
-                }
+                isActiveFlow
+                    .flatMapLatest { active ->
+                        if (!active) {
+                            flowOf(null)
+                        } else {
+                            combine(
+                                categoriesForType(),
+                                getLibraryItemPreferencesFlow(),
+                                state.map { it.searchQuery }.distinctUntilChanged(),
+                                libraryPreferences.useRegexSearch.changes(),
+                            ) { categories, prefs, query, useRegex ->
+                                buildPageSpecs(categories, prefs, query, useRegex)
+                            }
+                        }
+                    }
                     .distinctUntilChanged()
-                    .collectLatest {
-                        getLibraryManga.applyPageSpecs(it)
-                        // Filters/sort/search reset paging to page one. Bump the reset token so every
-                        // sentinel re-fires and can drain again if the new first page underfills.
-                        mutableState.update { st -> st.copy(paginationResetToken = st.paginationResetToken + 1) }
+                    .collectLatest { specs ->
+                        if (specs != null) {
+                            getLibraryManga.applyPageSpecs(specs)
+                            // Filters/sort/search reset paging to page one. Bump the reset token so every
+                            // sentinel re-fires and can drain again if the new first page underfills.
+                            mutableState.update { st -> st.copy(paginationResetToken = st.paginationResetToken + 1) }
+                        }
                     }
             }
         }

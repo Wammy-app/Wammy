@@ -1,20 +1,29 @@
 package eu.kanade.presentation.library.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
@@ -47,6 +56,8 @@ fun LibraryToolbar(
     onClickFindDuplicates: (() -> Unit)? = null,
     onClickEditCategories: (() -> Unit)? = null,
     onClickCategoryActions: (() -> Unit)? = null,
+    spaceLabel: String? = null,
+    onToggleSpace: (() -> Unit)? = null,
 ) = when {
     selectedCount > 0 -> LibrarySelectionToolbar(
         selectedCount = selectedCount,
@@ -71,6 +82,8 @@ fun LibraryToolbar(
         onClickFindDuplicates = onClickFindDuplicates,
         onClickEditCategories = onClickEditCategories,
         onClickCategoryActions = onClickCategoryActions,
+        spaceLabel = spaceLabel,
+        onToggleSpace = onToggleSpace,
     )
 }
 
@@ -92,6 +105,8 @@ private fun LibraryRegularToolbar(
     onClickFindDuplicates: (() -> Unit)? = null,
     onClickEditCategories: (() -> Unit)? = null,
     onClickCategoryActions: (() -> Unit)? = null,
+    spaceLabel: String? = null,
+    onToggleSpace: (() -> Unit)? = null,
 ) {
     val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
     SearchToolbar(
@@ -109,6 +124,25 @@ private fun LibraryRegularToolbar(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = pillAlpha),
                         fontSize = 14.sp,
                     )
+                }
+                if (spaceLabel != null && onToggleSpace != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable(onClick = onToggleSpace),
+                    ) {
+                        Text(
+                            text = spaceLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            letterSpacing = 1.sp,
+                        )
+                    }
                 }
             }
         },

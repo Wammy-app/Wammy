@@ -553,7 +553,8 @@ class MangaViewModel(
                 val isNovel = state.manga.isNovel
                 val contentType = if (isNovel) Category.CONTENT_TYPE_NOVEL else Category.CONTENT_TYPE_MANGA
                 val allCategories = getCategories()
-                val isJoinedLibrary = libraryPreferences.joinedLibrary.get()
+                val isJoinedLibrary = libraryPreferences.joinedLibrary.get() &&
+                    !libraryPreferences.spaceSeparatedLibrary.get()
                 val categories = if (isJoinedLibrary) {
                     allCategories
                 } else {
@@ -605,7 +606,8 @@ class MangaViewModel(
             val isNovel = manga.isNovel
             val contentType = if (isNovel) Category.CONTENT_TYPE_NOVEL else Category.CONTENT_TYPE_MANGA
             val allCategories = getCategories()
-            val isJoinedLibrary = libraryPreferences.joinedLibrary.get()
+            val isJoinedLibrary = libraryPreferences.joinedLibrary.get() &&
+                !libraryPreferences.spaceSeparatedLibrary.get()
             val categories = if (isJoinedLibrary) {
                 allCategories
             } else {

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -112,6 +113,10 @@ data object LibraryTab : Tab {
             },
         )
         val state by viewModel.state.collectAsState()
+        DisposableEffect(viewModel) {
+            viewModel.setActive(true)
+            onDispose { viewModel.setActive(false) }
+        }
         var reopenCategoryDialogOnReturn by androidx.compose.runtime.saveable.rememberSaveable {
             androidx.compose.runtime.mutableStateOf(false)
         }

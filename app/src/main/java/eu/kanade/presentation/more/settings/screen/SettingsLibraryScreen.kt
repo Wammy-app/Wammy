@@ -58,9 +58,13 @@ object SettingsLibraryScreen : SearchableSettings {
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
         val sourcePreferences = remember { Injekt.get<SourcePreferences>() }
         val allCategories by getCategories.subscribe().collectAsState(initial = emptyList())
-        val isJoined by libraryPreferences.joinedLibrary.changes().collectAsState(
+        val rawJoined by libraryPreferences.joinedLibrary.changes().collectAsState(
             initial = libraryPreferences.joinedLibrary.get(),
         )
+        val isSpaceSeparated by libraryPreferences.spaceSeparatedLibrary.changes().collectAsState(
+            initial = libraryPreferences.spaceSeparatedLibrary.get(),
+        )
+        val isJoined = rawJoined && !isSpaceSeparated
 
         return listOf(
             getCategoriesGroup(LocalNavigator.currentOrThrow, allCategories, libraryPreferences),

@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.TabletUiMode
 import eu.kanade.domain.ui.model.ThemeMode
@@ -162,18 +163,26 @@ object SettingsAppearanceScreen : SearchableSettings {
         libraryPreferences: tachiyomi.domain.library.service.LibraryPreferences,
     ): Preference.PreferenceGroup {
         val context = LocalContext.current
-        val basePreferences = remember { Injekt.get<eu.kanade.domain.base.BasePreferences>() }
+        val basePreferences = remember { Injekt.get<BasePreferences>() }
+        val isJoined by libraryPreferences.joinedLibrary.collectAsState()
+        val hideMangaUi by basePreferences.hideMangaUi.collectAsState()
         return Preference.PreferenceGroup(
             title = "Library layout",
             preferenceItems = listOf(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = libraryPreferences.joinedLibrary,
                     title = "Combined library",
-                    subtitle = "Merge Novels and Manga into a single Library tab",
+                    subtitle = "Use a single Library tab in the bottom bar",
                     onValueChanged = {
                         context.toast(MR.strings.requires_app_restart)
                         true
                     },
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = libraryPreferences.spaceSeparatedLibrary,
+                    title = "Separate library by space",
+                    subtitle = "Show only Manga in Manga Space and only Novels in Novel Space",
+                    enabled = isJoined && !hideMangaUi,
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = basePreferences.hideMangaUi,

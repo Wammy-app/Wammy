@@ -11,9 +11,12 @@ import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -31,6 +34,7 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.presentation.category.components.CategoryCreateDialog
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.library.DeleteLibraryMangaDialog
@@ -46,6 +50,7 @@ import eu.kanade.presentation.util.Tab
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
+import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.NovelGlobalSearchScreen
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
@@ -84,10 +89,12 @@ data object NovelsTab : Tab {
             val isSelected = LocalTabNavigator.current.current.key == key
             val image = AnimatedImageVector.animatedVectorResource(R.drawable.anim_library_enter)
             val libraryPreferences = remember { Injekt.get<tachiyomi.domain.library.service.LibraryPreferences>() }
+            val basePreferences = remember { Injekt.get<BasePreferences>() }
             val isJoined by libraryPreferences.joinedLibrary.collectAsState()
+            val hideMangaUi by basePreferences.hideMangaUi.collectAsState()
             return TabOptions(
                 index = 0u,
-                title = if (isJoined) stringResource(MR.strings.label_library) else "Novels",
+                title = if (isJoined || hideMangaUi) stringResource(MR.strings.label_library) else "Novels",
                 icon = rememberAnimatedVectorPainter(image, isSelected),
             )
         }
@@ -104,8 +111,19 @@ data object NovelsTab : Tab {
         val haptic = LocalHapticFeedback.current
 
         val libraryPreferences = remember { Injekt.get<tachiyomi.domain.library.service.LibraryPreferences>() }
+        val basePreferences = remember { Injekt.get<BasePreferences>() }
         val isJoined by libraryPreferences.joinedLibrary.collectAsState()
-        val libraryType = if (isJoined) LibraryViewModel.LibraryType.All else LibraryViewModel.LibraryType.Novel
+        val isSpaceSeparated by libraryPreferences.spaceSeparatedLibrary.collectAsState()
+        val hideMangaUi by basePreferences.hideMangaUi.collectAsState()
+        val homeTabIsNovel by basePreferences.homeTabIsNovel.collectAsState()
+        val isSpaceMode = !hideMangaUi && isJoined && isSpaceSeparated
+        val libraryType = resolveSpaceLibraryType(
+            hideMangaUi = hideMangaUi,
+            isJoined = isJoined,
+            isSpaceSeparated = isSpaceSeparated,
+            homeTabIsNovel = homeTabIsNovel,
+        )
+        val isNovelContent = libraryType != LibraryViewModel.LibraryType.Manga
         val viewModel = viewModel<LibraryViewModel>(
             key = "LibraryViewModel_${libraryType.name}",
             factory = LibraryViewModel.Factory,
@@ -120,11 +138,15 @@ data object NovelsTab : Tab {
                 set(LibrarySettingsViewModel.TYPE_KEY, libraryType)
             },
         )
+        DisposableEffect(viewModel) {
+            viewModel.setActive(true)
+            onDispose { viewModel.setActive(false) }
+        }
         val state by viewModel.state.collectAsState()
         var reopenCategoryDialogOnReturn by androidx.compose.runtime.saveable.rememberSaveable {
             androidx.compose.runtime.mutableStateOf(false)
         }
-        var createSubCategoryFor by remember { androidx.compose.runtime.mutableStateOf<Category?>(null) }
+        var createSubCategoryFor by remember(libraryType) { mutableStateOf<Category?>(null) }
         LaunchedEffect(navigator.lastItem) {
             if (navigator.lastItem is HomeScreen && reopenCategoryDialogOnReturn) {
                 reopenCategoryDialogOnReturn = false
@@ -167,7 +189,7 @@ data object NovelsTab : Tab {
         Scaffold(
             topBar = { scrollBehavior ->
                 val title = state.getToolbarTitle(
-                    defaultTitle = if (isJoined) stringResource(MR.strings.label_library) else "Novels",
+                    defaultTitle = if (isJoined || hideMangaUi) stringResource(MR.strings.label_library) else "Novels",
                     defaultCategoryTitle = stringResource(MR.strings.label_default),
                     page = state.coercedActiveCategoryIndex,
                 )
@@ -200,11 +222,24 @@ data object NovelsTab : Tab {
                     // For scroll overlay when no tab
                     scrollBehavior = scrollBehavior.takeIf { !state.showCategoryTabs && !state.hasUserCategories },
                     onClickMassImport = viewModel::openMassImportDialog,
-                    onClickImportEpub = { navigator.push(ImportEpubScreen()) },
+                    onClickImportEpub = { navigator.push(ImportEpubScreen()) }.takeIf { isNovelContent },
                     onClickFindDuplicates = { navigator.push(DuplicateDetectionScreen()) },
                     onClickEditCategories = { navigator.push(CategoryScreen()) },
                     onClickCategoryActions = {
                         state.activeCategory?.let(viewModel::openCategoryActionsDialog)
+                    },
+                    spaceLabel = if (isSpaceMode) {
+                        if (homeTabIsNovel) "NOVELS" else "MANGA"
+                    } else {
+                        null
+                    },
+                    onToggleSpace = if (isSpaceMode) {
+                        {
+                            viewModel.clearSelection()
+                            basePreferences.homeTabIsNovel.set(!homeTabIsNovel)
+                        }
+                    } else {
+                        null
                     },
                 )
             },
@@ -225,15 +260,18 @@ data object NovelsTab : Tab {
                     onCopyLinksClicked = {
                         val urls = viewModel.getSelectedMangaUrls()
                         if (urls.isNotEmpty()) {
-                            context.copyToClipboard("Novel Links", urls.joinToString("\n"))
+                            context.copyToClipboard(
+                                if (isNovelContent) "Novel Links" else "Manga Links",
+                                urls.joinToString("\n"),
+                            )
                         }
                         viewModel.clearSelection()
                     },
                     onUpdateClicked = viewModel::openUpdateSelectedDialog,
                     onTranslateClicked = {
                         viewModel.translateSelectedNovels()
-                    },
-                    onExportEpubClicked = viewModel::openExportEpubDialog,
+                    }.takeIf { isNovelContent },
+                    onExportEpubClicked = viewModel::openExportEpubDialog.takeIf { isNovelContent },
                 )
             },
             snackbarHost = {
@@ -262,52 +300,57 @@ data object NovelsTab : Tab {
                     )
                 }
                 else -> {
-                    LibraryContent(
-                        categories = state.displayedCategories,
-                        searchQuery = state.searchQuery,
-                        selection = state.selection,
-                        contentPadding = contentPadding + PaddingValues(bottom = 84.dp),
-                        currentPage = state.coercedActiveCategoryIndex,
-                        hasActiveFilters = state.hasActiveFilters,
-                        isQueryRunning = state.isQueryRunning,
-                        showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty() || state.hasUserCategories,
-                        onChangeCurrentPage = viewModel::updateActiveCategoryIndex,
-                        onClickManga = { navigator.push(MangaScreen(it)) },
-                        onContinueReadingClicked = { it: LibraryManga ->
-                            scope.launchIO {
-                                val chapter = viewModel.getNextUnreadChapter(it.manga)
-                                if (chapter != null) {
-                                    context.startActivity(
-                                        ReaderActivity.newIntent(context, chapter.mangaId, chapter.id),
-                                    )
-                                } else {
-                                    snackbarHostState.showSnackbar(context.stringResource(MR.strings.no_next_chapter))
+                    key(libraryType) {
+                        LibraryContent(
+                            categories = state.displayedCategories,
+                            searchQuery = state.searchQuery,
+                            selection = state.selection,
+                            contentPadding = contentPadding + PaddingValues(bottom = 84.dp),
+                            currentPage = state.coercedActiveCategoryIndex,
+                            hasActiveFilters = state.hasActiveFilters,
+                            isQueryRunning = state.isQueryRunning,
+                            showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty() || state.hasUserCategories,
+                            onChangeCurrentPage = viewModel::updateActiveCategoryIndex,
+                            onClickManga = { navigator.push(MangaScreen(it)) },
+                            onContinueReadingClicked = { it: LibraryManga ->
+                                scope.launchIO {
+                                    val chapter = viewModel.getNextUnreadChapter(it.manga)
+                                    if (chapter != null) {
+                                        context.startActivity(
+                                            ReaderActivity.newIntent(context, chapter.mangaId, chapter.id),
+                                        )
+                                    } else {
+                                        snackbarHostState.showSnackbar(context.stringResource(MR.strings.no_next_chapter))
+                                    }
                                 }
-                            }
-                            Unit
-                        }.takeIf { state.showMangaContinueButton },
-                        onToggleSelection = viewModel::toggleSelection,
-                        onToggleRangeSelection = { category, manga ->
-                            viewModel.toggleRangeSelection(category, manga)
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        },
-                        onRefresh = { onGlobalUpdate(state.activeCategory) },
-                        onGlobalSearchClicked = {
-                            navigator.push(NovelGlobalSearchScreen(viewModel.state.value.searchQuery ?: ""))
-                        },
-                        getItemCountForCategory = { state.getItemCountForCategory(it) },
-                        getDisplayMode = { viewModel.getDisplayMode() },
-                        getColumnsForOrientation = { viewModel.getColumnsForOrientation(it) },
-                        getItemsForCategory = { state.getItemsForCategory(it) },
-                        titleMaxLines = titleMaxLines,
-                        showUrlInList = showUrlInList,
-                        paginationEnabled = viewModel.paginationEnabled,
-                        onCategoryFirstVisible = viewModel::onCategoryFirstVisible,
-                        onLoadMore = viewModel::loadMoreForCategory,
-                        getLoadMoreKey = { state.categoryLoadKey(it) },
-                        isCategoryLoading = { state.paginationLoadingCategories.contains(it.id) },
-                        onCreateSubCategory = { createSubCategoryFor = it },
-                    )
+                                Unit
+                            }.takeIf { state.showMangaContinueButton },
+                            onToggleSelection = viewModel::toggleSelection,
+                            onToggleRangeSelection = { category, manga ->
+                                viewModel.toggleRangeSelection(category, manga)
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                            onRefresh = { onGlobalUpdate(state.activeCategory) },
+                            onGlobalSearchClicked = {
+                                val query = viewModel.state.value.searchQuery ?: ""
+                                navigator.push(
+                                    if (isNovelContent) NovelGlobalSearchScreen(query) else GlobalSearchScreen(query),
+                                )
+                            },
+                            getItemCountForCategory = { state.getItemCountForCategory(it) },
+                            getDisplayMode = { viewModel.getDisplayMode() },
+                            getColumnsForOrientation = { viewModel.getColumnsForOrientation(it) },
+                            getItemsForCategory = { state.getItemsForCategory(it) },
+                            titleMaxLines = titleMaxLines,
+                            showUrlInList = showUrlInList,
+                            paginationEnabled = viewModel.paginationEnabled,
+                            onCategoryFirstVisible = viewModel::onCategoryFirstVisible,
+                            onLoadMore = viewModel::loadMoreForCategory,
+                            getLoadMoreKey = { state.categoryLoadKey(it) },
+                            isCategoryLoading = { state.paginationLoadingCategories.contains(it.id) },
+                            onCreateSubCategory = { createSubCategoryFor = it },
+                        )
+                    }
                 }
             }
         }
@@ -431,6 +474,7 @@ data object NovelsTab : Tab {
             is LibraryViewModel.Dialog.MassImport -> {
                 MassImportDialog(
                     onDismissRequest = onDismissRequest,
+                    isNovelMode = isNovelContent,
                 )
             }
             is LibraryViewModel.Dialog.ImportEpub -> {
@@ -471,7 +515,7 @@ data object NovelsTab : Tab {
             }
         }
 
-        LaunchedEffect(Unit) {
+        LaunchedEffect(viewModel) {
             launch { queryEvent.receiveAsFlow().collect(viewModel::search) }
             launch { requestSettingsSheetEvent.receiveAsFlow().collectLatest { viewModel.showSettingsDialog() } }
         }
@@ -484,4 +528,15 @@ data object NovelsTab : Tab {
     // For opening settings sheet in LibraryController
     private val requestSettingsSheetEvent = Channel<Unit>()
     private suspend fun requestOpenSettingsSheet() = requestSettingsSheetEvent.send(Unit)
+}
+
+internal fun resolveSpaceLibraryType(
+    hideMangaUi: Boolean,
+    isJoined: Boolean,
+    isSpaceSeparated: Boolean,
+    homeTabIsNovel: Boolean,
+): LibraryViewModel.LibraryType = when {
+    hideMangaUi || !isJoined -> LibraryViewModel.LibraryType.Novel
+    isSpaceSeparated -> if (homeTabIsNovel) LibraryViewModel.LibraryType.Novel else LibraryViewModel.LibraryType.Manga
+    else -> LibraryViewModel.LibraryType.All
 }
