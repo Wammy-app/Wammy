@@ -45,14 +45,15 @@ If you enjoy using Wammy, please consider starring the repository — it helps m
 ## Screenshots
 
 <p align="center">
-  <img src=".github/images/home.jpg" alt="Wammy Home & Discover Screen" width="23%" />
-  <img src=".github/images/library.jpg" alt="Wammy Library Grid" width="23%" />
-  <img src=".github/images/details.jpg" alt="Wammy Manga Details Screen" width="23%" />
-  <img src=".github/images/profile.jpg" alt="Wammy Profile Screen" width="23%" />
+  <img src=".github/images/home.jpg" alt="Wammy Home & Discover Screen" width="18%" />
+  <img src=".github/images/library.jpg" alt="Wammy Library Grid" width="18%" />
+  <img src=".github/images/details.jpg" alt="Wammy Manga Details Screen" width="18%" />
+  <img src=".github/images/profile.jpg" alt="Wammy Profile Screen" width="18%" />
+  <img src=".github/images/reader.jpg" alt="Wammy 3D Page Curl Reader" width="18%" />
 </p>
 
 <p align="center">
-  <sub><b>Home & Discover</b> (Hero Featured Carousel & Badges) | <b>Library</b> (Comfortable/Compact Grid) | <b>Details & Suggestions</b> | <b>User Profile & Cloud Sync</b></sub>
+  <sub><b>Home & Discover</b> (Hero Featured Carousel & Badges) | <b>Library</b> (Comfortable/Compact Grid) | <b>Details & Suggestions</b> | <b>User Profile & Cloud Sync</b> | <b>Reader</b> (3D Page Curl)</sub>
 </p>
 
 ---
