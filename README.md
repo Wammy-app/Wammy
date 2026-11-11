@@ -45,7 +45,7 @@ If you enjoy using Wammy, please consider starring the repository — it helps m
 ## Screenshots
 
 <p align="center">
-  <img src=".github/images/home.jpg" alt="Wammy Home & Discover Screen" width="18%" />
+  <img src=".github/images/home_v2.jpg" alt="Wammy Home & Discover Screen" width="18%" />
   <img src=".github/images/library.jpg" alt="Wammy Library Grid" width="18%" />
   <img src=".github/images/details.jpg" alt="Wammy Manga Details Screen" width="18%" />
   <img src=".github/images/profile.jpg" alt="Wammy Profile Screen" width="18%" />
