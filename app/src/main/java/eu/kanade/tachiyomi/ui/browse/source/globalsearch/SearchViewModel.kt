@@ -141,18 +141,13 @@ abstract class SearchViewModel(
         val sources = getSelectedSources()
 
         // Reuse previous results if possible
-        if (sameQuery) {
+        val nextItems = if (sameQuery) {
             val existingResults = state.value.items
-            updateItems(
-                sources
-                    .associateWith { existingResults[it] ?: SearchItemResult.Loading },
-            )
+            sources.associateWith { existingResults[it] ?: SearchItemResult.Loading }
         } else {
-            updateItems(
-                sources
-                    .associateWith { SearchItemResult.Loading },
-            )
+            sources.associateWith { SearchItemResult.Loading }
         }
+        updateItems(nextItems, searchedQuery = query)
 
         searchJob = viewModelScope.launchIO {
             sources.map { source ->
@@ -193,11 +188,11 @@ abstract class SearchViewModel(
         }
     }
 
-    private fun updateItems(items: Map<Source, SearchItemResult>) {
+    private fun updateItems(items: Map<Source, SearchItemResult>, searchedQuery: String) {
         mutableState.update { state ->
-            val newItems = if (items.isNotEmpty()) items else state.items
             state.copy(
-                items = newItems.toSortedMap(sortComparator(newItems)),
+                searchedQuery = searchedQuery,
+                items = items.toSortedMap(sortComparator(items)),
             )
         }
     }
@@ -227,6 +222,7 @@ abstract class SearchViewModel(
     data class State(
         val from: Manga? = null,
         val searchQuery: String? = null,
+        val searchedQuery: String? = null,
         val sourceFilter: SourceFilter = SourceFilter.PinnedOnly,
         val pinGroups: List<String> = emptyList(),
         val onlyShowHasResults: Boolean = false,

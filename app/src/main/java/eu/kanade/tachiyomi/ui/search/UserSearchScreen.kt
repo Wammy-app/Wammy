@@ -6,14 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -43,19 +37,13 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
-import eu.kanade.domain.source.model.isAdultSource
-import eu.kanade.presentation.browse.GlobalSearchContent
+import eu.kanade.presentation.browse.UnifiedSearchGrid
 import eu.kanade.tachiyomi.data.sync.CloudUser
 import eu.kanade.tachiyomi.data.sync.FirestoreUserRepository
-import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchViewModel
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.NovelGlobalSearchViewModel
-import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchItemResult
-import eu.kanade.tachiyomi.ui.discover.components.DiscoverMangaCard
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.profile.PublicProfileScreen
-import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.model.effectiveRating
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -386,6 +374,7 @@ class UserSearchScreen(
                                     onMangaClick = { manga ->
                                         navigator.push(MangaScreen(manga.id, true))
                                     },
+                                    getManga = { mangaViewModel.getManga(it) },
                                 )
                             }
                         } else {
@@ -439,6 +428,7 @@ class UserSearchScreen(
                                     onMangaClick = { novel ->
                                         navigator.push(MangaScreen(novel.id, true))
                                     },
+                                    getManga = { novelViewModel.getManga(it) },
                                 )
                             }
                         } else {
@@ -597,123 +587,4 @@ fun UserListItem(user: CloudUser, onClick: () -> Unit) {
             )
         }
     }
-}
-
-@Composable
-private fun UnifiedSearchGrid(
-    items: Map<eu.kanade.tachiyomi.source.Source, SearchItemResult>,
-    searchQuery: String,
-    gridState: LazyGridState,
-    onMangaClick: (Manga) -> Unit,
-) {
-    val mangaResults = remember(items, searchQuery) {
-        val query = searchQuery.trim().lowercase()
-        val all = items.entries
-            .filter { it.value is SearchItemResult.Success }
-            .flatMap { (source, result) ->
-                (result as SearchItemResult.Success).result.map { manga ->
-                    Triple(manga, source, calculateRelevanceScore(manga, query))
-                }
-            }
-            .distinctBy { "${it.first.source}_${it.first.url}" }
-
-        all.sortedWith(
-            compareByDescending<Triple<Manga, eu.kanade.tachiyomi.source.Source, Int>> { it.third }
-                .thenBy { it.second.isAdultSource() }
-                .thenByDescending { it.first.effectiveRating ?: 0.0 }
-        ).map { it.first }
-    }
-    val isLoading = remember(items) {
-        items.values.any { it is SearchItemResult.Loading }
-    }
-
-    if (mangaResults.isEmpty()) {
-        if (isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "No results found for \"$searchQuery\".",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 15.sp,
-                )
-            }
-        }
-    } else {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            state = gridState,
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            if (isLoading) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 6.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-
-            items(
-                items = mangaResults,
-                key = { "${it.source}_${it.id}_${it.url}" },
-            ) { manga ->
-                DiscoverMangaCard(
-                    manga = manga,
-                    showSourceLogo = true,
-                    onClick = { onMangaClick(manga) },
-                )
-            }
-        }
-    }
-}
-
-private fun calculateRelevanceScore(manga: Manga, query: String): Int {
-    if (query.isBlank()) return 0
-    val title = manga.title.trim().lowercase()
-    val q = query.trim().lowercase()
-
-    // 1. Exact title match
-    if (title == q) return 100
-
-    // 2. Title starts with query
-    if (title.startsWith(q)) return 90
-
-    // 3. Acronym / Initials match (e.g. "hxh" matching "Hunter x Hunter")
-    val words = title.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
-    val initials = words.mapNotNull { it.firstOrNull() }.joinToString("")
-    if (initials == q || (q.length >= 2 && initials.contains(q))) return 85
-
-    // 4. Word boundary or substring in title
-    if (title.contains(q)) return 80
-
-    // 5. Multi-word all match (e.g. query "hunter hunter" in "Hunter x Hunter")
-    val qWords = q.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
-    if (qWords.size > 1 && qWords.all { title.contains(it) }) return 75
-
-    // 6. Author or Artist match
-    val author = manga.author?.trim()?.lowercase()
-    if (author?.contains(q) == true) return 60
-    val artist = manga.artist?.trim()?.lowercase()
-    if (artist?.contains(q) == true) return 60
-
-    // 7. Any query word present in title (if query has multiple words)
-    if (qWords.size > 1 && qWords.any { title.contains(it) }) return 40
-
-    return 0
 }

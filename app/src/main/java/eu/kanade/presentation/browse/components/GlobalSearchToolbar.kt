@@ -57,6 +57,7 @@ fun GlobalSearchToolbar(
     onlyShowHasResults: Boolean,
     onToggleResults: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
+    showHasResultsFilter: Boolean = true,
 ) {
     var showGroupRow by remember { mutableStateOf(false) }
 
@@ -154,23 +155,27 @@ fun GlobalSearchToolbar(
                     },
                 )
 
-                VerticalDivider()
+                if (showHasResultsFilter) {
+                    VerticalDivider()
+                }
             }
 
-            FilterChip(
-                selected = onlyShowHasResults,
-                onClick = { onToggleResults() },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Outlined.FilterList,
-                        contentDescription = null,
-                        modifier = Modifier.size(FilterChipDefaults.IconSize),
-                    )
-                },
-                label = {
-                    Text(text = stringResource(MR.strings.has_results))
-                },
-            )
+            if (showHasResultsFilter) {
+                FilterChip(
+                    selected = onlyShowHasResults,
+                    onClick = { onToggleResults() },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.FilterList,
+                            contentDescription = null,
+                            modifier = Modifier.size(FilterChipDefaults.IconSize),
+                        )
+                    },
+                    label = {
+                        Text(text = stringResource(MR.strings.has_results))
+                    },
+                )
+            }
         }
 
         AnimatedVisibility(visible = showGroupRow && pinGroups.isNotEmpty()) {
