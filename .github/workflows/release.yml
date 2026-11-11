@@ -40,6 +40,16 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
+      - name: Restore google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          printf '%s' "$GOOGLE_SERVICES_JSON" | tr -d '[:space:]' | base64 --decode > app/google-services.json
+          if [ ! -s app/google-services.json ]; then
+            echo "Missing or empty GOOGLE_SERVICES_JSON secret" >&2
+            exit 1
+          fi
+
       - name: Build
         run: |
           chmod +x ./gradlew
@@ -77,58 +87,11 @@ jobs:
             wammy-x86-${{ needs.get_tag.outputs.tag }}.apk
             wammy-x86_64-${{ needs.get_tag.outputs.tag }}.apk
 
-  build_foss:
-    if: github.repository == 'Wammy-app/Wammy'
-    name: Build (FOSS)
-    runs-on: ubuntu-24.04
-    needs: get_tag
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up JDK
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
-        with:
-          java-version-file: .github/.java-version
-          distribution: temurin
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        with:
-          cache-disabled: true
-
-      - name: Build
-        run: ./gradlew assembleFoss -Penable-updater
-
-      - name: Sign APK
-        uses: r0adkll/sign-android-release@a391126403df92c6a0a3988a829dd47f79b89ed7
-        with:
-          releaseDirectory: app/build/outputs/apk/foss
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-        env:
-          BUILD_TOOLS_VERSION: '35.0.1'
-
-      - name: Rename APK
-        run: |
-          set -e
-
-          mv app/build/outputs/apk/foss/app-universal-foss-signed.apk wammy-${{ needs.get_tag.outputs.tag }}-foss.apk
-
-      - name: Upload APK
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wammy-foss
-          path: wammy-${{ needs.get_tag.outputs.tag }}-foss.apk
-
   release:
     if: github.repository == 'Wammy-app/Wammy'
     name: Create GitHub Release
     runs-on: ubuntu-24.04
-    needs: [get_tag, build, build_foss]
+    needs: [get_tag, build]
     permissions:
       contents: write
 
@@ -142,9 +105,7 @@ jobs:
         uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
         with:
           failOnError: false
-          name: |
-            wammy
-            wammy-foss
+          name: wammy
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
@@ -165,7 +126,6 @@ jobs:
             > ### If you are unsure which version to download then go with `wammy-${{ needs.get_tag.outputs.tag }}.apk`
           files: |
             wammy-${{ needs.get_tag.outputs.tag }}.apk
-            wammy-${{ needs.get_tag.outputs.tag }}-foss.apk
             wammy-arm64-v8a-${{ needs.get_tag.outputs.tag }}.apk
             wammy-armeabi-v7a-${{ needs.get_tag.outputs.tag }}.apk
             wammy-x86-${{ needs.get_tag.outputs.tag }}.apk
