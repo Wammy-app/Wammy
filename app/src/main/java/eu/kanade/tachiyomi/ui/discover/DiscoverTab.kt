@@ -49,6 +49,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,8 +61,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,11 +75,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
+import eu.kanade.presentation.browse.components.RemoveMangaDialog
+import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.data.auth.AuthManager
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.builtin.BuiltinSourceManager
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
+import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.discover.components.DiscoverMangaCard
 import eu.kanade.tachiyomi.ui.discover.components.DiscoverSkeletonScreen
 import eu.kanade.tachiyomi.ui.discover.components.FeedGridSkeleton
@@ -84,8 +91,13 @@ import eu.kanade.tachiyomi.ui.discover.components.HeroFeaturedCard
 import eu.kanade.tachiyomi.ui.discover.components.HeroFeaturedCardSkeleton
 import eu.kanade.tachiyomi.ui.discover.components.HomeTopBar
 import eu.kanade.tachiyomi.ui.discover.components.rememberShimmerBrush
+import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import mihon.feature.migration.dialog.MigrateMangaDialog
+import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.presentation.core.util.collectAsState
@@ -121,9 +133,11 @@ object DiscoverTab : Tab {
         val navigator = LocalNavigator.currentOrThrow
         val viewModel = viewModel<DiscoverViewModel>()
         val state by viewModel.state.collectAsState()
+        val dialogState by viewModel.dialog.collectAsState()
         val scope = rememberCoroutineScope()
         val tabNavigator = LocalTabNavigator.current
         val context = androidx.compose.ui.platform.LocalContext.current
+        val haptic = LocalHapticFeedback.current
 
         LaunchedEffect(Unit) {
             (context as? eu.kanade.tachiyomi.ui.main.MainActivity)?.ready = true
@@ -440,13 +454,19 @@ object DiscoverTab : Tab {
                                     key = { "builtin_${it.source}_${it.url}" },
                                     contentType = { "manga_card" },
                                 ) { manga ->
+                                    val isFavorite = rememberDiscoverIsFavorite(viewModel, manga)
                                     DiscoverMangaCard(
                                         manga = manga,
+                                        isFavorite = isFavorite,
                                         onClick = {
                                             scope.launch {
                                                 val localManga = viewModel.getNetworkToLocalManga(manga)
                                                 navigator.push(MangaScreen(localManga.id))
                                             }
+                                        },
+                                        onLongClick = {
+                                            viewModel.onLongClickManga(manga)
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         },
                                     )
                                 }
@@ -558,13 +578,19 @@ object DiscoverTab : Tab {
                                         key = { "ext_${it.source}_${it.url}" },
                                         contentType = { "manga_card" },
                                     ) { manga ->
+                                        val isFavorite = rememberDiscoverIsFavorite(viewModel, manga)
                                         DiscoverMangaCard(
                                             manga = manga,
+                                            isFavorite = isFavorite,
                                             onClick = {
                                                 scope.launch {
                                                     val localManga = viewModel.getNetworkToLocalManga(manga)
                                                     navigator.push(MangaScreen(localManga.id))
                                                 }
+                                            },
+                                            onLongClick = {
+                                                viewModel.onLongClickManga(manga)
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             },
                                         )
                                     }
@@ -607,7 +633,83 @@ object DiscoverTab : Tab {
                 }
             }
         }
+
+        var reopenCategoryDialogMangaId by rememberSaveable { mutableStateOf<Long?>(null) }
+        LaunchedEffect(navigator.lastItem) {
+            val targetId = reopenCategoryDialogMangaId
+            if (targetId != null && navigator.lastItem == HomeScreen) {
+                reopenCategoryDialogMangaId = null
+                viewModel.showChangeCategoryDialogForId(targetId)
+            }
+        }
+
+        val onDismissDialog = viewModel::dismissDialog
+        when (val dialog = dialogState) {
+            null -> {}
+            is DiscoverViewModel.Dialog.ChangeCategory -> {
+                ChangeCategoryDialog(
+                    initialSelection = dialog.initialSelection,
+                    onDismissRequest = onDismissDialog,
+                    onEditCategories = {
+                        reopenCategoryDialogMangaId = dialog.manga.id
+                        navigator.push(CategoryScreen())
+                    },
+                    onConfirm = { addCategories, removeCategories ->
+                        val currentSelected = dialog.initialSelection
+                            .filter {
+                                it is CheckboxState.State.Checked ||
+                                    it is CheckboxState.TriState.Include
+                            }
+                            .map { it.value.id }
+                            .toMutableSet()
+                        currentSelected.addAll(addCategories)
+                        currentSelected.removeAll(removeCategories.toSet())
+                        viewModel.moveMangaToCategoriesAndAddToLibrary(dialog.manga, currentSelected.toList())
+                    },
+                )
+            }
+            is DiscoverViewModel.Dialog.DuplicateManga -> {
+                DuplicateMangaDialog(
+                    duplicates = dialog.duplicates,
+                    onDismissRequest = onDismissDialog,
+                    onConfirm = {
+                        viewModel.onLongClickManga(dialog.manga, skipDuplicateCheck = true)
+                    },
+                    onOpenManga = { navigator.push(MangaScreen(it.id)) },
+                    onMigrate = { viewModel.showMigrateDialog(duplicate = it, target = dialog.manga) },
+                    canAddAnyway = true,
+                )
+            }
+            is DiscoverViewModel.Dialog.Migrate -> {
+                MigrateMangaDialog(
+                    current = dialog.current,
+                    target = dialog.target,
+                    onClickTitle = { navigator.push(MangaScreen(dialog.current.id)) },
+                    onDismissRequest = onDismissDialog,
+                )
+            }
+            is DiscoverViewModel.Dialog.RemoveManga -> {
+                RemoveMangaDialog(
+                    onDismissRequest = onDismissDialog,
+                    onConfirm = { viewModel.removeFavorite(dialog.manga) },
+                    mangaToRemove = dialog.manga,
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun rememberDiscoverIsFavorite(
+    viewModel: DiscoverViewModel,
+    manga: Manga,
+): Boolean {
+    val liveManga by produceState(initialValue = manga, key1 = manga.source, key2 = manga.url) {
+        viewModel.observeManga(manga)
+            .catch { /* Keep cached state if row unavailable */ }
+            .collectLatest { value = it }
+    }
+    return liveManga.favorite
 }
 
 @Composable

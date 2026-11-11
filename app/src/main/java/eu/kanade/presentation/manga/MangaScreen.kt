@@ -114,6 +114,7 @@ fun MangaScreen(
     // For recommendations
     onSeeRecommendationsClick: () -> Unit,
     onSuggestionArrowClick: () -> Unit,
+    getSuggestionManga: @Composable (Manga) -> androidx.compose.runtime.State<Manga>,
     onSuggestionClick: (Manga) -> Unit,
     onSuggestionLongClick: (Manga) -> Unit,
 
@@ -185,6 +186,7 @@ fun MangaScreen(
             onSearch = onSearch,
             onSeeRecommendationsClick = onSeeRecommendationsClick,
             onSuggestionArrowClick = onSuggestionArrowClick,
+            getSuggestionManga = getSuggestionManga,
             onSuggestionClick = onSuggestionClick,
             onSuggestionLongClick = onSuggestionLongClick,
             onCoverClicked = onCoverClicked,
@@ -239,6 +241,7 @@ fun MangaScreen(
             onSearch = onSearch,
             onSeeRecommendationsClick = onSeeRecommendationsClick,
             onSuggestionArrowClick = onSuggestionArrowClick,
+            getSuggestionManga = getSuggestionManga,
             onSuggestionClick = onSuggestionClick,
             onSuggestionLongClick = onSuggestionLongClick,
             onCoverClicked = onCoverClicked,
@@ -301,6 +304,7 @@ private fun MangaScreenSmallImpl(
     // For recommendations
     onSeeRecommendationsClick: () -> Unit,
     onSuggestionArrowClick: () -> Unit,
+    getSuggestionManga: @Composable (Manga) -> androidx.compose.runtime.State<Manga>,
     onSuggestionClick: (Manga) -> Unit,
     onSuggestionLongClick: (Manga) -> Unit,
 
@@ -556,11 +560,7 @@ private fun MangaScreenSmallImpl(
                         RelatedMangasRow(
                             relatedMangas = state.relatedMangas,
                             isLoading = state.isRelatedMangasFetching,
-                            getManga = { manga -> 
-                                androidx.compose.runtime.produceState(initialValue = manga) {
-                                    value = manga
-                                }
-                            },
+                            getManga = getSuggestionManga,
                             onMangaClick = onSuggestionClick,
                             onMangaLongClick = onSuggestionLongClick,
                             onSeeRecommendationsClick = onSeeRecommendationsClick,
@@ -629,6 +629,7 @@ fun MangaScreenLargeImpl(
     // For recommendations
     onSeeRecommendationsClick: () -> Unit,
     onSuggestionArrowClick: () -> Unit,
+    getSuggestionManga: @Composable (Manga) -> androidx.compose.runtime.State<Manga>,
     onSuggestionClick: (Manga) -> Unit,
     onSuggestionLongClick: (Manga) -> Unit,
 
@@ -860,11 +861,7 @@ fun MangaScreenLargeImpl(
                         RelatedMangasRow(
                             relatedMangas = state.relatedMangas,
                             isLoading = state.isRelatedMangasFetching,
-                            getManga = { manga -> 
-                                androidx.compose.runtime.produceState(initialValue = manga) {
-                                    value = manga
-                                }
-                            },
+                            getManga = getSuggestionManga,
                             onMangaClick = onSuggestionClick,
                             onMangaLongClick = onSuggestionLongClick,
                             onSeeRecommendationsClick = onSeeRecommendationsClick,

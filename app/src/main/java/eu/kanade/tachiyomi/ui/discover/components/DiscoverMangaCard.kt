@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.ui.discover.components
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import eu.kanade.presentation.browse.components.InLibraryBadge
 import eu.kanade.presentation.browse.components.SourceLogoBadge
 import eu.kanade.presentation.library.components.RatingBadge
 import eu.kanade.presentation.library.components.formatViewsCount
@@ -39,6 +40,7 @@ import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.domain.manga.model.effectiveRating
 import tachiyomi.domain.manga.model.effectiveViews
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.presentation.core.components.BadgeGroup
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -53,6 +55,8 @@ fun DiscoverMangaCard(
     manga: Manga,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    isFavorite: Boolean = manga.favorite,
     showSourceLogo: Boolean = false,
 ) {
     val sourceManager = remember { Injekt.get<SourceManager>() }
@@ -86,7 +90,10 @@ fun DiscoverMangaCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
     ) {
         // Cover Poster with Rating Pill
         Box(
@@ -101,6 +108,16 @@ fun DiscoverMangaCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
+
+            if (isFavorite) {
+                BadgeGroup(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(5.dp),
+                ) {
+                    InLibraryBadge(enabled = true)
+                }
+            }
 
             if (showSourceLogo) {
                 SourceLogoBadge(

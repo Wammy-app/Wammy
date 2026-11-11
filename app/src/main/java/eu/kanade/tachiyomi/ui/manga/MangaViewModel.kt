@@ -50,6 +50,7 @@ import eu.kanade.tachiyomi.util.removeCovers
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -514,18 +515,44 @@ class MangaViewModel(
         )
     }
 
+    suspend fun observeManga(id: Long): Flow<Manga> {
+        return mangaRepository.getMangaByIdAsFlow(id)
+    }
+
+    fun toggleSuggestionFavorite(
+        suggestion: Manga,
+        skipDuplicateCheck: Boolean = false,
+    ) {
+        toggleFavorite(
+            targetManga = suggestion,
+            onRemoved = {
+                context.toast("Removed from library")
+            },
+            onAddedWithoutDialog = {
+                context.toast("Added to library")
+            },
+            skipDuplicateCheck = skipDuplicateCheck,
+        )
+    }
+
     /**
      * Update favorite status of manga, (removes / adds) manga (to / from) library.
      */
     fun toggleFavorite(
         onRemoved: () -> Unit,
         skipDuplicateCheck: Boolean = false,
+        targetManga: Manga? = null,
+        onAddedWithoutDialog: () -> Unit = {},
     ) {
         val state = successState ?: return
         viewModelScope.launchIO {
-            val manga = state.manga
+            val manga = if (targetManga != null) {
+                mangaRepository.getMangaByIdOrNull(targetManga.id) ?: targetManga
+            } else {
+                state.manga
+            }
 
-            if (isFavorited) {
+            if (manga.favorite) {
                 // Remove from library
                 if (updateManga.awaitUpdateFavorite(manga.id, false)) {
                     // Remove covers and update last modified in db
@@ -550,45 +577,40 @@ class MangaViewModel(
                 }
 
                 // Now check if user previously set categories, when available
-                val isNovel = state.manga.isNovel
-                val contentType = if (isNovel) Category.CONTENT_TYPE_NOVEL else Category.CONTENT_TYPE_MANGA
-                val allCategories = getCategories()
-                val isJoinedLibrary = libraryPreferences.joinedLibrary.get() &&
-                    !libraryPreferences.spaceSeparatedLibrary.get()
-                val categories = if (isJoinedLibrary) {
-                    allCategories
-                } else {
-                    allCategories.filter {
-                        it.contentType == contentType || it.contentType == Category.CONTENT_TYPE_ALL
-                    }
-                }
+                val categories = filterCategoriesForManga(manga)
                 // Normalize URL to ensure leading slash for JsSource/CustomNovelSource path convention
-                state.source?.let { src ->
-                    val normalizedUrl = eu.kanade.tachiyomi.util.source.normalizeSourcePath(src, manga.url)
-                    if (normalizedUrl != manga.url) {
-                        updateManga.awaitUpdateUrl(manga.id, normalizedUrl)
-                    }
+                val normalizedUrl = eu.kanade.tachiyomi.util.source.normalizeSourcePath(state.source, manga.url)
+                if (normalizedUrl != manga.url) {
+                    updateManga.awaitUpdateUrl(manga.id, normalizedUrl)
                 }
 
                 val defaultCategoryId = libraryPreferences.defaultCategory.get().toLong()
                 val defaultCategory = categories.find { it.id == defaultCategoryId }
-                when {
+                when (resolveFavoriteCategoryAction(categories, defaultCategoryId, defaultCategory)) {
                     // Default category set
-                    defaultCategory != null -> {
+                    FavoriteCategoryAction.AddToDefaultCategory -> {
                         val result = updateManga.awaitUpdateFavorite(manga.id, true)
                         if (!result) return@launchIO
-                        moveMangaToCategory(defaultCategory)
+                        if (manga.id != mangaId) {
+                            setMangaDefaultChapterFlags.await(manga)
+                        }
+                        moveMangaToCategory(defaultCategory!!, manga.id)
+                        withUIContext { onAddedWithoutDialog() }
                     }
 
                     // Automatic 'Default' or no categories
-                    defaultCategoryId == 0L || categories.isEmpty() -> {
+                    FavoriteCategoryAction.AddUncategorized -> {
                         val result = updateManga.awaitUpdateFavorite(manga.id, true)
                         if (!result) return@launchIO
-                        moveMangaToCategory(null)
+                        if (manga.id != mangaId) {
+                            setMangaDefaultChapterFlags.await(manga)
+                        }
+                        moveMangaToCategory(null, manga.id)
+                        withUIContext { onAddedWithoutDialog() }
                     }
 
                     // Choose a category
-                    else -> showChangeCategoryDialog()
+                    FavoriteCategoryAction.AskCategory -> showChangeCategoryDialogFor(manga)
                 }
 
                 // Finally match with enhanced tracking when available
@@ -600,21 +622,33 @@ class MangaViewModel(
         }
     }
 
+    private suspend fun filterCategoriesForManga(manga: Manga): List<Category> {
+        val allCategories = getCategories()
+        val isJoinedLibrary = libraryPreferences.joinedLibrary.get() &&
+            !libraryPreferences.spaceSeparatedLibrary.get()
+        return filterCategoriesForContent(allCategories, manga.isNovel, isJoinedLibrary)
+    }
+
     fun showChangeCategoryDialog() {
         val manga = successState?.manga ?: return
+        showChangeCategoryDialogFor(manga)
+    }
+
+    fun showChangeCategoryDialogForId(targetMangaId: Long) {
+        val state = successState ?: return
+        if (targetMangaId == state.manga.id) {
+            showChangeCategoryDialogFor(state.manga)
+            return
+        }
+        viewModelScope.launchIO {
+            val manga = mangaRepository.getMangaByIdOrNull(targetMangaId) ?: return@launchIO
+            showChangeCategoryDialogFor(manga)
+        }
+    }
+
+    private fun showChangeCategoryDialogFor(manga: Manga) {
         viewModelScope.launch {
-            val isNovel = manga.isNovel
-            val contentType = if (isNovel) Category.CONTENT_TYPE_NOVEL else Category.CONTENT_TYPE_MANGA
-            val allCategories = getCategories()
-            val isJoinedLibrary = libraryPreferences.joinedLibrary.get() &&
-                !libraryPreferences.spaceSeparatedLibrary.get()
-            val categories = if (isJoinedLibrary) {
-                allCategories
-            } else {
-                allCategories.filter {
-                    it.contentType == contentType || it.contentType == Category.CONTENT_TYPE_ALL
-                }
-            }
+            val categories = filterCategoriesForManga(manga)
             val selection = getMangaCategoryIds(manga)
             updateSuccessState { successState ->
                 successState.copy(
@@ -710,11 +744,14 @@ class MangaViewModel(
 
     fun moveMangaToCategoriesAndAddToLibrary(manga: Manga, categories: List<Long>) {
         viewModelScope.launchIO {
-            setMangaCategories.await(mangaId, categories)
             if (!manga.favorite) {
-                updateManga.awaitUpdateFavorite(manga.id, true)
-                getLibraryManga.setCategoriesForManga(listOf(manga.id), categories)
+                val result = updateManga.awaitUpdateFavorite(manga.id, true)
+                if (!result) return@launchIO
+                if (manga.id != mangaId) {
+                    setMangaDefaultChapterFlags.await(manga)
+                }
             }
+            setMangaCategories.await(manga.id, categories)
             val context = uy.kohesive.injekt.Injekt.get<android.app.Application>()
             eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
         }
@@ -725,14 +762,14 @@ class MangaViewModel(
      *
      * @param categories the selected categories.
      */
-    private fun moveMangaToCategories(categories: List<Category>) {
+    private fun moveMangaToCategories(categories: List<Category>, targetMangaId: Long = mangaId) {
         val categoryIds = categories.map { it.id }
-        moveMangaToCategory(categoryIds)
+        moveMangaToCategory(categoryIds, targetMangaId)
     }
 
-    private fun moveMangaToCategory(categoryIds: List<Long>) {
+    private fun moveMangaToCategory(categoryIds: List<Long>, targetMangaId: Long = mangaId) {
         viewModelScope.launchIO {
-            setMangaCategories.await(mangaId, categoryIds)
+            setMangaCategories.await(targetMangaId, categoryIds)
             val context = uy.kohesive.injekt.Injekt.get<android.app.Application>()
             eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
         }
@@ -743,8 +780,8 @@ class MangaViewModel(
      *
      * @param category the selected category, or null for default category.
      */
-    private fun moveMangaToCategory(category: Category?) {
-        moveMangaToCategories(listOfNotNull(category))
+    private fun moveMangaToCategory(category: Category?, targetMangaId: Long = mangaId) {
+        moveMangaToCategories(listOfNotNull(category), targetMangaId)
     }
 
     /**
@@ -1534,8 +1571,8 @@ class MangaViewModel(
         updateSuccessState { it.copy(dialog = Dialog.FullCover) }
     }
 
-    fun showMigrateDialog(duplicate: Manga) {
-        val manga = successState?.manga ?: return
+    fun showMigrateDialog(duplicate: Manga, sourceManga: Manga? = null) {
+        val manga = sourceManga ?: successState?.manga ?: return
         // Migrate replaces current and keeps target, so the entry the user picked is the kept one.
         val dialog = if (manga.favorite) {
             Dialog.Migrate(current = manga, target = duplicate)
@@ -1959,5 +1996,32 @@ sealed class ChapterList {
     }
 }
 
+internal enum class FavoriteCategoryAction {
+    AddToDefaultCategory,
+    AddUncategorized,
+    AskCategory,
+}
+
+internal fun filterCategoriesForContent(
+    categories: List<Category>,
+    isNovel: Boolean,
+    isJoinedLibrary: Boolean,
+): List<Category> {
+    if (isJoinedLibrary) return categories
+    val contentType = if (isNovel) Category.CONTENT_TYPE_NOVEL else Category.CONTENT_TYPE_MANGA
+    return categories.filter {
+        it.contentType == contentType || it.contentType == Category.CONTENT_TYPE_ALL
+    }
+}
+
+internal fun resolveFavoriteCategoryAction(
+    categories: List<Category>,
+    defaultCategoryId: Long,
+    defaultCategory: Category?,
+): FavoriteCategoryAction = when {
+    defaultCategory != null -> FavoriteCategoryAction.AddToDefaultCategory
+    defaultCategoryId == 0L || categories.isEmpty() -> FavoriteCategoryAction.AddUncategorized
+    else -> FavoriteCategoryAction.AskCategory
+}
 
 

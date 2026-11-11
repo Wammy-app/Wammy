@@ -12,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -63,6 +64,8 @@ import eu.kanade.tachiyomi.util.source.getMangaUrlOrNull
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import mihon.feature.migration.config.MigrationConfigScreen
@@ -77,8 +80,6 @@ import eu.kanade.tachiyomi.ui.manga.recommendations.RecommendationsScreen
 import eu.kanade.tachiyomi.ui.manga.suggestions.SuggestionsScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import eu.kanade.domain.manga.interactor.UpdateManga
-import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.i18n.novel.TDMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
@@ -237,23 +238,19 @@ class MangaScreen(
             onSuggestionArrowClick = {
                 navigator.push(SuggestionsScreen(successState.manga.id))
             },
+            getSuggestionManga = { suggestion ->
+                produceState(initialValue = suggestion, key1 = suggestion.id) {
+                    viewModel.observeManga(suggestion.id)
+                        .catch { /* Keep latest cached item if deleted */ }
+                        .collectLatest { value = it }
+                }
+            },
             onSuggestionClick = { manga ->
                 navigator.push(MangaScreen(manga.id, true))
             },
             onSuggestionLongClick = { manga ->
-                scope.launch {
-                    val networkToLocalManga = uy.kohesive.injekt.Injekt.get<tachiyomi.domain.manga.interactor.NetworkToLocalManga>()
-                    val savedManga = networkToLocalManga(listOf(manga)).first()
-                    
-                    val updateManga = uy.kohesive.injekt.Injekt.get<eu.kanade.domain.manga.interactor.UpdateManga>()
-                    updateManga.awaitUpdateFavorite(savedManga.id, !savedManga.favorite)
-                    
-                    if (!savedManga.favorite) {
-                        context.toast("Added to library")
-                    } else {
-                        context.toast("Removed from library")
-                    }
-                }
+                viewModel.toggleSuggestionFavorite(manga)
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             },
             onCoverClicked = viewModel::showCoverDialog,
             onShareClicked = {
@@ -307,11 +304,14 @@ class MangaScreen(
         } // TachiyomiTheme
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }
-        var reopenCategoryDialogOnReturn by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+        var reopenCategoryDialogMangaId by androidx.compose.runtime.saveable.rememberSaveable {
+            mutableStateOf<Long?>(null)
+        }
         LaunchedEffect(navigator.lastItem) {
-            if (reopenCategoryDialogOnReturn && navigator.lastItem == this@MangaScreen) {
-                reopenCategoryDialogOnReturn = false
-                viewModel.showChangeCategoryDialog()
+            val targetId = reopenCategoryDialogMangaId
+            if (targetId != null && navigator.lastItem == this@MangaScreen) {
+                reopenCategoryDialogMangaId = null
+                viewModel.showChangeCategoryDialogForId(targetId)
             }
         }
 
@@ -323,7 +323,7 @@ class MangaScreen(
                     initialSelection = dialog.initialSelection,
                     onDismissRequest = onDismissRequest,
                     onEditCategories = {
-                        reopenCategoryDialogOnReturn = true
+                        reopenCategoryDialogMangaId = dialog.manga.id
                         navigator.push(CategoryScreen())
                     },
                     onConfirm = { addCategories, removeCategories ->
@@ -363,9 +363,15 @@ class MangaScreen(
                 DuplicateMangaDialog(
                     duplicates = dialog.duplicates,
                     onDismissRequest = onDismissRequest,
-                    onConfirm = { viewModel.toggleFavorite(onRemoved = {}, skipDuplicateCheck = true) },
+                    onConfirm = {
+                        if (dialog.manga.id == successState.manga.id) {
+                            viewModel.toggleFavorite(onRemoved = {}, skipDuplicateCheck = true)
+                        } else {
+                            viewModel.toggleSuggestionFavorite(dialog.manga, skipDuplicateCheck = true)
+                        }
+                    },
                     onOpenManga = { navigator.push(MangaScreen(it.id)) },
-                    onMigrate = { viewModel.showMigrateDialog(it) },
+                    onMigrate = { viewModel.showMigrateDialog(it, dialog.manga) },
                     canAddAnyway = dialog.canAddAnyway,
                 )
             }

@@ -27,11 +27,33 @@ import mihon.core.viewmodel.StateViewModel
 import mihon.domain.manga.model.toDomainManga
 import eu.kanade.domain.manga.model.copyFrom
 import eu.kanade.domain.manga.model.toSManga
+import eu.kanade.domain.track.interactor.AddTracks
+import eu.kanade.tachiyomi.data.cache.CoverCache
+import eu.kanade.tachiyomi.ui.manga.FavoriteCategoryAction
+import eu.kanade.tachiyomi.ui.manga.filterCategoriesForContent
+import eu.kanade.tachiyomi.ui.manga.resolveFavoriteCategoryAction
+import eu.kanade.tachiyomi.util.removeCovers
+import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import tachiyomi.core.common.preference.CheckboxState
+import tachiyomi.core.common.preference.mapAsCheckboxState
+import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.interactor.SetMangaCategories
+import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.chapter.interactor.SetMangaDefaultChapterFlags
+import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
+import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.GetMangaByUrlAndSourceId
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.model.rating
+import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import eu.kanade.domain.source.model.isAdultSource
 import uy.kohesive.injekt.Injekt
@@ -53,6 +75,15 @@ class DiscoverViewModel(
     private val preferences: BasePreferences = Injekt.get(),
     private val networkToLocalManga: NetworkToLocalManga = Injekt.get(),
     private val getMangaByUrlAndSourceId: GetMangaByUrlAndSourceId = Injekt.get(),
+    private val getManga: GetManga = Injekt.get(),
+    private val mangaRepository: MangaRepository = Injekt.get(),
+    private val getDuplicateLibraryManga: GetDuplicateLibraryManga = Injekt.get(),
+    private val getCategories: GetCategories = Injekt.get(),
+    private val setMangaCategories: SetMangaCategories = Injekt.get(),
+    private val setMangaDefaultChapterFlags: SetMangaDefaultChapterFlags = Injekt.get(),
+    private val libraryPreferences: LibraryPreferences = Injekt.get(),
+    private val coverCache: CoverCache = Injekt.get(),
+    private val addTracks: AddTracks = Injekt.get(),
     private val updateManga: eu.kanade.domain.manga.interactor.UpdateManga = Injekt.get(),
     private val getHistory: tachiyomi.domain.history.interactor.GetHistory = Injekt.get(),
     private val getChaptersByMangaId: tachiyomi.domain.chapter.interactor.GetChaptersByMangaId = Injekt.get(),
@@ -61,6 +92,23 @@ class DiscoverViewModel(
     private val context: android.app.Application = Injekt.get(),
     private val sourcePreferences: eu.kanade.domain.source.service.SourcePreferences = Injekt.get()
 ) : StateViewModel<DiscoverState>(DiscoverState()) {
+
+    sealed interface Dialog {
+        data class ChangeCategory(
+            val manga: Manga,
+            val initialSelection: List<CheckboxState<Category>>,
+        ) : Dialog
+        data class DuplicateManga(
+            val manga: Manga,
+            val duplicates: List<MangaWithChapterCount>,
+        ) : Dialog
+        data class Migrate(val current: Manga, val target: Manga) : Dialog
+        data class RemoveManga(val manga: Manga) : Dialog
+    }
+
+    // Separate from DiscoverState so opening dialogs never retriggers DiscoverTab's Crossfade.
+    private val _dialog = MutableStateFlow<Dialog?>(null)
+    val dialog: StateFlow<Dialog?> = _dialog.asStateFlow()
 
     val popularCache = mutableStateMapOf<Long, List<Manga>>()
     val latestCache = mutableStateMapOf<Long, List<Manga>>()
@@ -447,21 +495,145 @@ class DiscoverViewModel(
         }
     }
 
-    suspend fun getNetworkToLocalManga(manga: Manga): Manga {
-        return withContext(Dispatchers.IO) {
-            networkToLocalManga(manga)
+    private suspend fun resolveLocalManga(manga: Manga): Manga {
+        val source = sourceManager.get(manga.source)
+        val normalizedUrl = source?.let { eu.kanade.tachiyomi.util.source.normalizeSourcePath(it, manga.url) } ?: manga.url
+        val existing = if (normalizedUrl != manga.url) {
+            getMangaByUrlAndSourceId.await(normalizedUrl, manga.source)
+                ?: getMangaByUrlAndSourceId.await(manga.url, manga.source)
+        } else {
+            getMangaByUrlAndSourceId.await(manga.url, manga.source)
+        }
+        return existing ?: networkToLocalManga(manga)
+    }
+
+    fun observeManga(manga: Manga): Flow<Manga> {
+        val source = sourceManager.get(manga.source)
+        val normalizedUrl = source?.let { eu.kanade.tachiyomi.util.source.normalizeSourcePath(it, manga.url) } ?: manga.url
+        return if (normalizedUrl == manga.url) {
+            getManga.subscribe(manga.url, manga.source).map { it ?: manga }
+        } else {
+            combine(
+                getManga.subscribe(manga.url, manga.source),
+                getManga.subscribe(normalizedUrl, manga.source),
+            ) { raw, normalized -> normalized ?: raw ?: manga }
         }
     }
 
-    fun toggleFavorite(manga: Manga, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val localManga = networkToLocalManga(manga)
-            val newFavorite = !localManga.favorite
-            updateManga.awaitUpdateFavorite(localManga.id, newFavorite)
-            withContext(Dispatchers.Main) {
-                onResult(newFavorite)
+    suspend fun getNetworkToLocalManga(manga: Manga): Manga {
+        return withContext(Dispatchers.IO) {
+            resolveLocalManga(manga)
+        }
+    }
+
+    fun dismissDialog() {
+        _dialog.value = null
+    }
+
+    fun onLongClickManga(manga: Manga, skipDuplicateCheck: Boolean = false) {
+        viewModelScope.launchIO {
+            val resolved = resolveLocalManga(manga)
+            if (resolved.favorite) {
+                _dialog.value = Dialog.RemoveManga(resolved)
+                return@launchIO
+            }
+
+            if (!skipDuplicateCheck) {
+                val duplicates = getDuplicateLibraryManga(resolved)
+                if (duplicates.isNotEmpty()) {
+                    _dialog.value = Dialog.DuplicateManga(resolved, duplicates)
+                    return@launchIO
+                }
+            }
+
+            val source = sourceManager.get(resolved.source)
+            var targetManga = resolved
+            if (source != null) {
+                val normalizedUrl = eu.kanade.tachiyomi.util.source.normalizeSourcePath(source, targetManga.url)
+                if (normalizedUrl != targetManga.url && updateManga.awaitUpdateUrl(targetManga.id, normalizedUrl)) {
+                    targetManga = targetManga.copy(url = normalizedUrl)
+                }
+            }
+
+            val categories = filterCategoriesForManga(targetManga)
+            val defaultCategoryId = libraryPreferences.defaultCategory.get().toLong()
+            val defaultCategory = categories.find { it.id == defaultCategoryId }
+
+            when (resolveFavoriteCategoryAction(categories, defaultCategoryId, defaultCategory)) {
+                FavoriteCategoryAction.AddToDefaultCategory -> {
+                    if (!updateManga.awaitUpdateFavorite(targetManga.id, true)) return@launchIO
+                    setMangaDefaultChapterFlags.await(targetManga)
+                    setMangaCategories.await(targetManga.id, listOf(defaultCategory!!.id))
+                    source?.let { addTracks.bindEnhancedTrackers(targetManga, it) }
+                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+                    withUIContext { context.toast("Added to library") }
+                }
+                FavoriteCategoryAction.AddUncategorized -> {
+                    if (!updateManga.awaitUpdateFavorite(targetManga.id, true)) return@launchIO
+                    setMangaDefaultChapterFlags.await(targetManga)
+                    setMangaCategories.await(targetManga.id, emptyList())
+                    source?.let { addTracks.bindEnhancedTrackers(targetManga, it) }
+                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+                    withUIContext { context.toast("Added to library") }
+                }
+                FavoriteCategoryAction.AskCategory -> {
+                    showChangeCategoryDialogFor(targetManga)
+                }
             }
         }
+    }
+
+    fun showChangeCategoryDialogForId(targetMangaId: Long) {
+        viewModelScope.launchIO {
+            val manga = mangaRepository.getMangaByIdOrNull(targetMangaId) ?: return@launchIO
+            showChangeCategoryDialogFor(manga)
+        }
+    }
+
+    private suspend fun filterCategoriesForManga(manga: Manga): List<Category> {
+        val allCategories = getCategories.await().filterNot { it.isSystemCategory }
+        val isJoinedLibrary = libraryPreferences.joinedLibrary.get() &&
+            !libraryPreferences.spaceSeparatedLibrary.get()
+        return filterCategoriesForContent(allCategories, manga.isNovel, isJoinedLibrary)
+    }
+
+    private suspend fun showChangeCategoryDialogFor(manga: Manga) {
+        val categories = filterCategoriesForManga(manga)
+        val selection = getCategories.await(manga.id).map { it.id }
+        _dialog.value = Dialog.ChangeCategory(
+            manga = manga,
+            initialSelection = categories.mapAsCheckboxState { it.id in selection },
+        )
+    }
+
+    fun moveMangaToCategoriesAndAddToLibrary(manga: Manga, categories: List<Long>) {
+        viewModelScope.launchIO {
+            if (!manga.favorite) {
+                if (!updateManga.awaitUpdateFavorite(manga.id, true)) return@launchIO
+                setMangaDefaultChapterFlags.await(manga)
+                sourceManager.get(manga.source)?.let { addTracks.bindEnhancedTrackers(manga, it) }
+            }
+            setMangaCategories.await(manga.id, categories)
+            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+        }
+    }
+
+    fun removeFavorite(manga: Manga) {
+        viewModelScope.launchIO {
+            val target = mangaRepository.getMangaByIdOrNull(manga.id) ?: manga
+            if (!target.favorite) return@launchIO
+            if (updateManga.awaitUpdateFavorite(target.id, false)) {
+                if (target.removeCovers(coverCache) != target) {
+                    updateManga.awaitUpdateCoverLastModified(target.id)
+                }
+                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+                withUIContext { context.toast("Removed from library") }
+            }
+        }
+    }
+
+    fun showMigrateDialog(duplicate: Manga, target: Manga) {
+        _dialog.value = Dialog.Migrate(current = duplicate, target = target)
     }
 
     suspend fun getResumeChapter(mangaId: Long, chapterId: Long): tachiyomi.domain.chapter.model.Chapter? {
