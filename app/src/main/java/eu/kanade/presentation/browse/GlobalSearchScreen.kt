@@ -25,25 +25,39 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.source.model.isAdultSource
 import eu.kanade.presentation.browse.components.GlobalSearchCardRow
 import eu.kanade.presentation.browse.components.GlobalSearchErrorResultItem
 import eu.kanade.presentation.browse.components.GlobalSearchLoadingResultItem
 import eu.kanade.presentation.browse.components.GlobalSearchResultItem
 import eu.kanade.presentation.browse.components.GlobalSearchToolbar
+import eu.kanade.presentation.browse.components.RemoveMangaDialog
+import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.manga.DuplicateMangaDialog
+import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.nameWithTypeTag
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchItemResult
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchViewModel
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter
+import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.discover.components.DiscoverMangaCard
+import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.util.system.LocaleHelper
+import mihon.feature.migration.dialog.MigrateMangaDialog
+import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.effectiveRating
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -51,7 +65,7 @@ import tachiyomi.presentation.core.components.material.Scaffold
 private val WORD_SPLIT_REGEX = Regex("[^\\p{L}\\p{N}]+")
 
 @Composable
-fun GlobalSearchScreen(
+fun Screen.GlobalSearchScreen(
     state: SearchViewModel.State,
     navigateUp: () -> Unit,
     onChangeSearchQuery: (String?) -> Unit,
@@ -62,7 +76,36 @@ fun GlobalSearchScreen(
     onClickSource: (Source) -> Unit,
     onClickItem: (Manga) -> Unit,
     onLongClickItem: (Manga) -> Unit,
+    onDismissDialog: () -> Unit = {},
+    onConfirmChangeCategory: (Manga, List<Long>) -> Unit = { _, _ -> },
+    onConfirmRemoveManga: (Manga) -> Unit = {},
+    onConfirmDuplicate: (Manga) -> Unit = {},
+    onMigrateDuplicate: (Manga, Manga) -> Unit = { _, _ -> },
+    onReopenCategoryDialog: (Long) -> Unit = {},
 ) {
+    val navigator = LocalNavigator.currentOrThrow
+    val gridState = rememberLazyGridState()
+    val searchedQuery = state.searchedQuery
+
+    val currentSearchKey = "${searchedQuery}_${state.sourceFilter}"
+    var previousSearchKey by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(currentSearchKey) {
+        if (previousSearchKey != null && previousSearchKey != currentSearchKey) {
+            gridState.scrollToItem(0, 0)
+        }
+        previousSearchKey = currentSearchKey
+    }
+
+    var reopenCategoryDialogMangaId by rememberSaveable { mutableStateOf<Long?>(null) }
+    LaunchedEffect(navigator.lastItem) {
+        val targetId = reopenCategoryDialogMangaId
+        if (targetId != null && (navigator.lastItem is eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen ||
+                navigator.lastItem is eu.kanade.tachiyomi.ui.browse.source.globalsearch.NovelGlobalSearchScreen)) {
+            reopenCategoryDialogMangaId = null
+            onReopenCategoryDialog(targetId)
+        }
+    }
+
     Scaffold(
         topBar = { scrollBehavior ->
             GlobalSearchToolbar(
@@ -83,13 +126,8 @@ fun GlobalSearchScreen(
             )
         },
     ) { paddingValues ->
-        val searchedQuery = state.searchedQuery
         if (searchedQuery != null) {
-            val gridState = rememberLazyGridState()
             val layoutDirection = LocalLayoutDirection.current
-            LaunchedEffect(searchedQuery, state.sourceFilter) {
-                gridState.scrollToItem(0, 0)
-            }
             val emptyMessage = when {
                 state.sourceFilter is SourceFilter.PinnedOnly && state.total == 0 -> {
                     "No pinned sources. Tap \"All\" above to search all sources."
@@ -112,6 +150,57 @@ fun GlobalSearchScreen(
                 onMangaLongClick = onLongClickItem,
                 showInlineLoadingBar = false,
                 emptyMessage = emptyMessage,
+            )
+        }
+    }
+
+    when (val dialog = state.dialog) {
+        null -> {}
+        is SearchViewModel.Dialog.ChangeCategory -> {
+            ChangeCategoryDialog(
+                initialSelection = dialog.initialSelection,
+                onDismissRequest = onDismissDialog,
+                onEditCategories = {
+                    reopenCategoryDialogMangaId = dialog.manga.id
+                    navigator.push(CategoryScreen())
+                },
+                onConfirm = { addCategories, removeCategories ->
+                    val currentSelected = dialog.initialSelection
+                        .filter {
+                            it is CheckboxState.State.Checked ||
+                                it is CheckboxState.TriState.Include
+                        }
+                        .map { it.value.id }
+                        .toMutableSet()
+                    currentSelected.addAll(addCategories)
+                    currentSelected.removeAll(removeCategories.toSet())
+                    onConfirmChangeCategory(dialog.manga, currentSelected.toList())
+                },
+            )
+        }
+        is SearchViewModel.Dialog.DuplicateManga -> {
+            DuplicateMangaDialog(
+                duplicates = dialog.duplicates,
+                onDismissRequest = onDismissDialog,
+                onConfirm = { onConfirmDuplicate(dialog.manga) },
+                onOpenManga = { navigator.push(MangaScreen(it.id)) },
+                onMigrate = { onMigrateDuplicate(it, dialog.manga) },
+                canAddAnyway = true,
+            )
+        }
+        is SearchViewModel.Dialog.Migrate -> {
+            MigrateMangaDialog(
+                current = dialog.current,
+                target = dialog.target,
+                onClickTitle = { navigator.push(MangaScreen(dialog.current.id)) },
+                onDismissRequest = onDismissDialog,
+            )
+        }
+        is SearchViewModel.Dialog.RemoveManga -> {
+            RemoveMangaDialog(
+                onDismissRequest = onDismissDialog,
+                onConfirm = { onConfirmRemoveManga(dialog.manga) },
+                mangaToRemove = dialog.manga,
             )
         }
     }

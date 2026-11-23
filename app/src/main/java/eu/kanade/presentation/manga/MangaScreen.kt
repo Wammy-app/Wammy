@@ -104,6 +104,7 @@ fun MangaScreen(
 
     // For tags menu
     onTagSearch: (String) -> Unit,
+    onTagGlobalSearch: ((String) -> Unit)? = null,
 
     onFilterButtonClicked: () -> Unit,
     onRefresh: () -> Unit,
@@ -178,6 +179,7 @@ fun MangaScreen(
             onWebViewLongClicked = onWebViewLongClicked,
             onTrackingClicked = onTrackingClicked,
             onTagSearch = onTagSearch,
+            onTagGlobalSearch = onTagGlobalSearch,
             onCopyTagToClipboard = onCopyTagToClipboard,
             onFilterClicked = onFilterButtonClicked,
             onRefresh = onRefresh,
@@ -233,6 +235,7 @@ fun MangaScreen(
             onWebViewLongClicked = onWebViewLongClicked,
             onTrackingClicked = onTrackingClicked,
             onTagSearch = onTagSearch,
+            onTagGlobalSearch = onTagGlobalSearch,
             onCopyTagToClipboard = onCopyTagToClipboard,
             onFilterButtonClicked = onFilterButtonClicked,
             onRefresh = onRefresh,
@@ -293,6 +296,7 @@ private fun MangaScreenSmallImpl(
 
     // For tags menu
     onTagSearch: (String) -> Unit,
+    onTagGlobalSearch: ((String) -> Unit)? = null,
     onCopyTagToClipboard: (tag: String) -> Unit,
 
     onFilterClicked: () -> Unit,
@@ -548,6 +552,7 @@ private fun MangaScreenSmallImpl(
                             },
                             notes = state.manga.notes,
                             onTagSearch = onTagSearch,
+                            onTagGlobalSearch = onTagGlobalSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
                             onEditNotes = onEditNotesClicked,
                         )
@@ -618,6 +623,7 @@ fun MangaScreenLargeImpl(
 
     // For tags menu
     onTagSearch: (String) -> Unit,
+    onTagGlobalSearch: ((String) -> Unit)? = null,
     onCopyTagToClipboard: (tag: String) -> Unit,
 
     onFilterButtonClicked: () -> Unit,
@@ -855,6 +861,7 @@ fun MangaScreenLargeImpl(
                             },
                             notes = state.manga.notes,
                             onTagSearch = onTagSearch,
+                            onTagGlobalSearch = onTagGlobalSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
                             onEditNotes = onEditNotesClicked,
                         )

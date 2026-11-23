@@ -261,6 +261,7 @@ fun ExpandableMangaDescription(
     onCopyTagToClipboard: (tag: String) -> Unit,
     onEditNotes: () -> Unit,
     modifier: Modifier = Modifier,
+    onTagGlobalSearch: ((String) -> Unit)? = null,
 ) {
     Column(modifier = modifier) {
         val (expanded, onExpanded) = rememberSaveable {
@@ -301,6 +302,15 @@ fun ExpandableMangaDescription(
                             showMenu = false
                         },
                     )
+                    if (onTagGlobalSearch != null) {
+                        DropdownMenuItem(
+                            text = { Text(text = stringResource(MR.strings.action_global_search)) },
+                            onClick = {
+                                onTagGlobalSearch(tagSelected)
+                                showMenu = false
+                            },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(text = stringResource(MR.strings.action_copy_to_clipboard)) },
                         onClick = {

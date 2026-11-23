@@ -7,6 +7,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -31,6 +33,7 @@ class GlobalSearchScreen(
         }
 
         val navigator = LocalNavigator.currentOrThrow
+        val haptic = LocalHapticFeedback.current
 
         val viewModel = viewModel<GlobalSearchViewModel>(
             factory = GlobalSearchViewModel.Factory,
@@ -75,7 +78,16 @@ class GlobalSearchScreen(
                     navigator.push(BrowseSourceScreen(it.id, state.searchQuery))
                 },
                 onClickItem = { navigator.push(MangaScreen(it.id, true)) },
-                onLongClickItem = { navigator.push(MangaScreen(it.id, true)) },
+                onLongClickItem = {
+                    viewModel.onLongClickManga(it)
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                },
+                onDismissDialog = viewModel::dismissDialog,
+                onConfirmChangeCategory = viewModel::moveMangaToCategoriesAndAddToLibrary,
+                onConfirmRemoveManga = viewModel::removeFavorite,
+                onConfirmDuplicate = { viewModel.onLongClickManga(it, skipDuplicateCheck = true) },
+                onMigrateDuplicate = { duplicate, target -> viewModel.showMigrateDialog(duplicate, target) },
+                onReopenCategoryDialog = viewModel::showChangeCategoryDialogForId,
             )
         }
     }

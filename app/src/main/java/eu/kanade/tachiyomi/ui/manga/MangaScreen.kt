@@ -217,6 +217,7 @@ class MangaScreen(
                 }
             },
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, viewModel.source!!) } },
+            onTagGlobalSearch = { scope.launch { performSearch(navigator, it, global = true, isNovel = successState.isNovel) } },
             onFilterButtonClicked = viewModel::showSettingsDialog,
             onRefresh = viewModel::fetchAllFromSource,
             onForceRefresh = { viewModel.fetchAllFromSource(forceRefresh = true) },
@@ -228,7 +229,7 @@ class MangaScreen(
                     if (!global && source != null && query == source.getNameForMangaInfo()) {
                         navigator.push(BrowseSourceScreen(source.id, null))
                     } else {
-                        performSearch(navigator, query, global, successState.isNovel)
+                        performSearch(navigator, query, global, successState.isNovel, source)
                     }
                 }
             },
@@ -583,6 +584,7 @@ class MangaScreen(
         query: String,
         global: Boolean,
         isNovel: Boolean = false,
+        source: Source? = null,
     ) {
         if (global) {
             if (isNovel) {
@@ -593,18 +595,22 @@ class MangaScreen(
             return
         }
 
-        if (navigator.size < 2) {
-            return
+        if (navigator.size >= 2) {
+            val previousController = navigator.items[navigator.size - 2]
+            if (previousController is BrowseSourceScreen) {
+                navigator.pop()
+                previousController.search(query)
+                return
+            }
         }
 
-        when (val previousController = navigator.items[navigator.size - 2]) {
-            is HomeScreen -> {
-                navigator.pop()
-                previousController.search(query)
-            }
-            is BrowseSourceScreen -> {
-                navigator.pop()
-                previousController.search(query)
+        if (source is HttpSource) {
+            navigator.push(BrowseSourceScreen(source.id, query))
+        } else {
+            if (isNovel) {
+                navigator.push(NovelGlobalSearchScreen(query))
+            } else {
+                navigator.push(GlobalSearchScreen(query))
             }
         }
     }
@@ -615,16 +621,19 @@ class MangaScreen(
      * @param genreName the search genre to the parent controller
      */
     private suspend fun performGenreSearch(navigator: Navigator, genreName: String, source: Source) {
-        if (navigator.size < 2) {
-            return
+        if (navigator.size >= 2) {
+            val previousController = navigator.items[navigator.size - 2]
+            if (previousController is BrowseSourceScreen && source is HttpSource) {
+                navigator.pop()
+                previousController.searchGenre(genreName)
+                return
+            }
         }
 
-        val previousController = navigator.items[navigator.size - 2]
-        if (previousController is BrowseSourceScreen && source is HttpSource) {
-            navigator.pop()
-            previousController.searchGenre(genreName)
+        if (source is HttpSource) {
+            navigator.push(BrowseSourceScreen(source.id, genreName))
         } else {
-            performSearch(navigator, genreName, global = false)
+            performSearch(navigator, genreName, global = true, isNovel = source.isNovelSource, source = source)
         }
     }
 

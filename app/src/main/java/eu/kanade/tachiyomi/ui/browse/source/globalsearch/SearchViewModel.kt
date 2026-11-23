@@ -1,30 +1,55 @@
 package eu.kanade.tachiyomi.ui.browse.source.globalsearch
 
+import android.app.Application
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.produceState
 import androidx.lifecycle.viewModelScope
+import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.domain.track.interactor.AddTracks
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.isNovelSource
+import eu.kanade.tachiyomi.ui.manga.FavoriteCategoryAction
+import eu.kanade.tachiyomi.ui.manga.filterCategoriesForContent
+import eu.kanade.tachiyomi.ui.manga.resolveFavoriteCategoryAction
+import eu.kanade.tachiyomi.util.removeCovers
+import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mihon.core.viewmodel.StateViewModel
 import mihon.domain.manga.model.toDomainManga
+import tachiyomi.core.common.preference.CheckboxState
+import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.preference.toggle
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.core.common.util.lang.withUIContext
+import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.interactor.SetMangaCategories
+import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.chapter.interactor.SetMangaDefaultChapterFlags
+import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.interactor.GetManga
+import tachiyomi.domain.manga.interactor.GetMangaByUrlAndSourceId
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.model.MangaWithChapterCount
+import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -38,6 +63,17 @@ abstract class SearchViewModel(
     private val networkToLocalManga: NetworkToLocalManga = Injekt.get(),
     private val getManga: GetManga = Injekt.get(),
     private val preferences: SourcePreferences = Injekt.get(),
+    private val getMangaByUrlAndSourceId: GetMangaByUrlAndSourceId = Injekt.get(),
+    private val mangaRepository: MangaRepository = Injekt.get(),
+    private val getDuplicateLibraryManga: GetDuplicateLibraryManga = Injekt.get(),
+    private val getCategories: GetCategories = Injekt.get(),
+    private val setMangaCategories: SetMangaCategories = Injekt.get(),
+    private val setMangaDefaultChapterFlags: SetMangaDefaultChapterFlags = Injekt.get(),
+    private val libraryPreferences: LibraryPreferences = Injekt.get(),
+    private val coverCache: CoverCache = Injekt.get(),
+    private val addTracks: AddTracks = Injekt.get(),
+    private val updateManga: UpdateManga = Injekt.get(),
+    private val context: Application = Injekt.get(),
 ) : StateViewModel<SearchViewModel.State>(initialState) {
 
     private val coroutineDispatcher = Executors.newFixedThreadPool(5).asCoroutineDispatcher()
@@ -77,9 +113,9 @@ abstract class SearchViewModel(
 
     @Composable
     fun getManga(initialManga: Manga): androidx.compose.runtime.State<Manga> {
-        return produceState(initialValue = initialManga) {
-            getManga.subscribe(initialManga.url, initialManga.source)
-                .filterNotNull()
+        return produceState(initialValue = initialManga, key1 = initialManga.source, key2 = initialManga.url) {
+            observeManga(initialManga)
+                .catch { /* Keep cached state if row unavailable */ }
                 .collectLatest { manga ->
                     value = manga
                 }
@@ -149,6 +185,12 @@ abstract class SearchViewModel(
         }
         updateItems(nextItems, searchedQuery = query)
 
+        val searchQuery = when {
+            query.startsWith("tag:", ignoreCase = true) -> query.substringAfter("tag:").trim()
+            query.startsWith("genre:", ignoreCase = true) -> query.substringAfter("genre:").trim()
+            else -> query
+        }
+
         searchJob = viewModelScope.launchIO {
             sources.map { source ->
                 async {
@@ -158,7 +200,7 @@ abstract class SearchViewModel(
 
                     try {
                         val page = withContext(coroutineDispatcher) {
-                            source.getSearchManga(1, query, source.getFilterList())
+                            source.getSearchManga(1, searchQuery, source.getFilterList())
                         }
 
                         val titles = page.mangas
@@ -218,6 +260,143 @@ abstract class SearchViewModel(
         mutableState.update { it.copy(dialog = null) }
     }
 
+    fun dismissDialog() = clearDialog()
+
+    private suspend fun resolveLocalManga(manga: Manga): Manga {
+        val source = sourceManager.get(manga.source)
+        val normalizedUrl = source?.let { eu.kanade.tachiyomi.util.source.normalizeSourcePath(it, manga.url) } ?: manga.url
+        val existing = if (normalizedUrl != manga.url) {
+            getMangaByUrlAndSourceId.await(normalizedUrl, manga.source)
+                ?: getMangaByUrlAndSourceId.await(manga.url, manga.source)
+        } else {
+            getMangaByUrlAndSourceId.await(manga.url, manga.source)
+        }
+        return existing ?: networkToLocalManga(manga)
+    }
+
+    fun observeManga(manga: Manga): Flow<Manga> {
+        val source = sourceManager.get(manga.source)
+        val normalizedUrl = source?.let { eu.kanade.tachiyomi.util.source.normalizeSourcePath(it, manga.url) } ?: manga.url
+        return if (normalizedUrl == manga.url) {
+            getManga.subscribe(manga.url, manga.source).map { it ?: manga }
+        } else {
+            combine(
+                getManga.subscribe(manga.url, manga.source),
+                getManga.subscribe(normalizedUrl, manga.source),
+            ) { raw, normalized -> normalized ?: raw ?: manga }
+        }
+    }
+
+    fun onLongClickManga(manga: Manga, skipDuplicateCheck: Boolean = false) {
+        viewModelScope.launchIO {
+            val resolved = resolveLocalManga(manga)
+            if (resolved.favorite) {
+                mutableState.update { it.copy(dialog = Dialog.RemoveManga(resolved)) }
+                return@launchIO
+            }
+
+            if (!skipDuplicateCheck) {
+                val duplicates = getDuplicateLibraryManga(resolved)
+                if (duplicates.isNotEmpty()) {
+                    mutableState.update { it.copy(dialog = Dialog.DuplicateManga(resolved, duplicates)) }
+                    return@launchIO
+                }
+            }
+
+            val source = sourceManager.get(resolved.source)
+            var targetManga = resolved
+            if (source != null) {
+                val normalizedUrl = eu.kanade.tachiyomi.util.source.normalizeSourcePath(source, targetManga.url)
+                if (normalizedUrl != targetManga.url && updateManga.awaitUpdateUrl(targetManga.id, normalizedUrl)) {
+                    targetManga = targetManga.copy(url = normalizedUrl)
+                }
+            }
+
+            val categories = filterCategoriesForManga(targetManga)
+            val defaultCategoryId = libraryPreferences.defaultCategory.get().toLong()
+            val defaultCategory = categories.find { it.id == defaultCategoryId }
+
+            when (resolveFavoriteCategoryAction(categories, defaultCategoryId, defaultCategory)) {
+                FavoriteCategoryAction.AddToDefaultCategory -> {
+                    if (!updateManga.awaitUpdateFavorite(targetManga.id, true)) return@launchIO
+                    setMangaDefaultChapterFlags.await(targetManga)
+                    setMangaCategories.await(targetManga.id, listOf(defaultCategory!!.id))
+                    source?.let { addTracks.bindEnhancedTrackers(targetManga, it) }
+                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+                    withUIContext { context.toast("Added to library") }
+                }
+                FavoriteCategoryAction.AddUncategorized -> {
+                    if (!updateManga.awaitUpdateFavorite(targetManga.id, true)) return@launchIO
+                    setMangaDefaultChapterFlags.await(targetManga)
+                    setMangaCategories.await(targetManga.id, emptyList())
+                    source?.let { addTracks.bindEnhancedTrackers(targetManga, it) }
+                    eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+                    withUIContext { context.toast("Added to library") }
+                }
+                FavoriteCategoryAction.AskCategory -> {
+                    showChangeCategoryDialogFor(targetManga)
+                }
+            }
+        }
+    }
+
+    fun showChangeCategoryDialogForId(targetMangaId: Long) {
+        viewModelScope.launchIO {
+            val manga = mangaRepository.getMangaByIdOrNull(targetMangaId) ?: return@launchIO
+            showChangeCategoryDialogFor(manga)
+        }
+    }
+
+    private suspend fun filterCategoriesForManga(manga: Manga): List<Category> {
+        val allCategories = getCategories.await().filterNot { it.isSystemCategory }
+        val isJoinedLibrary = libraryPreferences.joinedLibrary.get() &&
+            !libraryPreferences.spaceSeparatedLibrary.get()
+        return filterCategoriesForContent(allCategories, manga.isNovel, isJoinedLibrary)
+    }
+
+    private suspend fun showChangeCategoryDialogFor(manga: Manga) {
+        val categories = filterCategoriesForManga(manga)
+        val selection = getCategories.await(manga.id).map { it.id }
+        mutableState.update {
+            it.copy(
+                dialog = Dialog.ChangeCategory(
+                    manga = manga,
+                    initialSelection = categories.mapAsCheckboxState { category -> category.id in selection },
+                ),
+            )
+        }
+    }
+
+    fun moveMangaToCategoriesAndAddToLibrary(manga: Manga, categories: List<Long>) {
+        viewModelScope.launchIO {
+            if (!manga.favorite) {
+                if (!updateManga.awaitUpdateFavorite(manga.id, true)) return@launchIO
+                setMangaDefaultChapterFlags.await(manga)
+                sourceManager.get(manga.source)?.let { addTracks.bindEnhancedTrackers(manga, it) }
+            }
+            setMangaCategories.await(manga.id, categories)
+            eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+        }
+    }
+
+    fun removeFavorite(manga: Manga) {
+        viewModelScope.launchIO {
+            val target = mangaRepository.getMangaByIdOrNull(manga.id) ?: manga
+            if (!target.favorite) return@launchIO
+            if (updateManga.awaitUpdateFavorite(target.id, false)) {
+                if (target.removeCovers(coverCache) != target) {
+                    updateManga.awaitUpdateCoverLastModified(target.id)
+                }
+                eu.kanade.tachiyomi.data.sync.DriveSyncWorker.scheduleBackup(context)
+                withUIContext { context.toast("Removed from library") }
+            }
+        }
+    }
+
+    fun showMigrateDialog(duplicate: Manga, target: Manga) {
+        mutableState.update { it.copy(dialog = Dialog.Migrate(target = target, current = duplicate)) }
+    }
+
     @Immutable
     data class State(
         val from: Manga? = null,
@@ -236,6 +415,15 @@ abstract class SearchViewModel(
 
     sealed interface Dialog {
         data class Migrate(val target: Manga, val current: Manga) : Dialog
+        data class ChangeCategory(
+            val manga: Manga,
+            val initialSelection: List<CheckboxState<Category>>,
+        ) : Dialog
+        data class DuplicateManga(
+            val manga: Manga,
+            val duplicates: List<MangaWithChapterCount>,
+        ) : Dialog
+        data class RemoveManga(val manga: Manga) : Dialog
     }
 }
 
