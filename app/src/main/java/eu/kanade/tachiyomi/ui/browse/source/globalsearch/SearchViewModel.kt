@@ -356,7 +356,7 @@ abstract class SearchViewModel(
 
     private suspend fun showChangeCategoryDialogFor(manga: Manga) {
         val categories = filterCategoriesForManga(manga)
-        val selection = getCategories.await(manga.id).map { it.id }
+        val selection = if (manga.favorite) getCategories.await(manga.id).map { it.id } else emptyList()
         mutableState.update {
             it.copy(
                 dialog = Dialog.ChangeCategory(

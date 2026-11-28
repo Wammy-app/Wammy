@@ -599,7 +599,7 @@ class DiscoverViewModel(
 
     private suspend fun showChangeCategoryDialogFor(manga: Manga) {
         val categories = filterCategoriesForManga(manga)
-        val selection = getCategories.await(manga.id).map { it.id }
+        val selection = if (manga.favorite) getCategories.await(manga.id).map { it.id } else emptyList()
         _dialog.value = Dialog.ChangeCategory(
             manga = manga,
             initialSelection = categories.mapAsCheckboxState { it.id in selection },
