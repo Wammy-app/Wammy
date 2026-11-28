@@ -379,7 +379,7 @@ object AboutScreen : Screen() {
                             name = "Developer",
                             username = "kainotch",
                             shape = pos.shape,
-                            onClick = { uriHandler.openUri("https://instagram.com/n0tchh1)") },
+                            onClick = { uriHandler.openUri("https://instagram.com/n0tchh1") },
                         )
                     }
                     item { pos ->
